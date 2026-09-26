@@ -1,11 +1,9 @@
 import { useRoutes, type RouteObject } from 'react-router-dom';
 import { AppShell } from '@/ui/templates/AppShell';
 import { LibraryPage } from '@/ui/pages/LibraryPage';
+import { LessonPage } from '@/ui/pages/LessonPage';
 import { NotFoundPage } from '@/ui/pages/NotFoundPage';
 
-function LessonPlaceholder() {
-  return <h1>Lección</h1>;
-}
 function ReviewPlaceholder() {
   return <h1>Repaso</h1>;
 }
@@ -19,7 +17,7 @@ export const routes: RouteObject[] = [
     element: <AppShell />,
     children: [
       { index: true, element: <LibraryPage /> },
-      { path: 'etapa/:stageSlug/:lessonSlug', element: <LessonPlaceholder /> },
+      { path: 'etapa/:stageSlug/:lessonSlug', element: <LessonPage /> },
       { path: 'repaso', element: <ReviewPlaceholder /> },
       { path: 'notas', element: <NotesPlaceholder /> },
       { path: '*', element: <NotFoundPage /> },
