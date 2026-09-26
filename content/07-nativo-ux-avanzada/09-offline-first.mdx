@@ -1,0 +1,314 @@
+---
+id: "07-nativo-ux-avanzada/09-offline-first"
+title: "Offline-first"
+stage: 7
+module: "Robustez"
+order: 9
+minutes: 15
+prereqs: ["07-nativo-ux-avanzada/08-deep-links"]
+summary: "Diseña una app que funciona sin conexión con actualizaciones optimistas, una cola de mutaciones pendientes y reconciliación con el servidor, detectando la red con NetInfo."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás detectar el estado de la red con `@react-native-community/netinfo` y aplicar el patrón offline-first: actualización optimista, cola de mutaciones pendientes y reconciliación cuando vuelve la conexión.
+
+**Prerrequisitos:** `07-nativo-ux-avanzada/08-deep-links`
+
+## Concepto
+
+Un teléfono pierde la conexión todo el tiempo: en el metro, en un ascensor, en una zona rural o con una red wifi que dice estar conectada pero no deja pasar nada. Una app "online-first" muestra un spinner eterno o un error en cada uno de esos momentos. Una app **offline-first** asume que la red es un lujo: guarda primero en el teléfono, muestra el resultado al instante y sincroniza con el servidor cuando puede.
+
+La analogía: piensa en un cuaderno de pedidos de un mesero. Cuando la cocina está saturada, el mesero no deja al cliente esperando de pie: anota el pedido en su libreta, le dice "enseguida" y sigue atendiendo. Cuando la cocina se libera, entrega las comandas en orden. Si la cocina dice que se acabó un plato, vuelve a la mesa y lo resuelve. La libreta es tu **cola de mutaciones**, el "enseguida" es la **actualización optimista** y volver a la mesa es la **reconciliación**.
+
+Documentación oficial: https://github.com/react-native-netinfo/react-native-netinfo y https://docs.expo.dev/versions/latest/sdk/netinfo/
+
+### Detectar la red
+
+```bash
+npx expo install @react-native-community/netinfo
+```
+
+`useNetInfo()` devuelve el estado actual y vuelve a renderizar cuando cambia:
+
+```tsx
+import { useNetInfo } from "@react-native-community/netinfo";
+
+const net = useNetInfo();
+// net.isConnected: true | false | null (null while unknown)
+// net.isInternetReachable: true | false | null
+// net.type: "wifi" | "cellular" | "none" | ...
+```
+
+`isConnected` dice si hay una red; `isInternetReachable` dice si esa red llega a internet. Un wifi de hotel con página de inicio de sesión tiene `isConnected: true` e `isInternetReachable: false`. Ninguno de los dos es garantía: la única prueba real es que la petición funcione. Usa NetInfo para **decidir cuándo intentar**, no para asegurar que la petición saldrá bien.
+
+Fuera de componentes, `NetInfo.addEventListener` te avisa de los cambios y devuelve una función para cancelar la suscripción.
+
+### Paso 1: actualización optimista
+
+Cuando el usuario crea una nota, la agregas a la lista local **antes** de hablar con el servidor. Como aún no tiene id del servidor, le das un id temporal y una marca de "pendiente":
+
+```tsx
+type Note = { id: string; title: string; synced: boolean };
+
+function addNote(title: string) {
+  const tempId = "tmp-" + Date.now();
+  setNotes((notes) => [{ id: tempId, title, synced: false }, ...notes]);
+  setQueue((queue) => [...queue, { type: "create", tempId, title }]);
+}
+```
+
+La interfaz responde al instante y puede mostrar un ícono de reloj en las notas con `synced: false`.
+
+### Paso 2: la cola de mutaciones
+
+Cada cambio que el servidor aún no conoce se guarda como una **mutación**: un objeto que describe qué hacer (`create`, `update`, `delete`) y con qué datos. La cola se procesa **en orden** y de a una: si creas una nota y luego la editas, el servidor debe recibir primero la creación.
+
+La cola tiene que sobrevivir a que el usuario cierre la app. En la etapa 5 aprendiste a persistir datos con AsyncStorage y SQLite: guarda allí la cola cada vez que cambia y cárgala al arrancar.
+
+```tsx
+async function flush() {
+  for (const mutation of queue) {
+    try {
+      const saved = await api.createNote({ clientId: mutation.tempId, title: mutation.title });
+      reconcile(mutation.tempId, saved.id);
+      removeFromQueue(mutation.tempId);
+    } catch {
+      break; // Keep the rest for the next attempt, in order.
+    }
+  }
+}
+```
+
+Si una petición falla, te detienes y conservas el resto para el siguiente intento. Dispara `flush` al volver la conexión, al abrir la app y tras cada nueva mutación si hay red.
+
+### Paso 3: reconciliación
+
+Cuando el servidor confirma, la nota local debe reflejar la verdad del servidor: el id temporal se reemplaza por el definitivo y la marca de pendiente desaparece.
+
+```tsx
+function reconcile(tempId: string, serverId: string) {
+  setNotes((notes) =>
+    notes.map((note) => (note.id === tempId ? { ...note, id: serverId, synced: true } : note)),
+  );
+}
+```
+
+Tres situaciones más que debes decidir de antemano:
+
+- **Reintentos duplicados.** Si la respuesta se pierde en el camino, reenviarás una creación que el servidor ya guardó. Por eso se envía el `tempId` como `clientId`: el servidor puede reconocerlo y devolver la nota existente en lugar de crear otra. A esto se le llama **idempotencia**.
+- **Rechazos.** Si el servidor responde con un error de validación (no de red), reintentar no sirve. Quita la mutación de la cola, marca la nota con error y deja que el usuario la corrija.
+- **Conflictos.** Si editaste una nota sin conexión y otra persona la editó en el servidor, alguien gana. La regla más simple es "gana la última escritura" comparando un campo `updatedAt`. Para una app de notas personal suele bastar.
+
+### ¿Y TanStack Query?
+
+En la etapa 5 usaste TanStack Query. Sus mutaciones se pausan sin conexión y su `onlineManager` puede usar NetInfo. Es una buena herramienta para aplicar este patrón, pero primero necesitas entender las tres piezas: sin ellas, cualquier librería es una caja negra cuando algo falla.
+
+## Práctica
+
+El Snack simula un servidor con un retraso de medio segundo. Activa "Simular sin conexión", agrega varias notas y observa que aparecen al instante con un reloj. Desactiva el interruptor y mira cómo la cola se vacía en orden y cada id temporal se reemplaza por uno del servidor.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  dependencies={{ '@react-native-community/netinfo': '11.5.2' }}
+  code={`import { useEffect, useRef, useState } from "react";
+import { Button, FlatList, StyleSheet, Switch, Text, View } from "react-native";
+import { useNetInfo } from "@react-native-community/netinfo";
+
+type Note = { id: string; title: string; synced: boolean };
+type Mutation = { tempId: string; title: string };
+
+let lastServerId = 100;
+async function fakeCreateNote(title: string): Promise<{ id: string }> {
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  lastServerId += 1;
+  return { id: "srv-" + lastServerId };
+}
+
+export default function App() {
+  const net = useNetInfo();
+  const [forceOffline, setForceOffline] = useState(false);
+  const online = net.isConnected !== false && !forceOffline;
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [queue, setQueue] = useState<Mutation[]>([]);
+  const busy = useRef(false);
+
+  function addNote() {
+    const tempId = "tmp-" + Date.now();
+    const title = "Nota " + (notes.length + 1);
+    setNotes((current) => [{ id: tempId, title, synced: false }, ...current]);
+    setQueue((current) => [...current, { tempId, title }]);
+  }
+
+  useEffect(() => {
+    if (!online || queue.length === 0 || busy.current) return;
+    busy.current = true;
+    const next = queue[0];
+    fakeCreateNote(next.title)
+      .then(({ id }) => {
+        busy.current = false;
+        setNotes((current) =>
+          current.map((n) => (n.id === next.tempId ? { ...n, id, synced: true } : n))
+        );
+        setQueue((current) => current.slice(1));
+      })
+      .catch(() => {
+        busy.current = false;
+      });
+  }, [online, queue]);
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.row}>
+        <Text>Simular sin conexión</Text>
+        <Switch value={forceOffline} onValueChange={setForceOffline} />
+      </View>
+      <Text>Red: {online ? "en línea" : "sin conexión"} · Pendientes: {queue.length}</Text>
+      <Button title="Agregar nota" onPress={addNote} />
+      <FlatList
+        data={notes}
+        keyExtractor={(n) => n.id}
+        renderItem={({ item }) => (
+          <Text style={styles.note}>
+            {item.synced ? "✓" : "⏱"} {item.title} ({item.id})
+          </Text>
+        )}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, paddingTop: 60, paddingHorizontal: 24, gap: 12 },
+  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  note: { fontSize: 16, paddingVertical: 8 }
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Rechazo del servidor"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="55.0.0"
+      code={`import { useEffect, useRef, useState } from "react";
+import { Button, FlatList, StyleSheet, Text, View } from "react-native";
+
+type Status = "pending" | "synced" | "failed";
+type Note = { id: string; title: string; status: Status };
+type Mutation = { tempId: string; title: string };
+
+let lastServerId = 100;
+async function fakeCreateNote(title: string): Promise<{ id: string }> {
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  if (title.includes("3")) throw new Error("validation");
+  lastServerId += 1;
+  return { id: "srv-" + lastServerId };
+}
+
+export default function App() {
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [queue, setQueue] = useState<Mutation[]>([]);
+  const busy = useRef(false);
+
+  function addNote() {
+    const tempId = "tmp-" + Date.now();
+    const title = "Nota " + (notes.length + 1);
+    setNotes((current) => [{ id: tempId, title, status: "pending" }, ...current]);
+    setQueue((current) => [...current, { tempId, title }]);
+  }
+
+  function update(tempId: string, changes: Partial<Note>) {
+    setNotes((current) => current.map((n) => (n.id === tempId ? { ...n, ...changes } : n)));
+  }
+
+  useEffect(() => {
+    if (queue.length === 0 || busy.current) return;
+    busy.current = true;
+    const next = queue[0];
+    fakeCreateNote(next.title)
+      .then(({ id }) => update(next.tempId, { id, status: "synced" }))
+      .catch(() => update(next.tempId, { status: "failed" }))
+      .then(() => {
+        busy.current = false;
+        setQueue((current) => current.slice(1));
+      });
+  }, [queue]);
+
+  return (
+    <View style={styles.container}>
+      <Button title="Agregar nota" onPress={addNote} />
+      <FlatList
+        data={notes}
+        keyExtractor={(n) => n.id}
+        renderItem={({ item }) => (
+          <Text style={[styles.note, item.status === "failed" && styles.failed]}>
+            {item.status === "synced" ? "✓" : item.status === "failed" ? "⚠ Error:" : "⏱"} {item.title}
+          </Text>
+        )}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, paddingTop: 60, paddingHorizontal: 24, gap: 12 },
+  note: { fontSize: 16, paddingVertical: 8 },
+  failed: { color: "#b00020" }
+});`}
+    />
+  }
+>
+  Modifica el servidor falso para que rechace con un error de validación cualquier nota cuyo título contenga el número 3. Cambia `synced: boolean` por un estado `"pending" | "synced" | "failed"`. Cuando el servidor rechaza, la mutación sale de la cola (reintentar no sirve) y la nota se muestra con un aviso de error que no depende solo del color.
+</Challenge>
+
+## Errores comunes
+
+**Confiar en `isConnected` como garantía.** La app intenta sincronizar, la petición falla y la mutación se pierde. Ocurre porque se asume que "hay red" significa "la petición llegará". Se detecta en redes con portal de inicio de sesión o con mala cobertura. Solución: usa NetInfo solo para decidir cuándo intentar y trata cada fallo como "sigue en la cola".
+
+**Guardar la cola solo en memoria.** El usuario crea tres notas en el metro, cierra la app y las notas desaparecen. Ocurre porque la cola vive en `useState`. Se detecta cerrando la app con mutaciones pendientes. Solución: persiste la cola en AsyncStorage o SQLite y cárgala al arrancar.
+
+**Enviar la cola en paralelo.** La edición de una nota llega al servidor antes que su creación y falla. Ocurre por usar `Promise.all` para "ir más rápido". Se detecta con errores de "no encontrado" intermitentes. Solución: procesa la cola en orden, una mutación cada vez.
+
+**Reintentar sin idempotencia.** Aparecen notas duplicadas en el servidor. Ocurre porque una respuesta se perdió y la creación se reenvió. Se detecta comparando el conteo local con el del servidor. Solución: envía un `clientId` estable con cada creación.
+
+<Flashcards
+  cards={[
+    { front: "¿Cuáles son las tres piezas del patrón offline-first?", back: "Actualización optimista, cola de mutaciones pendientes y reconciliación con el servidor." },
+    { front: "¿Qué diferencia hay entre isConnected e isInternetReachable en NetInfo?", back: "isConnected indica que hay una red; isInternetReachable indica que esa red llega a internet." },
+    { front: "¿Por qué la cola de mutaciones se procesa en orden y de a una?", back: "Porque unas mutaciones dependen de otras; por ejemplo, editar una nota requiere que antes exista." },
+    { front: "¿Qué es una operación idempotente en sincronización offline?", back: "Una que puede repetirse sin efectos extra; por ejemplo, crear con un clientId estable no duplica la nota." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "El usuario crea una nota sin conexión. ¿Qué debe ver de inmediato en una app offline-first?",
+      options: [
+        { text: "Un error que le pide conectarse", correct: false, feedback: "Eso es online-first: bloquea al usuario." },
+        { text: "La nota en la lista, marcada como pendiente", correct: true, feedback: "Correcto: actualización optimista con indicador de sincronización." },
+        { text: "Un spinner hasta que vuelva la red", correct: false, feedback: "El usuario no debería esperar a la red para ver su propio cambio." }
+      ]
+    },
+    {
+      prompt: "El servidor responde que el título de una nota no es válido. ¿Qué haces con esa mutación?",
+      options: [
+        { text: "Reintentarla cada minuto", correct: false, feedback: "Un error de validación se repetirá siempre." },
+        { text: "Quitarla de la cola y marcar la nota con error", correct: true, feedback: "Correcto: solo los fallos de red se reintentan." },
+        { text: "Borrar la nota en silencio", correct: false, feedback: "El usuario perdería su trabajo sin saberlo." }
+      ]
+    },
+    {
+      prompt: "¿Para qué sirve enviar el id temporal como clientId al crear una nota?",
+      options: [
+        { text: "Para que el servidor no cree duplicados si la creación se reenvía", correct: true, feedback: "Correcto: hace la creación idempotente." },
+        { text: "Para que la nota se guarde más rápido", correct: false, feedback: "No cambia la velocidad." },
+        { text: "Para cifrar la nota", correct: false, feedback: "Un identificador no cifra nada." }
+      ]
+    }
+  ]}
+/>

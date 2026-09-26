@@ -1,0 +1,275 @@
+---
+id: "07-nativo-ux-avanzada/08-deep-links"
+title: "Deep links y universal links"
+stage: 7
+module: "Robustez"
+order: 8
+minutes: 12
+prereqs: ["07-nativo-ux-avanzada/07-i18n"]
+summary: "Abre una pantalla concreta de la app desde un enlace con un scheme propio o un dominio web, y lee sus parámetros con Expo Router."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás configurar un `scheme` en `app.json`, abrir una nota concreta desde un enlace, leer sus parámetros con `useLocalSearchParams` y explicar qué añade un universal link.
+
+**Prerrequisitos:** `07-nativo-ux-avanzada/07-i18n`
+
+## Concepto
+
+Un **deep link** es un enlace que abre tu app directamente en una pantalla concreta, no en la de inicio. "Abre la nota 42" desde una notificación, un correo o un mensaje de chat es un deep link.
+
+La analogía: una dirección postal completa. Decir "voy al edificio Saber" te deja en la puerta; decir "edificio Saber, piso 3, oficina 42" te lleva al escritorio exacto. El `scheme` es el nombre del edificio, la ruta es el piso y la oficina, y los parámetros de consulta (`?from=push`) son la nota adhesiva que dice quién te envió.
+
+Documentación oficial: https://docs.expo.dev/linking/overview/ y https://docs.expo.dev/linking/into-your-app/
+
+### Anatomía de un enlace
+
+```text
+saber://note/42?from=push
+└─┬─┘   └──┬──┘ └───┬───┘
+scheme    ruta   parámetros
+```
+
+- El **scheme** (`saber`) identifica a tu app en el sistema. Lo declaras en `app.json`.
+- La **ruta** (`note/42`) coincide con un archivo de rutas de Expo Router.
+- Los **parámetros de consulta** (`from=push`) son datos extra.
+
+### Declarar el scheme
+
+```json
+{
+  "expo": {
+    "scheme": "saber"
+  }
+}
+```
+
+Al compilar, Expo registra `saber://` en iOS y Android. Como cualquier cambio nativo, necesita una compilación nueva. En Expo Go no puedes usar tu scheme: los enlaces tienen la forma `exp://127.0.0.1:8081/--/note/42`, donde `/--/` separa la dirección del servidor de desarrollo de la ruta de tu app.
+
+### Expo Router hace el trabajo
+
+En la etapa 4 creaste `src/app/note/[id].tsx`. Con Expo Router, cada archivo de rutas ya es un destino de deep link: `saber://note/42` abre esa pantalla sin código adicional. Dentro de la pantalla lees los parámetros con `useLocalSearchParams`, igual que cuando navegabas con `router.push`:
+
+```tsx
+import { useLocalSearchParams } from "expo-router";
+import { Text } from "react-native";
+
+export default function NoteScreen() {
+  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
+  return (
+    <Text>
+      Nota {id} {from ? `(abierta desde ${from})` : ""}
+    </Text>
+  );
+}
+```
+
+Los parámetros de ruta (`[id]`) y los de consulta (`?from=`) llegan en el mismo objeto, siempre como texto. Si `id` debe ser un número, conviértelo y valida que exista: un enlace puede venir de cualquier parte, incluso con datos inventados.
+
+### Crear y leer enlaces con `expo-linking`
+
+Para **generar** un enlace que funcione tanto en Expo Go como en tu compilación, usa `Linking.createURL`, que elige el prefijo correcto:
+
+```tsx
+import * as Linking from "expo-linking";
+
+const url = Linking.createURL("note/42", { queryParams: { from: "share" } });
+// Expo Go: exp://192.168.1.10:8081/--/note/42?from=share
+// Build:   saber://note/42?from=share
+```
+
+Si necesitas leer un enlace fuera de Expo Router, `Linking.parse(url)` lo separa en `scheme`, `hostname`, `path` y `queryParams`. Ojo con un detalle: en `saber://note/42`, la parte `note` se interpreta como `hostname` y `42` como `path`, porque así funcionan las URL estándar. Expo Router ya lo tiene en cuenta; si lo haces a mano, combina ambos.
+
+### Probar desde la terminal
+
+No necesitas enviarte correos para probar. `npx uri-scheme` abre un enlace en el simulador o emulador que está corriendo. La práctica muestra los comandos paso a paso.
+
+### Universal links y App Links
+
+Un enlace `saber://` tiene dos problemas: si la app no está instalada, no pasa nada, y cualquier otra app podría registrar el mismo scheme. Los **universal links** (iOS) y **App Links** (Android) usan un dominio `https` que tú controlas:
+
+- `https://saber.app/note/42` abre la app si está instalada y, si no, la página web.
+- El sistema verifica que el dominio es tuyo descargando un archivo desde `https://saber.app/.well-known/`: `apple-app-site-association` para iOS y `assetlinks.json` para Android.
+
+```json
+{
+  "expo": {
+    "ios": { "associatedDomains": ["applinks:saber.app"] },
+    "android": {
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [{ "scheme": "https", "host": "saber.app", "pathPrefix": "/note" }],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
+    }
+  }
+}
+```
+
+Necesitas un dominio propio y la configuración de firma de la app, así que esta parte se completa cuando publiques en la etapa 10. Lo importante ahora es la idea: el scheme propio sirve para desarrollo y enlaces internos; los universal links son los que compartes con el mundo.
+
+<Callout kind="warning">
+  Trata cada parámetro de un enlace como una entrada del usuario. Un enlace como `saber://note/42?delete=true` no debe borrar nada sin confirmación: cualquiera puede escribir un enlace y enviártelo.
+</Callout>
+
+## Práctica
+
+Con tu app de notas corriendo en el simulador de iOS (o en el emulador de Android) y el scheme `saber` configurado en una compilación de desarrollo, prueba estos comandos:
+
+<Terminal
+  steps={[
+    { cmd: "npx uri-scheme list", out: "› Schemes for config: ./app.json\n› saber\n› com.saber.notes" },
+    { cmd: "npx uri-scheme open saber://note/42 --ios", out: "› iOS: Opening URI \"saber://note/42\" in simulator" },
+    { cmd: "npx uri-scheme open \"saber://note/42?from=push\" --android", out: "› Android: Opening URI \"saber://note/42?from=push\" in emulator" },
+    { cmd: "npx uri-scheme open \"exp://127.0.0.1:8081/--/note/42\" --ios", out: "› iOS: Opening URI \"exp://127.0.0.1:8081/--/note/42\" in simulator" }
+  ]}
+/>
+
+El Snack siguiente no usa Expo Router, pero te deja ver cómo `expo-linking` descompone distintos enlaces. Escribe tus propias URL en el campo y observa `hostname`, `path` y `queryParams`.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  dependencies={{ 'expo-linking': '~55.0.17' }}
+  code={`import { useState } from "react";
+import { StyleSheet, Text, TextInput, View } from "react-native";
+import * as Linking from "expo-linking";
+
+function noteIdFrom(url: string): string | null {
+  const { hostname, path } = Linking.parse(url);
+  const full = [hostname, path].filter(Boolean).join("/");
+  const match = full.match(/(?:^|\\/)note\\/(\\d+)$/);
+  return match ? match[1] : null;
+}
+
+export default function App() {
+  const [url, setUrl] = useState("saber://note/42?from=push");
+  const parsed = Linking.parse(url);
+
+  return (
+    <View style={styles.container}>
+      <TextInput
+        style={styles.input}
+        value={url}
+        onChangeText={setUrl}
+        autoCapitalize="none"
+        accessibilityLabel="Enlace a analizar"
+      />
+      <Text style={styles.text}>scheme: {String(parsed.scheme)}</Text>
+      <Text style={styles.text}>hostname: {String(parsed.hostname)}</Text>
+      <Text style={styles.text}>path: {String(parsed.path)}</Text>
+      <Text style={styles.text}>queryParams: {JSON.stringify(parsed.queryParams)}</Text>
+      <Text style={styles.result}>Nota a abrir: {noteIdFrom(url) ?? "ninguna"}</Text>
+      <Text style={styles.small}>Enlace propio: {Linking.createURL("note/7")}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", padding: 24, gap: 8 },
+  input: { borderWidth: 1, borderColor: "#999999", borderRadius: 8, padding: 12, fontSize: 16 },
+  text: { fontSize: 15 },
+  result: { fontSize: 18, fontWeight: "600", marginTop: 8 },
+  small: { fontSize: 12, color: "#555555" }
+});`}
+/>
+
+Prueba estas URL: `https://saber.app/note/42`, `exp://127.0.0.1:8081/--/note/42?from=share` y `saber://settings`.
+
+## Ejercicio
+
+<Challenge
+  title="Validar el identificador del enlace"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="55.0.0"
+      dependencies={{ 'expo-linking': '~55.0.17' }}
+      code={`import { StyleSheet, Text, View } from "react-native";
+import * as Linking from "expo-linking";
+
+const NOTES: Record<string, string> = { "1": "Lista de compras", "42": "Ideas para el viaje" };
+
+function resolveNote(url: string): string {
+  const { hostname, path } = Linking.parse(url);
+  const segments = [hostname, path].filter(Boolean).join("/").split("/");
+  const index = segments.indexOf("note");
+  const id = index >= 0 ? segments[index + 1] : undefined;
+  if (!id || !/^\\d+$/.test(id)) return "Enlace no válido";
+  return NOTES[id] ?? "Nota no encontrada";
+}
+
+const SAMPLES = ["saber://note/42", "https://saber.app/note/1", "saber://note/abc", "saber://note/99"];
+
+export default function App() {
+  return (
+    <View style={styles.container}>
+      {SAMPLES.map((url) => (
+        <Text key={url} style={styles.text}>
+          {url} → {resolveNote(url)}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", padding: 24, gap: 12 },
+  text: { fontSize: 15 }
+});`}
+    />
+  }
+>
+  Escribe una función `resolveNote(url)` que use `Linking.parse` para extraer el identificador de un enlace del tipo `saber://note/42` o `https://saber.app/note/42`. Si el identificador no es numérico, devuelve "Enlace no válido"; si no existe en un diccionario de notas, "Nota no encontrada"; si existe, el título. Muestra el resultado para cuatro enlaces de ejemplo.
+</Challenge>
+
+## Errores comunes
+
+**Probar el scheme propio en Expo Go.** `npx uri-scheme open saber://note/42` no hace nada o abre otra app. Ocurre porque Expo Go solo responde a `exp://`; tu scheme existe únicamente en una compilación propia. Se detecta porque el mismo enlace con `exp://127.0.0.1:8081/--/note/42` sí funciona. Solución: usa `Linking.createURL` para generar enlaces y prueba el scheme en una development build.
+
+**Confiar en los parámetros del enlace.** Una pantalla se rompe con `saber://note/abc` o ejecuta acciones con `?delete=true`. Ocurre porque se trata el enlace como si viniera de la propia app. Se detecta probando enlaces con valores inválidos. Solución: valida tipo y existencia, y nunca ejecutes acciones destructivas desde un enlace sin confirmación.
+
+**Buscar la ruta solo en `path`.** Con `saber://note/42`, `path` vale `"42"` y el código no encuentra `note`. Ocurre porque en una URL estándar la primera parte después de `//` es el `hostname`. Se detecta imprimiendo el resultado de `Linking.parse`. Solución: deja que Expo Router resuelva la ruta o combina `hostname` y `path`.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué es un deep link en una app móvil?", back: "Un enlace que abre la app directamente en una pantalla concreta, por ejemplo saber://note/42." },
+    { front: "¿Dónde se declara el scheme propio de una app Expo?", back: "En app.json, con la clave expo.scheme." },
+    { front: "¿Con qué hook de Expo Router lees el id y los parámetros de consulta de un deep link?", back: "useLocalSearchParams; todos los valores llegan como texto." },
+    { front: "¿Qué ventaja tiene un universal link frente a un scheme propio?", back: "Usa un dominio https verificado: nadie más puede reclamarlo y, si la app no está instalada, abre la web." },
+    { front: "¿Qué comando abre un deep link en el simulador de iOS desde la terminal?", back: "npx uri-scheme open saber://note/42 --ios" }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Tu app tiene src/app/note/[id].tsx y el scheme saber. ¿Qué enlace abre la nota 42 en una compilación propia?",
+      options: [
+        { text: "saber://note/42", correct: true, feedback: "Correcto: Expo Router asocia la ruta note/42 al archivo note/[id].tsx." },
+        { text: "saber://[id]/42", correct: false, feedback: "Los corchetes solo aparecen en el nombre del archivo, no en el enlace." },
+        { text: "note://saber/42", correct: false, feedback: "El scheme va primero: saber://." }
+      ]
+    },
+    {
+      prompt: "¿Por qué saber://note/42 no funciona mientras pruebas con Expo Go?",
+      options: [
+        { text: "Porque falta instalar expo-router", correct: false, feedback: "El problema es el scheme, no el enrutador." },
+        { text: "Porque Expo Go solo responde a exp:// y tu scheme se registra al compilar", correct: true, feedback: "Correcto: en Expo Go usa exp://.../--/note/42." },
+        { text: "Porque los deep links solo funcionan en Android", correct: false, feedback: "Funcionan en ambas plataformas." }
+      ]
+    },
+    {
+      prompt: "¿Qué archivo usa iOS para verificar que un dominio puede abrir tu app con universal links?",
+      options: [
+        { text: "assetlinks.json", correct: false, feedback: "Ese es el archivo de verificación de Android." },
+        { text: "apple-app-site-association", correct: true, feedback: "Correcto: se sirve desde /.well-known/ en tu dominio." },
+        { text: "app.json", correct: false, feedback: "app.json declara el dominio, pero la verificación está en el servidor." }
+      ]
+    }
+  ]}
+/>
