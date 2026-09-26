@@ -1,0 +1,186 @@
+---
+id: "10-build-release-operaciones/06-store-listing-y-revision"
+title: "Ficha de la tienda y proceso de revisión"
+stage: 10
+module: "Publicar"
+order: 6
+minutes: 12
+prereqs: ["10-build-release-operaciones/05-eas-submit-testflight-internal"]
+summary: "Completa la ficha de la app en ambas tiendas, prepara lo que la revisión exige y evita las causas de rechazo más frecuentes."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás preparar la ficha completa de la app (capturas, textos, política de privacidad, formularios de datos) en App Store Connect y Google Play Console, y anticipar las razones de rechazo más comunes antes de enviar a revisión.
+
+**Prerrequisitos:** `10-build-release-operaciones/05-eas-submit-testflight-internal`
+
+## Concepto
+
+El build ya está en TestFlight y en internal testing. Para que llegue al público falta la parte que no es código: la **ficha de la tienda** (store listing) y la **revisión**. Ambas tiendas revisan cada app nueva con personas y sistemas automáticos, y una ficha incompleta es la forma más rápida de perder varios días.
+
+Piensa en presentar un proyecto a una convocatoria. El trabajo puede ser excelente, pero si el formulario tiene campos vacíos, faltan anexos o la descripción no coincide con lo entregado, el jurado ni siquiera lo evalúa: lo devuelve. La revisión de las tiendas funciona igual: primero comprueban la carpeta, después el contenido.
+
+### Qué pide la ficha
+
+Los elementos coinciden en gran parte entre ambas tiendas:
+
+| Elemento                    | App Store Connect                                        | Google Play Console                                          |
+| --------------------------- | -------------------------------------------------------- | ------------------------------------------------------------ |
+| Nombre y subtítulo          | Nombre (30 caracteres) y subtítulo (30)                  | Título (30) y descripción breve (80)                         |
+| Descripción                 | Hasta 4000 caracteres                                    | Hasta 4000 caracteres                                        |
+| Capturas de pantalla        | Obligatorias por tamaño de dispositivo (iPhone 6.7" y 6.5", iPad si la app lo soporta) | Mínimo 2 para teléfono; tablet si aplica |
+| Icono                       | Se toma del build (1024x1024 en el proyecto)             | 512x512 subido en la consola                                 |
+| Gráfico destacado           | No aplica                                                | Feature graphic 1024x500, obligatorio                        |
+| Categoría y clasificación   | Categoría y cuestionario de clasificación por edad       | Categoría y cuestionario de clasificación de contenido       |
+| URL de política de privacidad | Obligatoria                                            | Obligatoria                                                  |
+| Declaración de datos        | App Privacy (qué datos recoges y para qué)               | Data safety (formulario equivalente)                         |
+| Información de contacto     | Correo y teléfono de soporte                             | Correo de soporte, visible en la ficha                       |
+| Notas para el revisor       | Texto libre y cuenta de demostración                     | Notas en la sección de revisión                              |
+
+Los límites de caracteres y de tamaños cambian; verifica los vigentes en las guías oficiales: https://developer.apple.com/app-store/product-page/ y https://support.google.com/googleplay/android-developer/answer/9866151.
+
+### La política de privacidad
+
+Es el único elemento que no se genera desde el proyecto y que ambas tiendas exigen sin excepción, incluso para una app que "no recoge nada". Debe ser una página web pública con URL estable, redactada para tu app concreta, que explique qué datos se recogen (incluidos los de servicios de terceros, como el monitoreo de errores que agregarás en unas lecciones), con qué fin y cómo contactarte. Publícala antes de completar la ficha: la URL se pide en varios formularios.
+
+### Las guías de revisión
+
+Cada tienda publica sus normas. No las resumas de memoria ni las copies de un foro: cambian y la versión que cuenta es la oficial.
+
+- Apple: App Store Review Guidelines, https://developer.apple.com/app-store/review/guidelines/
+- Google: Políticas del programa para desarrolladores y la guía de lanzamiento, https://play.google.com/console/about/guides/releasewithconfidence/
+
+Léelas completas al menos una vez. La mayoría de los rechazos no vienen de secciones oscuras, sino de las primeras páginas.
+
+### Las causas de rechazo más frecuentes
+
+Estas se repiten en casi todos los lanzamientos de equipos que publican por primera vez:
+
+1. **Falta la política de privacidad o la URL no carga.** Rechazo inmediato en ambas tiendas.
+2. **La app tiene login y no diste una cuenta de demostración.** El revisor no puede entrar y devuelve la app sin evaluar nada más. Da usuario y contraseña en las notas para el revisor.
+3. **Enlaces rotos** dentro de la app o en la ficha (soporte, términos, política).
+4. **Crash o pantalla en blanco al arrancar** en el dispositivo del revisor. Suele ser una variable de entorno que falta en el build de producción o un servicio caído.
+5. **Funcionalidad mínima insuficiente**: una app que solo muestra una web o que está claramente incompleta ("próximamente").
+6. **Metadatos que no coinciden**: capturas de otra app, descripción que promete funciones que no existen, mención a otras plataformas.
+7. **Permisos sin justificar**: pedir cámara o ubicación sin un texto claro que explique para qué (en iOS, los textos `NSCameraUsageDescription` y similares de `infoPlist`).
+8. **Declaración de datos incompleta o falsa**: dices que no recoges datos pero la app envía identificadores a un servicio de analítica.
+
+<Callout kind="warning">
+  Cuando una tienda rechaza, responde en el mismo hilo de la consola con la corrección o la aclaración. Discutir la norma rara vez funciona; explicar el caso concreto con capturas y pasos, sí.
+</Callout>
+
+### El flujo hasta publicar
+
+En Apple, con la ficha completa y el build de TestFlight seleccionado, pulsas "Enviar a revisión". El estado pasa por "Waiting for Review", "In Review" y termina en "Ready for Distribution" o en un rechazo con el motivo. Puedes elegir publicación manual (tú pulsas cuando quieras) o automática al aprobarse. La revisión suele tardar entre 24 y 48 horas.
+
+En Google, promueves el build de la pista interna a una pista de pruebas cerrada, abierta o directamente a producción, completas el cuestionario de la ficha y envías. La revisión puede durar desde horas hasta varios días, y en apps nuevas suele ser más larga. Recuerda el requisito de pruebas cerradas para cuentas personales que viste en la lección de cuentas.
+
+El proyecto de esta etapa termina en TestFlight e internal testing, así que enviar a revisión es opcional. Pero deja la ficha lista: es lo que convierte un build en un lanzamiento.
+
+## Práctica
+
+Repasa la ficha antes de pulsar "Enviar a revisión". Cada ítem corresponde a un motivo de rechazo real.
+
+<Checklist
+  id="10-build-release-operaciones/06-store-listing-y-revision/ficha"
+  items={[
+    "La política de privacidad está publicada en una URL pública que carga y menciona los servicios de terceros que usa la app",
+    "Las capturas de pantalla son de esta app, en los tamaños que cada tienda exige, sin marcos de dispositivo que las tiendas prohíban",
+    "Google Play tiene el icono 512x512 y el feature graphic 1024x500",
+    "La descripción no promete funciones inexistentes ni menciona otras plataformas",
+    "App Privacy (Apple) y Data safety (Google) declaran todos los datos que la app o sus SDK envían",
+    "Si la app tiene login, las notas para el revisor incluyen usuario y contraseña de una cuenta de demostración",
+    "Cada permiso que la app pide tiene un texto de justificación claro en la configuración",
+    "Todos los enlaces de la ficha y de la app (soporte, términos, privacidad) abren correctamente",
+    "El cuestionario de clasificación por edad o de contenido está completo",
+    "Probaste el build exacto que vas a enviar en un dispositivo real y arranca sin errores",
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Prevalidar la ficha"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type Listing = {
+  privacyPolicyUrl: string;
+  screenshots: number;
+  hasLogin: boolean;
+  demoAccount: string | null;
+  dataSafetyCompleted: boolean;
+};
+
+function prevalidate(l: Listing): string[] {
+  const problems: string[] = [];
+  if (!l.privacyPolicyUrl.startsWith("https://")) problems.push("privacy policy URL missing or not https");
+  if (l.screenshots < 2) problems.push("at least 2 screenshots required");
+  if (l.hasLogin && !l.demoAccount) problems.push("login without demo account for the reviewer");
+  if (!l.dataSafetyCompleted) problems.push("data declaration incomplete");
+  return problems;
+}
+
+const draft: Listing = {
+  privacyPolicyUrl: "",
+  screenshots: 1,
+  hasLogin: true,
+  demoAccount: null,
+  dataSafetyCompleted: false,
+};
+
+const result = prevalidate(draft);
+console.log(result.length === 0 ? "ready" : result.join("\\n"));`}
+    />
+  }
+>
+  Escribe una función `prevalidate(listing)` que reciba un objeto con `privacyPolicyUrl`, `screenshots`, `hasLogin`, `demoAccount` y `dataSafetyCompleted`, y devuelva la lista de problemas que causarían un rechazo: URL de privacidad ausente o sin `https://`, menos de 2 capturas, login sin cuenta de demostración, declaración de datos incompleta. Prueba con una ficha vacía y comprueba que aparecen los cuatro problemas.
+</Challenge>
+
+## Errores comunes
+
+**Declarar "no recogemos datos" con un SDK de monitoreo instalado.** La revisión detecta tráfico hacia un tercero o compara con lo que el SDK declara, y rechaza por declaración falsa. Ocurre porque el formulario se llena pensando solo en el código propio. Se detecta revisando la documentación de privacidad de cada dependencia nativa. Declara lo que cada SDK envía (identificadores de dispositivo, datos de fallo) y menciónalo en la política.
+
+**Enviar a revisión un build distinto del que probaste.** Apple revisa el build seleccionado en la ficha, que puede no ser el último de TestFlight. Ocurre porque la selección del build es un paso aparte del envío. Se detecta comparando el número de build en la ficha con el de TestFlight. Antes de enviar, confirma el número de build en la página de la versión.
+
+**Capturas con texto de otro idioma o de la variante preview.** El revisor ve "Notes (Preview)" en la barra o un idioma que no coincide con la ficha y objeta metadatos inexactos. Ocurre por hacer las capturas desde el build de desarrollo. Toma las capturas desde el build de producción en TestFlight o internal testing.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué elemento de la ficha exigen ambas tiendas incluso para una app que no recoge datos?", back: "Una URL pública con la política de privacidad." },
+    { front: "¿Qué debes dar al revisor si la app tiene login?", back: "Una cuenta de demostración (usuario y contraseña) en las notas para el revisor." },
+    { front: "¿Cómo se llaman los formularios de declaración de datos en Apple y en Google?", back: "App Privacy en App Store Connect y Data safety en Google Play Console." },
+    { front: "¿Qué gráfico exige Google Play y Apple no?", back: "El feature graphic de 1024x500." },
+    { front: "¿Dónde se consultan las normas de revisión de Apple?", back: "En las App Store Review Guidelines: https://developer.apple.com/app-store/review/guidelines/" },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Tu app de notas no tiene cuentas de usuario ni envía datos a tu servidor. ¿Necesita política de privacidad?",
+      options: [
+        { text: "No, porque no recoge datos", correct: false, feedback: "Ambas tiendas la exigen sin excepción; además, un SDK de monitoreo sí envía datos." },
+        { text: "Sí, es obligatoria en ambas tiendas", correct: true, feedback: "Correcto: y debe mencionar lo que envían los servicios de terceros que integres." },
+        { text: "Solo en Google Play", correct: false, feedback: "Apple también la pide como campo obligatorio de la ficha." },
+      ],
+    },
+    {
+      prompt: "La revisión de Apple devuelve la app diciendo que no pudo completar la evaluación. La app tiene login. ¿Cuál es la causa más probable?",
+      options: [
+        { text: "Faltó la cuenta de demostración en las notas para el revisor", correct: true, feedback: "Correcto: sin credenciales el revisor no puede pasar de la primera pantalla." },
+        { text: "El icono es demasiado grande", correct: false, feedback: "Un icono con tamaño incorrecto fallaría al subir el build, no en revisión." },
+        { text: "El build es de TestFlight", correct: false, feedback: "Todos los builds que se envían a revisión pasan antes por TestFlight." },
+      ],
+    },
+    {
+      prompt: "¿Qué debes hacer cuando una tienda rechaza la app?",
+      options: [
+        { text: "Volver a enviar el mismo build sin cambios para que lo revise otra persona", correct: false, feedback: "Sin corregir o aclarar, el resultado se repite y consumes tiempo." },
+        { text: "Responder en el hilo de la consola con la corrección o una aclaración concreta con pasos y capturas", correct: true, feedback: "Correcto: el hilo es el canal previsto y una explicación concreta resuelve la mayoría de los casos." },
+        { text: "Cambiar el bundle identifier y enviar como app nueva", correct: false, feedback: "Perderías la ficha y la continuidad de la app, y el problema seguiría ahí." },
+      ],
+    },
+  ]}
+/>

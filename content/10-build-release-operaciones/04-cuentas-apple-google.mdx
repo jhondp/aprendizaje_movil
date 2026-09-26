@@ -1,0 +1,189 @@
+---
+id: "10-build-release-operaciones/04-cuentas-apple-google"
+title: "Cuentas de Apple Developer y Google Play Console"
+stage: 10
+module: "Build"
+order: 4
+minutes: 12
+prereqs: ["10-build-release-operaciones/03-firma-ios-android"]
+summary: "Abre las cuentas de desarrollador de Apple y Google, entiende costos y plazos, y registra los identificadores de la app antes del primer envío."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás explicar qué cuenta necesitas en cada plataforma, cuánto cuesta, qué verificaciones exige y qué identificadores (bundle identifier, package name, ASC app id) debes tener registrados antes de enviar la app.
+
+**Prerrequisitos:** `10-build-release-operaciones/03-firma-ios-android`
+
+## Concepto
+
+EAS compila y firma tu app, pero no puede abrir por ti las puertas de las tiendas. Apple y Google exigen una cuenta de desarrollador verificada, con costo y con un tiempo de aprobación que no controlas. Si esperas a tener la app terminada para abrirlas, el lanzamiento se retrasa días o semanas.
+
+Piensa en registrar un negocio. Antes de vender necesitas un número de identificación fiscal y un local con dirección. El trámite no tiene que ver con lo que vendes, pero sin él no puedes abrir. Las cuentas de desarrollador son ese trámite, y los identificadores de la app son la dirección que quedará fija en el registro.
+
+### Apple Developer Program
+
+Para publicar en el App Store o distribuir por TestFlight necesitas inscribirte en el **Apple Developer Program** (https://developer.apple.com/programs/). Puntos clave:
+
+- **Costo**: una cuota anual (99 USD al momento de escribir esto; comprueba la cifra vigente en la página oficial, varía por país). Si dejas de pagar, las apps publicadas se retiran de la tienda.
+- **Tipo de cuenta**: individual (a tu nombre, aparece como desarrollador) u organización (requiere un D-U-N-S number y que la entidad legal exista). Para el proyecto del curso basta la individual.
+- **Requisitos**: Apple ID con autenticación de dos factores activada y, para cuentas individuales, verificación de identidad desde la app Apple Developer en un iPhone o iPad.
+- **Plazo**: la aprobación suele tardar de 24 a 48 horas, a veces más.
+
+Una vez dentro, trabajas en dos sitios: el portal de desarrollador (certificados, identificadores, dispositivos) y **App Store Connect** (https://appstoreconnect.apple.com), donde creas la ficha de la app, gestionas TestFlight y envías versiones a revisión.
+
+### Google Play Console
+
+Para Android la cuenta se llama **Google Play Console** (https://play.google.com/console/about/). Puntos clave:
+
+- **Costo**: un pago único de registro (25 USD al momento de escribir esto).
+- **Tipo de cuenta**: personal u organización. La de organización pide un D-U-N-S number.
+- **Requisitos**: verificación de identidad con documento oficial y, para cuentas personales, un dispositivo Android físico asociado a la cuenta.
+- **Requisito de pruebas para cuentas personales nuevas**: antes de poder publicar en producción, Google exige que la app pase por una prueba cerrada con un número mínimo de testers durante un número mínimo de días. Los valores exactos están en la página oficial y han cambiado con el tiempo; búscalos en https://support.google.com/googleplay/android-developer/ antes de planificar. Internal testing, que es lo que usará el proyecto de esta etapa, no está sujeto a ese requisito.
+
+<Callout kind="warning">
+  Los importes y los plazos cambian. Esta lección los menciona como referencia de orden de magnitud; consulta siempre la página oficial enlazada antes de tomar decisiones o de informar a un cliente.
+</Callout>
+
+### Los identificadores que quedan fijos
+
+Tres identificadores acompañan a tu app toda su vida. Decídelos antes del primer envío, porque después no se pueden cambiar sin crear una app nueva:
+
+| Identificador                | Dónde vive                                                         | Ejemplo (placeholder)        |
+| ---------------------------- | ------------------------------------------------------------------ | ---------------------------- |
+| `ios.bundleIdentifier`       | `app.config.ts`; se registra en el portal de Apple como App ID     | `com.example.notes`          |
+| `android.package`            | `app.config.ts`; queda fijo en Google Play con la primera subida   | `com.example.notes`          |
+| ASC App ID (`ascAppId`)      | Número que App Store Connect asigna al crear la ficha de la app    | `1234567890`                 |
+
+En la primera lección elegiste el patrón `com.example.notes` con sufijos `.dev` y `.preview`. Solo el identificador de producción se registra en las tiendas; las variantes de desarrollo y preview nunca pasan por App Store Connect ni por Play Console. Sustituye `com.example` por un dominio que controles o por `com.<tuapellido>`; Apple rechaza identificadores con dominios que pertenecen a terceros.
+
+### Preparar cada tienda para EAS
+
+Con las cuentas abiertas, EAS necesita permisos para actuar en tu nombre:
+
+- **Apple**: `eas build` y `eas submit` pueden iniciar sesión con tu Apple ID de forma interactiva, o usar una **App Store Connect API key** que generas en App Store Connect (Usuarios y acceso, Integraciones). La clave API es lo recomendable para automatizar; la CLI la guarda en EAS igual que las demás credenciales. Además, la ficha de la app debe existir en App Store Connect: EAS puede crearla por ti durante el primer `eas submit` si aún no existe.
+- **Google**: EAS Submit usa una **cuenta de servicio** (service account) de Google Cloud con permisos en Play Console. Se crea un JSON de credenciales, se guarda fuera del repositorio y se referencia desde `eas.json`. Hay un paso que EAS no puede saltarse: **la primera subida de una app nueva a Google Play debe hacerse a mano** desde Play Console, porque la API de publicación solo funciona con apps que ya tienen al menos un artefacto. La guía paso a paso está en https://docs.expo.dev/submit/android/.
+
+### Cuánto tiempo reservar
+
+Un calendario realista para alguien que empieza de cero:
+
+1. Día 0: inscribirse en ambos programas y completar las verificaciones de identidad.
+2. Días 1 a 3: aprobación de las cuentas. Mientras tanto, generar la clave API de App Store Connect y la cuenta de servicio de Google.
+3. Día 3: crear la ficha de la app en App Store Connect y en Play Console; subir a mano el primer `.aab` a internal testing.
+4. Día 4 en adelante: `eas submit` funciona en ambas plataformas.
+
+## Práctica
+
+Marca cada paso a medida que lo completes en las cuentas reales. Algunos dependen de la aprobación de Apple o Google, así que la lista puede tardar varios días.
+
+<Checklist
+  id="10-build-release-operaciones/04-cuentas-apple-google/enrollment"
+  items={[
+    "Apple ID con dos factores activado e inscripción al Apple Developer Program completada (cuota anual pagada)",
+    "Registro en Google Play Console completado (pago único) y verificación de identidad aprobada",
+    "Decidido el identificador de producción (ios.bundleIdentifier y android.package iguales, sin sufijo, con un dominio propio)",
+    "App ID registrado en el portal de Apple con el bundleIdentifier de producción",
+    "Ficha de la app creada en App Store Connect y anotado su ascAppId numérico",
+    "App creada en Google Play Console con el package name de producción",
+    "Clave API de App Store Connect generada y guardada fuera del repositorio",
+    "Cuenta de servicio de Google Cloud creada, con permisos en Play Console y su JSON guardado fuera del repositorio",
+    "Primer .aab subido a mano a internal testing en Play Console",
+    "Leído el requisito vigente de pruebas cerradas para cuentas personales en la página oficial de Google",
+  ]}
+/>
+
+Los identificadores tienen reglas de formato. Ejecuta el validador y prueba tus propios candidatos.
+
+<Playground
+  lang="ts"
+  code={`function isValidPackageName(id: string): boolean {
+  const segments = id.split(".");
+  if (segments.length < 2) return false;
+  return segments.every((s) => /^[a-z][a-z0-9_]*$/.test(s));
+}
+
+const candidates = ["com.example.notes", "notes", "com.Example.Notes", "com.example.notes.dev", "com.example.2notes"];
+for (const c of candidates) {
+  console.log(c + " -> " + (isValidPackageName(c) ? "valid" : "invalid"));
+}`}
+  expected={`com.example.notes -> valid
+notes -> invalid
+com.Example.Notes -> invalid
+com.example.notes.dev -> valid
+com.example.2notes -> invalid`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Calendario de apertura de cuentas"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type Step = { name: string; daysAfterStart: number };
+
+function releasePlan(approvalDays: number): Step[] {
+  return [
+    { name: "Enroll in Apple Developer Program and Google Play Console", daysAfterStart: 0 },
+    { name: "Accounts approved", daysAfterStart: approvalDays },
+    { name: "Create app records and upload first .aab manually", daysAfterStart: approvalDays },
+    { name: "First eas submit on both platforms", daysAfterStart: approvalDays + 1 },
+  ];
+}
+
+for (const step of releasePlan(3)) {
+  console.log("Day " + step.daysAfterStart + ": " + step.name);
+}`}
+    />
+  }
+>
+  Escribe una función `releasePlan(approvalDays)` que devuelva la lista de pasos para abrir las cuentas y llegar al primer `eas submit`, cada uno con el día en que ocurre contando desde la inscripción. La aprobación de cuentas ocurre en `approvalDays`; la creación de fichas y la primera subida manual del `.aab` el mismo día; el primer `eas submit` un día después. Imprime el plan para `approvalDays = 3`.
+</Challenge>
+
+## Errores comunes
+
+**Empezar el trámite de las cuentas el día del lanzamiento.** La app está lista pero la cuenta sigue "en revisión" y no hay nada que hacer salvo esperar. Ocurre porque las cuentas parecen un formulario rápido y no lo son: hay verificación de identidad y aprobación humana. Se detecta cuando el correo de bienvenida no llega. Solución: inscribirse la primera semana del proyecto.
+
+**Usar un identificador con dominio ajeno.** Apple rechaza el App ID o la revisión objeta el uso de una marca que no te pertenece. Ocurre por copiar `com.company.app` de un tutorial. Se detecta al registrar el App ID: el portal rechaza o la revisión pregunta por la relación con la empresa. Usa un dominio propio o un patrón `com.<tunombre>.<app>`.
+
+**Esperar que `eas submit` cree la app en Google Play.** El comando falla con un error de la API de Google diciendo que la app no existe o que no tiene artefactos. Ocurre porque la API de publicación solo acepta apps con una primera subida manual. Se detecta porque el mismo comando funciona para iOS. Sube el primer `.aab` a mano desde Play Console y vuelve a intentarlo.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué diferencia de costo hay entre el Apple Developer Program y Google Play Console?", back: "Apple cobra una cuota anual; Google un pago único de registro. Los importes exactos están en las páginas oficiales." },
+    { front: "¿Qué es el ascAppId y dónde se obtiene?", back: "El identificador numérico que App Store Connect asigna a la ficha de la app; se lee en App Store Connect y se usa en eas.json para submit." },
+    { front: "¿Por qué la primera subida de una app nueva a Google Play debe hacerse a mano?", back: "Porque la API de publicación que usa EAS Submit solo funciona con apps que ya tienen al menos un artefacto subido desde Play Console." },
+    { front: "¿Qué identificadores de una app quedan fijos tras la primera publicación?", back: "ios.bundleIdentifier y android.package. Cambiarlos crea una app nueva." },
+    { front: "¿Qué mecanismo usa EAS Submit para autenticarse con Google Play?", back: "Una cuenta de servicio de Google Cloud con permisos en Play Console, cuyo JSON se guarda fuera del repositorio." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Cuál de estas afirmaciones sobre la cuenta de Apple Developer es correcta?",
+      options: [
+        { text: "Es un pago único y la app queda publicada para siempre", correct: false, feedback: "La cuota es anual; si dejas de pagar las apps se retiran de la tienda." },
+        { text: "Es una cuota anual y exige un Apple ID con dos factores", correct: true, feedback: "Correcto: y para cuentas individuales también verificación de identidad." },
+        { text: "No hace falta para distribuir por TestFlight", correct: false, feedback: "TestFlight forma parte de App Store Connect y requiere la cuenta de desarrollador." },
+      ],
+    },
+    {
+      prompt: "Registraste en las tiendas com.example.notes y quieres que la variante preview también aparezca en Play Console. ¿Qué haces?",
+      options: [
+        { text: "Nada: solo el identificador de producción se registra en las tiendas", correct: true, feedback: "Correcto: las variantes .dev y .preview se instalan a mano y nunca pasan por las consolas." },
+        { text: "Crear una segunda app en Play Console para com.example.notes.preview", correct: false, feedback: "Duplicarías fichas y confundirías a la tienda; preview se distribuye como .apk interno." },
+        { text: "Cambiar el package de preview al de producción", correct: false, feedback: "Entonces no podrías tener las dos variantes instaladas a la vez." },
+      ],
+    },
+    {
+      prompt: "eas submit --platform android falla diciendo que la app no existe en Google Play, aunque la creaste en Play Console. ¿Cuál es la causa más probable?",
+      options: [
+        { text: "El package name tiene mayúsculas", correct: false, feedback: "Un package inválido habría fallado antes, en el build." },
+        { text: "Todavía no subiste el primer .aab a mano desde Play Console", correct: true, feedback: "Correcto: la API de publicación necesita un primer artefacto subido manualmente." },
+        { text: "La cuenta de Apple no está aprobada", correct: false, feedback: "La cuenta de Apple no interviene en el envío a Google Play." },
+      ],
+    },
+  ]}
+/>

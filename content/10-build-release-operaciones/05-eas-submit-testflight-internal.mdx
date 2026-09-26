@@ -1,0 +1,189 @@
+---
+id: "10-build-release-operaciones/05-eas-submit-testflight-internal"
+title: "EAS Submit, TestFlight e Internal testing"
+stage: 10
+module: "Publicar"
+order: 5
+minutes: 15
+prereqs: ["10-build-release-operaciones/04-cuentas-apple-google"]
+summary: "Envía el build de producción a TestFlight y a Google Play internal testing con eas submit, y reparte la app a tus primeros testers."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás configurar la sección `submit` de `eas.json`, enviar un build a App Store Connect y a Google Play con `eas submit`, y explicar cómo llegan los testers a la app por TestFlight y por internal testing.
+
+**Prerrequisitos:** `10-build-release-operaciones/04-cuentas-apple-google`
+
+## Concepto
+
+Ya tienes un `.aab` y un `.ipa` de producción firmados y las cuentas abiertas. El siguiente paso es llevarlos a las tiendas. Sin herramientas, eso significa arrastrar archivos a Transporter (macOS) o al formulario web de Play Console cada vez. **EAS Submit** lo hace desde la terminal con las credenciales que guardaste en EAS.
+
+Piensa en una mensajería con recogida programada. Tú dejas el paquete en la puerta con la etiqueta correcta (el build y su perfil) y el mensajero sabe a qué ventanilla llevarlo (App Store Connect o Google Play). Pero que el paquete llegue al almacén no significa que esté en la estantería: dentro de cada tienda hay una "sala de espera" para probar antes de publicar. En Apple se llama **TestFlight**; en Google, **internal testing**.
+
+### La sección submit de eas.json
+
+Igual que `build`, la sección `submit` tiene perfiles. Uno basta para el proyecto (referencia completa en https://docs.expo.dev/submit/introduction/):
+
+```json
+{
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "<ascAppId>",
+        "appleTeamId": "<apple-team-id>"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./google-service-account.json",
+        "track": "internal"
+      }
+    }
+  }
+}
+```
+
+- `ascAppId`: el número de la ficha en App Store Connect que anotaste en la lección anterior.
+- `appleTeamId`: el identificador de tu equipo de Apple (visible en la cuenta de desarrollador). Con una sola cuenta la CLI lo deduce, pero escribirlo evita preguntas interactivas en automatizaciones.
+- `serviceAccountKeyPath`: ruta al JSON de la cuenta de servicio de Google. El archivo está en `.gitignore`; una alternativa más limpia es subirlo a EAS con `eas credentials --platform android` y omitir la ruta, así el envío funciona desde cualquier máquina.
+- `track`: a qué pista de Google Play va el build. `internal` es la de pruebas internas; las demás (`alpha`, `beta`, `production`) las verás en la ficha de la tienda, pero en este curso la subida a producción se hace desde la consola con el botón de promover.
+
+### Enviar
+
+El comando toma un build ya terminado y lo sube. La forma más cómoda es `--latest`, que elige el último build compatible con la plataforma y el perfil:
+
+```sh
+eas submit --platform ios --profile production --latest
+eas submit --platform android --profile production --latest
+```
+
+También puedes indicar un build concreto con `--id <build-id>` o un archivo local con `--path ./app.aab`. Y si quieres ahorrarte un paso, `eas build --profile production --platform all --auto-submit` encadena el build y el envío con el perfil de submit del mismo nombre.
+
+Para iOS, la primera vez la CLI pide iniciar sesión en Apple o usar la clave API de App Store Connect. Elige la clave API: se guarda en EAS y los envíos siguientes no preguntan nada. Para Android no hay diálogo: la cuenta de servicio hace todo el trabajo, siempre que la primera subida manual ya exista.
+
+### TestFlight
+
+Cuando el `.ipa` llega a App Store Connect, Apple lo procesa unos minutos y aparece en la pestaña TestFlight. Ahí hay dos tipos de testers:
+
+- **Internos**: hasta 100 personas con un rol en tu equipo de App Store Connect. Reciben cada build inmediatamente, sin revisión de Apple.
+- **Externos**: hasta 10 000 personas invitadas por correo o por enlace público. La primera build de cada versión pasa por una **revisión beta** de Apple, normalmente más ligera que la de App Store pero que puede tardar un día.
+
+El tester instala la app TestFlight desde el App Store, acepta la invitación y ve tu app con un punto naranja que la identifica como beta. Cada build de TestFlight caduca a los 90 días. La documentación de Apple está en https://developer.apple.com/testflight/.
+
+### Google Play internal testing
+
+El `.aab` en la pista `internal` está disponible en minutos. Puedes tener hasta 100 testers, que agregas por correo en una lista o en un grupo de Google. Reciben un enlace de participación; una vez lo aceptan, la app aparece en Google Play para ellos como cualquier otra, con la etiqueta de prueba interna. No hay revisión previa de Google para esta pista, y por eso es el lugar ideal para verificar que el build de producción arranca antes de pedir la revisión completa. La guía está en https://support.google.com/googleplay/android-developer/answer/9845334.
+
+<Callout kind="tip">
+  Internal testing en Google y los testers internos de TestFlight son las dos vías más rápidas para poner el build de producción en un teléfono real. Úsalas siempre antes de enviar a revisión: un fallo al arrancar detectado aquí ahorra un rechazo.
+</Callout>
+
+### Qué hacer cuando el envío falla
+
+El envío puede fallar por razones que no tienen que ver con tu código: `versionCode` repetido (Google exige que cada subida sea mayor que la anterior), `buildNumber` repetido en Apple, un `.ipa` firmado con un provisioning profile de tipo Ad Hoc en vez de App Store, o una ficha sin completar los datos obligatorios de exportación (cifrado). El mensaje de error de `eas submit` suele citar la respuesta literal de la tienda; léelo antes de volver a construir.
+
+## Práctica
+
+Sigue la sesión: un envío a cada tienda a partir del último build de producción.
+
+<Terminal
+  steps={[
+    { cmd: "eas build --profile production --platform all", out: "✔ Using remote iOS credentials (Expo server)\n✔ Using remote Android credentials (Expo server)\n✔ Uploaded to EAS 4s\n\nBuild details: https://expo.dev/accounts/<account>/projects/notes/builds\n✔ iOS build finished\n✔ Android build finished" },
+    { cmd: "eas submit --platform ios --profile production --latest", out: "✔ Using build 9c1f5a2b-xxxx-xxxx-xxxx-xxxxxxxxxxxx (production, 1.0.0 (1))\n✔ Using App Store Connect API Key (ID: <key-id>) stored on EAS\n✔ Scheduled iOS submission\n\nSubmission details: https://expo.dev/accounts/<account>/projects/notes/submissions/3a7d...\n\n✔ Submitted your app to Apple App Store Connect!\nYour binary has been successfully uploaded to App Store Connect!\n- It is now being processed by Apple - you will receive an email when the processing finishes.\n- It usually takes about 5-10 minutes depending on how busy Apple servers are.\n- When it's done, you can see your build here: https://appstoreconnect.apple.com/apps/<ascAppId>/testflight/ios" },
+    { cmd: "eas submit --platform android --profile production --latest", out: "✔ Using build e41b7c90-xxxx-xxxx-xxxx-xxxxxxxxxxxx (production, 1.0.0 (1))\n✔ Using Google Service Account Key stored on EAS\n✔ Scheduled Android submission\n\n✔ Submitted your app to the Google Play Store!\nRelease uploaded to track: internal\nYou can now find it in the Play Console: https://play.google.com/console/developers/<developer-id>/app/<app-id>/tracks/internal-testing" },
+    { cmd: "eas submit:list --platform android --limit 1", out: "ID          3f9e...\nPlatform    Android\nStatus      finished\nTrack       internal\nApp         com.example.notes\nVersion     1.0.0 (1)\nCreated     2026-09-26 11:04:33" },
+  ]}
+/>
+
+Antes de dar por cerrado el primer envío a testers:
+
+<Checklist
+  id="10-build-release-operaciones/05-eas-submit-testflight-internal/primer-envio"
+  items={[
+    "eas.json tiene submit.production con ascAppId, appleTeamId y track internal",
+    "La clave API de App Store Connect y la cuenta de servicio de Google están guardadas en EAS (no solo en tu máquina)",
+    "eas submit --platform ios terminó y el build aparece procesado en TestFlight",
+    "Al menos un tester interno de TestFlight instaló la app y la abrió",
+    "eas submit --platform android terminó y el build está en la pista internal",
+    "La lista de testers internos de Google Play tiene tu correo y el de otra persona, y ambos aceptaron el enlace",
+    "La app de producción arranca en un iPhone y en un Android reales sin pantalla en blanco ni crash",
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Elegir la vía de prueba"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type Platform = "ios" | "android";
+
+type Audience = {
+  platform: Platform;
+  testers: number;
+  inMyTeam: boolean;
+};
+
+function chooseChannel(a: Audience): string {
+  if (a.platform === "android") {
+    return a.testers <= 100 ? "Google Play internal testing" : "Google Play closed testing";
+  }
+  if (a.inMyTeam && a.testers <= 100) return "TestFlight internal testers (no beta review)";
+  return a.testers <= 10000 ? "TestFlight external testers (beta review)" : "Too many testers for TestFlight";
+}
+
+console.log(chooseChannel({ platform: "ios", testers: 5, inMyTeam: true }));
+console.log(chooseChannel({ platform: "ios", testers: 300, inMyTeam: false }));
+console.log(chooseChannel({ platform: "android", testers: 40, inMyTeam: false }));`}
+    />
+  }
+>
+  Escribe una función `chooseChannel(audience)` que reciba `platform`, `testers` (número) e `inMyTeam` (si los testers tienen rol en App Store Connect) y devuelva la vía de prueba adecuada: en Android, internal testing hasta 100 testers y closed testing por encima; en iOS, testers internos de TestFlight si son de tu equipo y no pasan de 100, testers externos hasta 10 000 (con revisión beta) y un mensaje de "demasiados" por encima. Prueba con 5 testers del equipo en iOS, 300 externos en iOS y 40 en Android.
+</Challenge>
+
+## Errores comunes
+
+**Enviar el mismo `versionCode` dos veces.** Google responde que ya existe una versión con ese código y rechaza el `.aab`. Ocurre cuando construyes de nuevo sin `autoIncrement` o con `appVersionSource: "local"` sin tocar el número. Se detecta porque el error de `eas submit` cita "version code ... has already been used". Activa `autoIncrement` en el perfil de producción y usa `--latest` para asegurarte de enviar el build recién hecho.
+
+**Invitar testers externos en TestFlight y esperar acceso inmediato.** Los testers no reciben nada durante horas. Ocurre porque la primera build de cada versión para testers externos pasa por la revisión beta de Apple. Se detecta en App Store Connect: el estado dice "Waiting for Review". Para pruebas del equipo usa testers internos, que no requieren revisión.
+
+**Pensar que el build en internal testing ya es público.** Compartes el enlace y personas fuera de la lista ven "no disponible". Ocurre porque la pista interna solo es visible para los correos de la lista de testers que aceptaron la invitación. Se detecta porque tú lo ves y los demás no. Agrega a cada persona a la lista o promueve el build a una pista abierta cuando estés listo.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué hace la opción --latest en eas submit?", back: "Selecciona automáticamente el último build terminado compatible con la plataforma y el perfil indicados." },
+    { front: "¿Qué diferencia hay entre testers internos y externos en TestFlight?", back: "Internos: hasta 100 personas del equipo de App Store Connect, sin revisión. Externos: hasta 10 000 invitados, con revisión beta de la primera build de cada versión." },
+    { front: "¿Cuántos testers admite la pista internal de Google Play y necesita revisión?", back: "Hasta 100 testers y no pasa por revisión de Google." },
+    { front: "¿Qué campo de eas.json indica a qué pista de Google Play va el build?", back: "submit.<perfil>.android.track, por ejemplo internal." },
+    { front: "¿Qué flag encadena build y envío en un solo comando?", back: "eas build --auto-submit, que usa el perfil de submit con el mismo nombre que el de build." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Quieres que tres compañeros de equipo prueben el build de iOS hoy mismo. ¿Qué vía eliges?",
+      options: [
+        { text: "Testers externos de TestFlight con enlace público", correct: false, feedback: "La primera build para externos pasa por revisión beta y puede tardar un día." },
+        { text: "Testers internos de TestFlight", correct: true, feedback: "Correcto: hasta 100 personas con rol en App Store Connect reciben la build sin revisión." },
+        { text: "Enviar a revisión de App Store", correct: false, feedback: "La revisión completa es para publicar, no para probar." },
+      ],
+    },
+    {
+      prompt: "¿Qué credencial usa eas submit para subir a Google Play?",
+      options: [
+        { text: "Tu contraseña de Google", correct: false, feedback: "EAS nunca usa credenciales personales de Google." },
+        { text: "El keystore de Android", correct: false, feedback: "El keystore firma el build; no autoriza la subida." },
+        { text: "Una cuenta de servicio con permisos en Play Console", correct: true, feedback: "Correcto: su JSON se referencia en eas.json o se guarda en EAS." },
+      ],
+    },
+    {
+      prompt: "eas submit --platform android falla con 'version code 1 has already been used'. ¿Qué cambias?",
+      options: [
+        { text: "Activar autoIncrement en el perfil production y reconstruir", correct: true, feedback: "Correcto: cada subida a Google Play necesita un versionCode mayor que el anterior." },
+        { text: "Cambiar el track a alpha", correct: false, feedback: "El versionCode debe ser único en toda la app, no por pista." },
+        { text: "Regenerar el keystore", correct: false, feedback: "La firma no tiene relación con el versionCode y regenerarla causaría un problema mayor." },
+      ],
+    },
+  ]}
+/>

@@ -109,8 +109,8 @@ Sigue la sesión de terminal. Es la secuencia completa desde un proyecto sin `ea
 <Terminal
   steps={[
     { cmd: "npm install -g eas-cli && eas login", out: "✔ Logged in as <account>." },
-    { cmd: "eas build:configure", out: "✔ Linked to project @<account>/notes (ID: 4f8c1c2e-xxxx-xxxx-xxxx-xxxxxxxxxxxx)\n✔ Generated eas.json. Learn more: https://docs.expo.dev/build-reference/eas-json/\n\n🎉 Your project is ready to build.\n\n- Run eas build when you are ready to create your first build." },
-    { cmd: "eas build --profile preview --platform android", out: "✔ Using remote Android credentials (Expo server)\n✔ Generated a new Android Keystore\n✔ Uploaded to EAS 3s\n\nBuild details: https://expo.dev/accounts/<account>/projects/notes/builds/7d2e9b10-xxxx-xxxx-xxxx-xxxxxxxxxxxx\n\nWaiting for build to complete. You can press Ctrl+C to exit.\n✔ Build finished\n\n🤖 Android app:\nhttps://expo.dev/artifacts/eas/aBcDeFgHiJkLmNoPqRsTuV.apk" },
+    { cmd: "eas build:configure", out: "✔ Linked to project @<account>/notes (ID: 4f8c1c2e-xxxx-xxxx-xxxx-xxxxxxxxxxxx)\n✔ Generated eas.json. Learn more: https://docs.expo.dev/build-reference/eas-json/\n\nYour project is ready to build.\n\n- Run eas build when you are ready to create your first build." },
+    { cmd: "eas build --profile preview --platform android", out: "✔ Using remote Android credentials (Expo server)\n✔ Generated a new Android Keystore\n✔ Uploaded to EAS 3s\n\nBuild details: https://expo.dev/accounts/<account>/projects/notes/builds/7d2e9b10-xxxx-xxxx-xxxx-xxxxxxxxxxxx\n\nWaiting for build to complete. You can press Ctrl+C to exit.\n✔ Build finished\n\nAndroid app:\nhttps://expo.dev/artifacts/eas/aBcDeFgHiJkLmNoPqRsTuV.apk" },
     { cmd: "eas build:list --platform android --limit 1", out: "ID              7d2e9b10-xxxx-xxxx-xxxx-xxxxxxxxxxxx\nPlatform        Android\nStatus          finished\nProfile         preview\nDistribution    internal\nChannel         preview\nApp Version     1.0.0\nVersion code    1\nStarted at      2026-09-26 10:12:04\nFinished at     2026-09-26 10:21:47" },
   ]}
 />
