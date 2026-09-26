@@ -6,7 +6,7 @@ module: "Entrega"
 order: 2
 minutes: 20
 prereqs: ["11-capstone/01-arquitectura-y-plan", "06-calidad-ci/07-proyecto-pipeline-verde", "09-seguridad-movil/09-proyecto-auditoria", "10-build-release-operaciones/11-proyecto-publicar"]
-summary: "Evalúa tu app con la rúbrica completa del capstone: arquitectura, calidad, seguridad, release y producto, con un criterio de aprobación y una evidencia por ítem."
+summary: "Evalúa tu app con la rúbrica del capstone: arquitectura, calidad, seguridad, release y producto, con un criterio de aprobación y una evidencia por ítem."
 ---
 
 ## Objetivo
@@ -53,11 +53,16 @@ npx tsc --noEmit
 npx jest
 maestro test flows/
 
-# Security: no service key or private key in the exported bundle (no output means pass)
+# Security: no secret key or private key in the exported bundle (no output means pass)
 npx expo export --platform all
-grep -rl "service_role" dist
+grep -rlE "sb_secret_|PRIVATE KEY" dist
+# Every JWT in the bundle must be the anon key: decode its payload and check the role claim
+grep -rhoE "eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+" dist | sort -u | cut -d. -f2 \
+  | node -e 'require("fs").readFileSync(0, "utf8").trim().split("\n").forEach((p) => console.log(JSON.parse(Buffer.from(p, "base64url")).role))'
 pnpm audit --audit-level high
 ```
+
+Buscar el texto `service_role` no sirve: la clave de servicio antigua es un JWT y su claim `role` está codificado en base64url, así que esa palabra nunca aparece literal en el bundle; las claves secretas nuevas de Supabase empiezan con `sb_secret_`. Por eso el control busca ese prefijo y claves privadas, y decodifica cada JWT que encuentre: la única salida aceptable es `anon`, como viste en la lección de configuración de Supabase de la etapa 8.
 
 Otros criterios no se comprueban con un comando, sino con una captura o un enlace: la política RLS de cada tabla en el panel de Supabase, la build en TestFlight, el evento de prueba en Sentry sin datos personales. Para la parte de seguridad, reutiliza la tabla de autoauditoría MASVS L1 que construiste en la etapa 9; el catálogo oficial de controles está en https://mas.owasp.org/checklists/. Para el release, la referencia es la documentación de EAS en https://docs.expo.dev/.
 
@@ -82,7 +87,8 @@ Esta es una ejecución de los comandos de verificación sobre el registro de há
     { cmd: "npx tsc --noEmit && echo \"types ok\"", out: "types ok" },
     { cmd: "npx jest", out: "Test Suites: 6 passed, 6 total\nTests:       14 passed, 14 total\nSnapshots:   0 total\nTime:        3.1 s" },
     { cmd: "maestro test flows/complete-habit.yaml", out: "Launch app \"com.example.habittracker\"... COMPLETED\nTap on \"Read 10 pages\"... COMPLETED\nAssert that \"Streak: 1\" is visible... COMPLETED" },
-    { cmd: "grep -rl \"service_role\" dist; echo \"exit $?\"", out: "exit 1" },
+    { cmd: "grep -rlE \"sb_secret_|PRIVATE KEY\" dist; echo \"exit $?\"", out: "exit 1" },
+    { cmd: "grep -rhoE \"eyJ[A-Za-z0-9_-]+\\.eyJ[A-Za-z0-9_-]+\" dist | sort -u | cut -d. -f2 | node -e '<same role script as above>'", out: "anon" },
     { cmd: "pnpm audit --audit-level high", out: "No known vulnerabilities found" }
   ]}
 />
@@ -100,7 +106,7 @@ Esta es la rúbrica completa. Cada ítem incluye su criterio de aprobación y la
     "Calidad. Pruebas unitarias: al menos 10 pruebas pasan con npx jest, incluidas las reglas de dominio de tus historias (06-calidad-ci/03-jest-y-rntl)",
     "Calidad. E2E: al menos un flujo de Maestro que recorre la historia 1 pasa en un emulador o dispositivo (06-calidad-ci/05-e2e-con-maestro)",
     "Calidad. CI: el workflow de GitHub Actions ejecuta lint, typecheck y pruebas, y está en verde en la rama principal (06-calidad-ci/06-github-actions)",
-    "Seguridad. Sin secretos en el bundle: buscar service_role y claves privadas en el resultado de npx expo export no devuelve nada; solo viajan variables EXPO_PUBLIC_ públicas (09-seguridad-movil/02-secretos-fuera-del-bundle)",
+    "Seguridad. Sin secretos en el bundle: buscar sb_secret_ y claves privadas en el resultado de npx expo export no devuelve nada y todo JWT del bundle tiene role anon; solo viajan variables EXPO_PUBLIC_ públicas (09-seguridad-movil/02-secretos-fuera-del-bundle)",
     "Seguridad. Tokens en SecureStore: el cliente de Supabase usa un adaptador de SecureStore en auth.storage y ningún token se guarda en AsyncStorage (08-autenticacion-backend/05-securestore-y-refresh-tokens)",
     "Seguridad. RLS en todas las tablas: cada tabla tiene RLS activado y políticas con auth.uid(), comprobado con un segundo usuario que no ve datos ajenos (08-autenticacion-backend/03-base-de-datos-y-rls)",
     "Seguridad. Dependencias auditadas: pnpm audit --audit-level high no reporta vulnerabilidades y el lockfile está en el repositorio (09-seguridad-movil/06-supply-chain)",

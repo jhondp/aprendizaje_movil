@@ -6,7 +6,7 @@ module: "Entrega"
 order: 3
 minutes: 25
 prereqs: ["11-capstone/02-rubrica-y-checklist-final", "10-build-release-operaciones/11-proyecto-publicar"]
-summary: "Publica tu app en las pruebas internas de ambas tiendas, escribe un README con capturas, agrega una pantalla Acerca de y presenta tu trabajo con un guion de demo de 5 minutos."
+summary: "Publica tu app en las pruebas internas de ambas tiendas, escribe un README con capturas, agrega una pantalla Acerca de y presenta tu trabajo en 5 minutos."
 ---
 
 ## Objetivo
@@ -36,7 +36,7 @@ eas submit --platform ios --latest
 eas submit --platform android --latest
 
 # 3. Ship one OTA update to prove the update channel works
-eas update --branch production --message "fix: copy on the empty state"
+eas update --channel production --environment production --message "fix: copy on the empty state"
 ```
 
 Antes de enviar, confirma lo que las tiendas revisan con más frecuencia: la URL de la política de privacidad, las etiquetas de privacidad que coinciden con tu clasificación de datos, textos de permisos que explican para qué se usa cada uno y una cuenta de prueba si la app requiere inicio de sesión. Los detalles están en [Ficha de la tienda y proceso de revisión](/etapa/10-build-release-operaciones/06-store-listing-y-revision) y en la documentación de EAS Submit: https://docs.expo.dev/submit/introduction/.
@@ -255,7 +255,7 @@ buildChangelog("1.1.0", "2026-09-26", commits).forEach((line) => console.log(lin
       prompt: "¿Qué comando envía a TestFlight la última build de iOS construida con EAS?",
       options: [
         { text: "eas build --platform ios", correct: false, feedback: "Ese comando construye la app, no la envía a la tienda." },
-        { text: "eas update --branch production", correct: false, feedback: "Ese comando publica una actualización OTA, no una build." },
+        { text: "eas update --channel production --environment production", correct: false, feedback: "Ese comando publica una actualización OTA, no una build." },
         { text: "eas submit --platform ios --latest", correct: true, feedback: "Correcto: eas submit envía la build a App Store Connect, desde donde llega a TestFlight." }
       ]
     },

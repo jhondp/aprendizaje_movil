@@ -6,7 +6,7 @@ module: "Diseño"
 order: 1
 minutes: 20
 prereqs: ["11-capstone/00-elegir-y-definir-tu-app", "05-estado-datos-arquitectura/10-proyecto-app-con-api", "09-seguridad-movil/09-proyecto-auditoria"]
-summary: "Traduce la definición de tu app a carpetas por feature con cuatro capas, un modelo de amenazas, una clasificación de datos y un plan de entregas por rebanadas verticales."
+summary: "Traduce la definición de tu app a carpetas por feature con cuatro capas, un modelo de amenazas, una clasificación de datos y un plan de entregas verticales."
 ---
 
 ## Objetivo
@@ -27,9 +27,9 @@ Tu app funciona igual. Cada **feature** es una estación, y dentro de ella las c
 
 | Capa | Rol en la cocina | Qué contiene | Puede importar |
 | --- | --- | --- | --- |
-| `domain` | La receta | Tipos, reglas puras, puertos (interfaces) | Nada externo |
-| `application` | El procedimiento | Casos de uso que orquestan el dominio a través de puertos | `domain` |
-| `infrastructure` | Los proveedores | Adaptadores: Supabase, SQLite, SecureStore, notificaciones | `domain`, librerías |
+| `domain` | La receta | Tipos y reglas puras | Nada externo |
+| `application` | El procedimiento | Puertos (interfaces de repositorio) y casos de uso que orquestan el dominio a través de ellos | `domain` |
+| `infrastructure` | Los proveedores | Adaptadores que cumplen los puertos: Supabase, SQLite, SecureStore, notificaciones | `application`, `domain`, librerías |
 | `ui` | El emplatado | Pantallas, componentes y hooks de React | `application`, `domain` |
 
 La regla que no se negocia: **las dependencias apuntan hacia adentro**. El dominio no importa React, React Native, Expo ni Supabase. Así puedes probarlo con pruebas unitarias rápidas y cambiar de proveedor sin tocar las reglas.
@@ -39,14 +39,14 @@ La regla que no se negocia: **las dependencias apuntan hacia adentro**. El domin
 Con el registro de hábitos como ejemplo, el árbol queda así:
 
 ```text
-app/                         # Expo Router routes, thin: they only render screens
-  (tabs)/index.tsx
-  habit/[id].tsx
 src/
+  app/                       # Expo Router routes, thin: they only render screens
+    (tabs)/index.tsx
+    habit/[id].tsx
   features/
     habits/
-      domain/                # Habit, currentStreak, HabitRepository port
-      application/           # completeHabit, createHabit use cases
+      domain/                # Habit, currentStreak
+      application/           # HabitRepository port, completeHabit, createHabit use cases
       infrastructure/        # SupabaseHabitRepository, InMemoryHabitRepository
       ui/                    # HabitListScreen, useHabits hook
     reminders/
@@ -60,7 +60,7 @@ src/
 
 Las carpetas de primer nivel dentro de `features` gritan qué hace la app: hábitos, recordatorios, autenticación. Los componentes reutilizables viven en `shared/ui` organizados con atomic design, y cada feature arma sus pantallas con ellos.
 
-Un detalle práctico: los archivos de `app/` deben ser delgados. Una ruta solo importa la pantalla de la feature y la renderiza. Si una ruta empieza a tener lógica, esa lógica pertenece a `application` o a un hook en `ui`.
+Un detalle práctico: los archivos de `src/app/` deben ser delgados. Una ruta solo importa la pantalla de la feature y la renderiza. Si una ruta empieza a tener lógica, esa lógica pertenece a `application` o a un hook en `ui`.
 
 ### Modelo de amenazas en media página
 
@@ -119,10 +119,10 @@ Marca cada punto cuando esté en el repositorio de tu proyecto.
   id="11-capstone/01-arquitectura-y-plan/arquitectura"
   items={[
     "Cada feature tiene las carpetas domain, application, infrastructure y ui",
-    "domain define las entidades, las reglas puras y los puertos (interfaces de repositorio) de cada feature",
+    "domain define las entidades y las reglas puras de cada feature; los puertos (interfaces de repositorio) viven en application",
     "application tiene un caso de uso por cada historia de usuario y solo depende de domain",
     "infrastructure tiene al menos un adaptador en memoria para pruebas y uno real (Supabase o SQLite)",
-    "ui tiene las pantallas y los hooks; los archivos de app/ solo renderizan pantallas",
+    "ui tiene las pantallas y los hooks; los archivos de src/app/ solo renderizan pantallas",
     "shared/ui está organizado en atoms, molecules y organisms",
     "Escribí el modelo de amenazas STRIDE-lite con una mitigación por amenaza en docs/threat-model.md",
     "Escribí la tabla de clasificación de datos con la clase y el almacenamiento de cada dato",
@@ -143,7 +143,7 @@ Marca cada punto cuando esté en el repositorio de tu proyecto.
   completedOn: string[];
 }
 
-// Port: lives in domain
+// Port: lives in application
 interface HabitRepository {
   findById(id: string): Promise<Habit | undefined>;
   save(habit: Habit): Promise<void>;
@@ -226,11 +226,11 @@ main();`}
       ]
     },
     {
-      prompt: "¿Qué debe contener un archivo de ruta como app/habit/[id].tsx?",
+      prompt: "¿Qué debe contener un archivo de ruta como src/app/habit/[id].tsx?",
       options: [
         { text: "La consulta a Supabase y la lógica de la racha", correct: false, feedback: "Eso pertenece a infrastructure y domain; la ruta debe ser delgada." },
         { text: "Solo la importación y el renderizado de la pantalla de la feature", correct: true, feedback: "Correcto: las rutas de Expo Router son delgadas y delegan en la feature." },
-        { text: "La definición del puerto HabitRepository", correct: false, feedback: "Los puertos se definen en domain." }
+        { text: "La definición del puerto HabitRepository", correct: false, feedback: "Los puertos se definen en application." }
       ]
     },
     {
