@@ -3,13 +3,8 @@ import { AppShell } from '@/ui/templates/AppShell';
 import { LibraryPage } from '@/ui/pages/LibraryPage';
 import { LessonPage } from '@/ui/pages/LessonPage';
 import { NotFoundPage } from '@/ui/pages/NotFoundPage';
-
-function ReviewPlaceholder() {
-  return <h1>Repaso</h1>;
-}
-function NotesPlaceholder() {
-  return <h1>Notas</h1>;
-}
+import { ReviewPage } from '@/ui/pages/ReviewPage';
+import { NotesPage } from '@/ui/pages/NotesPage';
 
 export const routes: RouteObject[] = [
   {
@@ -18,8 +13,8 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <LibraryPage /> },
       { path: 'etapa/:stageSlug/:lessonSlug', element: <LessonPage /> },
-      { path: 'repaso', element: <ReviewPlaceholder /> },
-      { path: 'notas', element: <NotesPlaceholder /> },
+      { path: 'repaso', element: <ReviewPage /> },
+      { path: 'notas', element: <NotesPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },

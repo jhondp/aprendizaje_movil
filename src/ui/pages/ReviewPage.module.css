@@ -1,0 +1,42 @@
+.root {
+  min-height: calc(100vh - var(--topbar-height));
+  background: var(--color-teal);
+  color: var(--color-sand);
+  padding: 0 var(--page-gutter) 56px;
+  display: flex;
+  flex-direction: column;
+}
+
+.bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: var(--topbar-height);
+  font-size: 13px;
+}
+
+.exit {
+  color: var(--color-sand);
+  text-decoration: none;
+}
+
+.barTitle {
+  font-weight: 500;
+}
+
+.stage {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 56px 0 0;
+}
+
+.empty {
+  padding: 72px var(--page-gutter);
+  max-width: 600px;
+}
+
+.empty h1 {
+  font-size: 36px;
+  margin-bottom: 12px;
+}

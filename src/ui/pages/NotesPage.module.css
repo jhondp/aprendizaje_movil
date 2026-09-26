@@ -1,0 +1,45 @@
+.root {
+  padding: 56px var(--page-gutter) 72px;
+  max-width: 820px;
+}
+
+.title {
+  font-size: 40px;
+  margin-bottom: 32px;
+}
+
+.empty {
+  color: var(--ink-55);
+}
+
+.group {
+  margin-bottom: 40px;
+}
+
+.stage {
+  font-size: 20px;
+  margin-bottom: 14px;
+}
+
+.note {
+  background: var(--color-sand);
+  border-radius: 20px;
+  padding: 20px 24px;
+  margin-bottom: 12px;
+}
+
+.lesson {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.text {
+  margin: 8px 0;
+  white-space: pre-wrap;
+  color: var(--color-teal);
+}
+
+.time {
+  font-size: 12px;
+  color: var(--ink-55);
+}
