@@ -28,14 +28,15 @@ export interface QuizQuestionSource {
   options: QuizOptionSource[];
 }
 
-const SECTION_MARKERS = [
-  '## Objetivo',
-  '## Concepto',
-  '## Práctica',
-  '## Ejercicio',
-  '## Errores comunes',
-  '<Flashcards',
-  '<Quiz',
+/** Section headings and components, in required order. Headings are matched as whole lines. */
+const SECTION_MARKERS: { name: string; regex: RegExp }[] = [
+  { name: '## Objetivo', regex: /^## Objetivo[ \t]*$/m },
+  { name: '## Concepto', regex: /^## Concepto[ \t]*$/m },
+  { name: '## Práctica', regex: /^## Práctica[ \t]*$/m },
+  { name: '## Ejercicio', regex: /^## Ejercicio[ \t]*$/m },
+  { name: '## Errores comunes', regex: /^## Errores comunes[ \t]*$/m },
+  { name: '<Flashcards', regex: /<Flashcards\b/ },
+  { name: '<Quiz', regex: /<Quiz\b/ },
 ];
 const PRACTICE_COMPONENTS = ['Playground', 'Sandpack', 'Snack', 'Terminal', 'Checklist'];
 /** Components forbidden per stage id (spec section 4); the label is used in the error message. */
@@ -67,6 +68,69 @@ function hasType(value: unknown, type: Field['type']): boolean {
   return typeof value === type;
 }
 
+function describeError(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+function isErrnoException(e: unknown): e is NodeJS.ErrnoException {
+  return e instanceof Error && 'code' in e;
+}
+
+/** Replaces every non-newline character with a space, so line/column positions stay valid. */
+function blankKeepingNewlines(text: string): string {
+  return text.replace(/[^\n]/g, ' ');
+}
+
+/**
+ * Blanks out fenced code blocks (``` or ~~~, any language, closing fence at least as long as the
+ * opening one) so headings and component tags written inside example code are not matched.
+ */
+function maskFencedBlocks(text: string): string {
+  let fenceChar: string | null = null;
+  let fenceLen = 0;
+  const lines = text.split('\n').map((line) => {
+    const trimmed = line.trim();
+    const fenceMatch = /^([`~]{3,})/.exec(trimmed);
+    if (fenceChar) {
+      if (
+        fenceMatch &&
+        fenceMatch[1]!.startsWith(fenceChar) &&
+        fenceMatch[1]!.length >= fenceLen &&
+        trimmed === fenceMatch[1]
+      ) {
+        fenceChar = null;
+      }
+      return blankKeepingNewlines(line);
+    }
+    if (fenceMatch) {
+      fenceChar = fenceMatch[1]![0]!;
+      fenceLen = fenceMatch[1]!.length;
+      return blankKeepingNewlines(line);
+    }
+    return line;
+  });
+  return lines.join('\n');
+}
+
+/** Blanks out MDX comment blocks, i.e. `{/` + `* ... *` + `/}`, which may span several lines. */
+function maskComments(text: string): string {
+  return text.replace(/\{\/\*[\s\S]*?\*\/\}/g, (m) => blankKeepingNewlines(m));
+}
+
+/** Blanks fenced code blocks and MDX comments so headings/components/links inside them are ignored. */
+function maskNonContent(text: string): string {
+  return maskComments(maskFencedBlocks(text));
+}
+
+function countMatches(text: string, regex: RegExp): number {
+  const flags = regex.flags.includes('g') ? regex.flags : `${regex.flags}g`;
+  return (text.match(new RegExp(regex.source, flags)) ?? []).length;
+}
+
+function hasTag(text: string, tag: string): boolean {
+  return new RegExp(`<${tag}\\b`).test(text);
+}
+
 /**
  * Walks `source` from `from` and returns the index just past the `{...}` group that starts at
  * `from`, ignoring braces inside '...', "..." and `...` strings. Returns -1 when unbalanced.
@@ -91,14 +155,22 @@ function skipBraceGroup(source: string, from: number): number {
   return -1;
 }
 
-/** Returns the source slice of a self-closing JSX block starting at `<Tag`, balancing `{}` braces. */
+/**
+ * Returns the source slice of a self-closing JSX block starting at `<Tag` (word-boundary matched,
+ * so `<Quiz` never matches `<QuizIntro`), balancing `{}` braces. The tag's start position is
+ * located on a masked copy of `source` (fenced code and MDX comments blanked out) so an example
+ * `<Tag ... />` written inside a code fence or comment is skipped, but the returned text is sliced
+ * from the real, unmasked `source`.
+ */
 export function extractBlock(
   source: string,
   tag: string,
   from = 0,
 ): { start: number; end: number; text: string } | null {
-  const start = source.indexOf(`<${tag}`, from);
-  if (start === -1) return null;
+  const masked = maskNonContent(source).slice(from);
+  const match = new RegExp(`<${tag}\\b`).exec(masked);
+  if (!match) return null;
+  const start = from + match.index;
   let i = start;
   while (i < source.length - 1) {
     const ch = source[i];
@@ -138,15 +210,21 @@ export function extractProp(source: string, component: string, prop: string): st
   return null;
 }
 
+/** Evaluates a trusted repo-content array/object literal. Throws (with the parser's message) on failure. */
+function evalLiteral(raw: string): unknown {
+  return new Function(`return (${raw});`)();
+}
+
 /**
  * Parses the `questions={[...]}` literal of the first `<Quiz` block. The literal is trusted repo
- * content, so it is evaluated as a JavaScript array expression. Returns [] when absent or invalid.
+ * content, so it is evaluated as a JavaScript array expression. Returns [] when absent or invalid;
+ * `validateLesson` uses the throwing `evalLiteral` directly so it can report the parse error.
  */
 export function extractQuizQuestions(source: string): QuizQuestionSource[] {
   const raw = extractProp(source, 'Quiz', 'questions');
   if (!raw) return [];
   try {
-    const value = new Function(`return (${raw});`)() as unknown;
+    const value = evalLiteral(raw);
     if (!Array.isArray(value)) return [];
     return value.filter(
       (q): q is QuizQuestionSource =>
@@ -157,8 +235,60 @@ export function extractQuizQuestions(source: string): QuizQuestionSource[] {
   }
 }
 
-function countOccurrences(text: string, needle: string): number {
-  return text.split(needle).length - 1;
+function validateQuizQuestions(questions: unknown[], err: (msg: string) => void): void {
+  if (questions.length !== 3) err(`Quiz must have exactly 3 questions, found ${questions.length}`);
+  questions.forEach((raw, i) => {
+    const n = i + 1;
+    if (typeof raw !== 'object' || raw === null) {
+      err(`Quiz question ${n} must be an object`);
+      return;
+    }
+    const question = raw as Record<string, unknown>;
+    if (typeof question.prompt !== 'string') err(`Quiz question ${n} must have a string prompt`);
+    const options = question.options;
+    if (!Array.isArray(options) || options.length < 2) {
+      err(`Quiz question ${n} must have at least 2 options`);
+      return;
+    }
+    let correctCount = 0;
+    options.forEach((rawOption, j) => {
+      const m = j + 1;
+      if (typeof rawOption !== 'object' || rawOption === null) {
+        err(`Quiz question ${n} option ${m} must be an object`);
+        return;
+      }
+      const option = rawOption as Record<string, unknown>;
+      if (typeof option.text !== 'string')
+        err(`Quiz question ${n} option ${m} must have a string text`);
+      if (typeof option.correct !== 'boolean') {
+        err(`Quiz question ${n} option ${m} must have a boolean correct`);
+      } else if (option.correct) {
+        correctCount += 1;
+      }
+      if (typeof option.feedback !== 'string') {
+        err(`Quiz question ${n} option ${m} must have a string feedback`);
+      }
+    });
+    if (correctCount !== 1) {
+      err(`Quiz question ${n} must have exactly one correct option, found ${correctCount}`);
+    }
+  });
+}
+
+function validateFlashcardsCards(cards: unknown[], err: (msg: string) => void): void {
+  if (cards.length < 3 || cards.length > 5) {
+    err(`Flashcards must have 3 to 5 cards, found ${cards.length}`);
+  }
+  cards.forEach((raw, i) => {
+    const n = i + 1;
+    if (typeof raw !== 'object' || raw === null) {
+      err(`Flashcards card ${n} must be an object`);
+      return;
+    }
+    const card = raw as Record<string, unknown>;
+    if (typeof card.front !== 'string') err(`Flashcards card ${n} must have a string front`);
+    if (typeof card.back !== 'string') err(`Flashcards card ${n} must have a string back`);
+  });
 }
 
 export function validateLesson(
@@ -175,7 +305,7 @@ export function validateLesson(
     data = parsed.data as Record<string, unknown>;
     body = parsed.content;
   } catch (e) {
-    err(`frontmatter could not be parsed (${e instanceof Error ? e.message : String(e)})`);
+    err(`frontmatter could not be parsed (${describeError(e)})`);
     return { id: null, stage: null, hidden: false, prereqs: [], links: [], errors };
   }
 
@@ -198,17 +328,18 @@ export function validateLesson(
   }
 
   const hidden = data.hidden === true;
+  const maskedBody = maskNonContent(body);
 
   if (!hidden) {
-    const positions = SECTION_MARKERS.map((marker) => body.indexOf(marker));
+    const positions = SECTION_MARKERS.map(({ regex }) => regex.exec(maskedBody)?.index ?? -1);
     positions.forEach((pos, i) => {
-      const marker = SECTION_MARKERS[i]!;
+      const marker = SECTION_MARKERS[i]!.name;
       if (pos === -1) {
         err(`missing section "${marker}"`);
         return;
       }
-      const before = SECTION_MARKERS[i - 1];
-      const after = SECTION_MARKERS[i + 1];
+      const before = SECTION_MARKERS[i - 1]?.name;
+      const after = SECTION_MARKERS[i + 1]?.name;
       const prevPos = positions[i - 1] ?? -1;
       const nextPos = positions[i + 1] ?? Number.MAX_SAFE_INTEGER;
       if (
@@ -219,48 +350,69 @@ export function validateLesson(
       }
     });
 
-    const practice = body.indexOf('## Práctica');
-    const exercise = body.indexOf('## Ejercicio');
-    const mistakes = body.indexOf('## Errores comunes');
+    const practice = positions[2];
+    const exercise = positions[3];
+    const mistakes = positions[4];
     if (practice !== -1) {
-      const section = body.slice(practice, exercise === -1 ? undefined : exercise);
-      if (!PRACTICE_COMPONENTS.some((c) => section.includes(`<${c}`))) {
+      const section = maskedBody.slice(practice, exercise === -1 ? undefined : exercise);
+      if (!PRACTICE_COMPONENTS.some((c) => hasTag(section, c))) {
         err(`"## Práctica" needs at least one of ${PRACTICE_COMPONENTS.join(', ')}`);
       }
     }
     if (exercise !== -1) {
-      const section = body.slice(exercise, mistakes === -1 ? undefined : mistakes);
-      if (!section.includes('<Challenge')) err(`"## Ejercicio" needs a Challenge`);
+      const section = maskedBody.slice(exercise, mistakes === -1 ? undefined : mistakes);
+      if (!hasTag(section, 'Challenge')) err(`"## Ejercicio" needs a Challenge`);
     }
 
     if (stage) {
       for (const limit of STAGE_LIMITS) {
-        if (stage.id <= limit.maxStage && body.includes(`<${limit.component}`)) {
+        if (stage.id <= limit.maxStage && hasTag(maskedBody, limit.component)) {
           err(`${limit.component} is not allowed in stage ${stage.id} (${limit.label})`);
         }
       }
     }
   }
 
-  const quizCount = countOccurrences(body, '<Quiz');
-  if (!hidden && quizCount !== 1) err(`lesson must have exactly one Quiz, found ${quizCount}`);
-  const quiz = extractBlock(body, 'Quiz');
-  if (quiz) {
-    const prompts = countOccurrences(quiz.text, 'prompt:');
-    if (prompts !== 3) err(`Quiz must have exactly 3 questions, found ${prompts}`);
+  const quizMatches = countMatches(maskedBody, /<Quiz\b/g);
+  if (!hidden && quizMatches !== 1) err(`lesson must have exactly one Quiz, found ${quizMatches}`);
+  const quizBlock = extractBlock(body, 'Quiz');
+  if (quizBlock) {
+    const raw = extractProp(body, 'Quiz', 'questions');
+    if (raw === null) {
+      err('Quiz questions literal could not be parsed (missing "questions" prop)');
+    } else {
+      try {
+        const parsed = evalLiteral(raw);
+        if (!Array.isArray(parsed)) throw new Error('questions must be an array');
+        validateQuizQuestions(parsed, err);
+      } catch (e) {
+        err(`Quiz questions literal could not be parsed (${describeError(e)})`);
+      }
+    }
   }
 
-  const cardsCount = countOccurrences(body, '<Flashcards');
-  if (!hidden && cardsCount !== 1)
-    err(`lesson must have exactly one Flashcards, found ${cardsCount}`);
-  const cards = extractBlock(body, 'Flashcards');
-  if (cards) {
-    const fronts = countOccurrences(cards.text, 'front:');
-    if (fronts < 3 || fronts > 5) err(`Flashcards must have 3 to 5 cards, found ${fronts}`);
+  const cardsMatches = countMatches(maskedBody, /<Flashcards\b/g);
+  if (!hidden && cardsMatches !== 1) {
+    err(`lesson must have exactly one Flashcards, found ${cardsMatches}`);
+  }
+  const cardsBlock = extractBlock(body, 'Flashcards');
+  if (cardsBlock) {
+    const raw = extractProp(body, 'Flashcards', 'cards');
+    if (raw === null) {
+      err('Flashcards cards literal could not be parsed (missing "cards" prop)');
+    } else {
+      try {
+        const parsed = evalLiteral(raw);
+        if (!Array.isArray(parsed)) throw new Error('cards must be an array');
+        validateFlashcardsCards(parsed, err);
+      } catch (e) {
+        err(`Flashcards cards literal could not be parsed (${describeError(e)})`);
+      }
+    }
   }
 
   const links: string[] = [];
-  for (const match of body.matchAll(/\]\(\/etapa\/([^)#?\s]+)/g)) {
+  for (const match of maskedBody.matchAll(/\]\(\/etapa\/([^)#?\s]+)/g)) {
     links.push(match[1]!.replace(/\/$/, ''));
   }
 
@@ -286,8 +438,22 @@ function walk(dir: string): string[] {
 }
 
 export function validateContent(rootDir: string): ValidationResult {
+  const stagesPath = path.join(rootDir, 'stages.json');
+  let raw: string;
+  try {
+    raw = readFileSync(stagesPath, 'utf8');
+  } catch (e) {
+    const reason = isErrnoException(e) && e.code === 'ENOENT' ? 'file not found' : describeError(e);
+    return { ok: false, errors: [`content/stages.json: ${reason}`] };
+  }
+  let stages: StageMeta[];
+  try {
+    stages = JSON.parse(raw) as StageMeta[];
+  } catch (e) {
+    return { ok: false, errors: [`content/stages.json: invalid JSON (${describeError(e)})`] };
+  }
+
   const errors: string[] = [];
-  const stages = JSON.parse(readFileSync(path.join(rootDir, 'stages.json'), 'utf8')) as StageMeta[];
   const files = walk(rootDir);
   const seen = new Map<string, string>();
   const results = files.map((file) => {
