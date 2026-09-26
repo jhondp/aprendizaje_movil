@@ -1,0 +1,98 @@
+[
+  {
+    "file": "content/08-autenticacion-backend/07-proyecto-app-con-usuarios.mdx",
+    "line": 306,
+    "severity": "major",
+    "category": "oauth-pkce",
+    "summary": "The Google OAuth flow relies on exchangeCodeForSession(code), which only works when the client is created with auth.flowType: 'pkce' (supabase-js does not use PKCE unless asked: https://supabase.com/docs/guides/auth/sessions/pkce-flow), but the createClient config the project tells the learner to reuse (lesson 05, lines 53-60, and the Snack at line 171) never sets flowType; it only appears as a trailing comment on line 339, so a learner who follows the spec gets tokens in the redirect URL fragment and 'Respuesta sin código de autorización'.",
+    "fix": "Add flowType: \"pkce\" to the createClient auth options in lesson 05 (lines 53-60 and the Snack at line 171) and to item 2 'Cliente' of 'Qué vas a construir' here; add a Checklist item 'El cliente de Supabase tiene auth.flowType: pkce'; keep the comment on line 339 but make it match the real module."
+  },
+  {
+    "file": "content/08-autenticacion-backend/06-biometria.mdx",
+    "line": 32,
+    "severity": "minor",
+    "category": "masvs-auth-2",
+    "summary": "The lesson correctly frames biometrics as a local gate, but it should say that a UI-only authenticateAsync check (event-bound) can be bypassed with instrumentation on a rooted/jailbroken device because no secret depends on the biometric result; MASVS-AUTH-2 (https://mas.owasp.org/MASVS/controls/MASVS-AUTH-2/) and MASTG prefer crypto-bound local auth, which Expo exposes as SecureStore's requireAuthentication option (https://docs.expo.dev/versions/latest/sdk/securestore/).",
+    "fix": "Add one paragraph under 'Qué protege y qué no': the lock is a UX/opportunistic control; on a compromised device the setLocked(false) branch can be forced. Mention that binding the stored session to biometrics is possible with SecureStore.setItemAsync(key, value, { requireAuthentication: true }) (needs NSFaceIDUsageDescription, a biometric enrolled, and fails on devices without one), and state the trade-off; add a flashcard that biometrics are 'defensa en profundidad, no autenticación contra el servidor ni garantía en dispositivos comprometidos'."
+  },
+  {
+    "file": "content/09-seguridad-movil/08-crash-reporting-sin-fugas.mdx",
+    "line": 84,
+    "severity": "major",
+    "category": "pii-scrubbing",
+    "summary": "scrubEvent only scrubs event.message, event.extra, event.user and request.cookies, but a thrown Error's text lands in event.exception.values[].value (the Sentry Event payload: https://docs.sentry.io/platforms/react-native/configuration/filtering/ and https://docs.sentry.io/platforms/react-native/data-management/sensitive-data/), so the lesson's own bad example throw new Error(\"Failed to save note: \" + note.body) (line 32) reaches Sentry untouched; event.tags, event.contexts, event.request.url/headers and stacktrace frame vars are also left unscrubbed, and dropSensitiveBreadcrumb ignores crumb.message.",
+    "fix": "Extend scrubEvent to run scrubText over each event.exception?.values[i].value, scrubValue over event.tags, event.contexts and event.request (headers, url, query_string), and scrubValue over event.breadcrumbs as a last line of defense; in dropSensitiveBreadcrumb also apply scrubText to crumb.message; update the Snack's beforeSend and the Checklist item 'beforeSend enmascara correos y tokens en message, exception y extra'; keep the Playground exercise unchanged."
+  },
+  {
+    "file": "content/09-seguridad-movil/04-https-y-certificate-pinning.mdx",
+    "line": 186,
+    "severity": "major",
+    "category": "pinning-rotation",
+    "summary": "The lesson assumes the server key stays the same across Let's Encrypt renewals ('aunque la clave sea la misma', quiz at line 213 'con la misma clave'), but certbot and most ACME clients generate a NEW private key on every renewal by default (certbot docs: '--reuse-key ... Not reusing private keys is the default behavior of Certbot', https://eff-certbot.readthedocs.io/en/stable/using.html), so a learner who pins the leaf SPKI of the api shown in the Terminal (issuer Let's Encrypt R11, line 124) will break their app at the next 90-day renewal even with a backup pin.",
+    "fix": "State explicitly that automated ACME renewals rotate the key unless key reuse is configured (certbot --reuse-key or the equivalent in Caddy/Traefik/acme.sh); give two safe options: (a) reuse the key deliberately and pre-generate the backup key, or (b) pin the CA/intermediate SPKI (iOS NSPinnedCAIdentities, Android <pin> of the CA) instead of the leaf; reword 'Errores comunes' line 186 and quiz option feedback at lines 213-217 so 'con la misma clave' becomes an explicit precondition, not an assumption."
+  },
+  {
+    "file": "content/09-seguridad-movil/03-almacenamiento-seguro.mdx",
+    "line": 78,
+    "severity": "minor",
+    "category": "android-backup",
+    "summary": "The lesson says android:allowBackup can be disabled 'mediante expo-build-properties o un config plugin', but expo-build-properties has no allowBackup option (https://docs.expo.dev/versions/latest/sdk/build-properties/); the supported knob is the app config field android.allowBackup, default true (https://docs.expo.dev/versions/latest/config/app/#allowbackup).",
+    "fix": "Replace the sentence with: 'Con Expo se desactiva con \"android\": { \"allowBackup\": false } en app.json / app.config.ts (por defecto es true, así que las notas en SQLite se copian a Google Drive)'; update Checklist item 'Decidí y anoté si desactivo el backup de Android y por qué' to name the field."
+  },
+  {
+    "file": "content/09-seguridad-movil/03-almacenamiento-seguro.mdx",
+    "line": 54,
+    "severity": "minor",
+    "category": "keychain-accessibility",
+    "summary": "The reference snippet (and the Snack at line 112) stores the session token with keychainAccessible: AFTER_FIRST_UNLOCK, which is weaker than SecureStore's default WHEN_UNLOCKED and not device-bound, for an app that has no background access need; MASTG recommends the most restrictive class that works and the lesson itself notes _THIS_DEVICE_ONLY prevents Keychain migration via backups (SecureStore docs: default WHEN_UNLOCKED; constants WHEN_UNLOCKED_THIS_DEVICE_ONLY, AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY, https://docs.expo.dev/versions/latest/sdk/securestore/).",
+    "fix": "Use SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY in both snippets, and in the bullet 'Accesibilidad en iOS' explain when to relax to AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY (only if a background task must read the token); adjust the quiz feedback at line 237 accordingly."
+  },
+  {
+    "file": "content/09-seguridad-movil/06-supply-chain.mdx",
+    "line": 20,
+    "severity": "minor",
+    "category": "masvs-mapping",
+    "summary": "Mapping dependency/lockfile integrity to MASVS-RESILIENCE-2 is incorrect: RESILIENCE-2 is runtime anti-tampering of the installed app (MAS-R profile), while dependency vulnerabilities and build reproducibility fall under MASVS-CODE-3 (and OWASP Mobile Top 10 M2); the same stretch appears in lesson 09 line 110 ('RESILIENCE-2: ... integridad del build vía lockfile y EAS').",
+    "fix": "Keep MASVS-CODE-3 as the only control for this lesson, drop the RESILIENCE-2 sentence, and in lesson 09 line 110 describe RESILIENCE-2 as 'decisión sobre anti-tampering en tiempo de ejecución (integridad de la app instalada)', moving lockfile/EAS evidence to the CODE-3 row."
+  },
+  {
+    "file": "content/09-seguridad-movil/09-proyecto-auditoria.mdx",
+    "line": 60,
+    "severity": "minor",
+    "category": "masvs-auth-2",
+    "summary": "The audit guidance says AUTH-2 and AUTH-3 'suelen ser No aplica en una app de notas, salvo que hayas añadido bloqueo biométrico', but the stage-8 project (08/07 line 313) requires the biometric lock, so for the learner's app AUTH-2 applies and must be assessed, not skipped.",
+    "fix": "Reword to: 'Tu app tiene bloqueo biométrico (etapa 8), así que AUTH-2 aplica: evidencia = uso de expo-local-authentication con disableDeviceFallback: false y la nota de que es un control local, no una prueba de identidad; AUTH-3 aplica si el borrado de cuenta pide reautenticación'; update Checklist item at line 98 to match."
+  },
+  {
+    "file": "content/10-build-release-operaciones/01-secrets-en-eas.mdx",
+    "line": 48,
+    "severity": "major",
+    "category": "config-extra-leak",
+    "summary": "The lesson says a secret 'solo puede usarlo app.config.ts o un paso del build' without warning that every field app.config.ts returns, including extra (which lesson 00 line 73 presents as the runtime channel), is embedded in the app manifest and readable by anyone (npx expo config --type public prints it; Expo: 'anything that is included in your client-side code should be considered public', https://docs.expo.dev/eas/environment-variables/), so a learner can leak a build-time secret by writing extra: { sentryToken: process.env.SENTRY_AUTH_TOKEN }; also, secret-visibility variables are not available during EAS CLI config resolution (https://docs.expo.dev/eas/environment-variables/usage/).",
+    "fix": "Add a Callout kind=\"danger\" after line 48: 'Todo lo que app.config.ts devuelve (extra incluido) viaja dentro de la app: nunca copies una variable sin prefijo a extra ni a ningún campo de configuración. Usa los secretos solo en pasos del build (por ejemplo la subida de source maps).'; add a Checklist item 'Ningún valor de extra ni de app.config.ts proviene de una variable secret'; in lesson 00 line 73 add 'extra es público: se ve con npx expo config --type public'."
+  },
+  {
+    "file": "content/10-build-release-operaciones/07-eas-update-y-rollback.mdx",
+    "line": 75,
+    "severity": "major",
+    "category": "ota-security",
+    "summary": "The OTA lesson never states that anyone who can run eas update on the production channel (a compromised Expo account, a leaked EXPO_TOKEN in CI) gets code execution on every installed app, nor that EAS Update supports update code signing so the device verifies the update came from you (npx expo-updates codesigning:generate / codesigning:configure, eas update --private-key-path; Production/Enterprise plans, https://docs.expo.dev/eas-update/code-signing/); this is the release-side counterpart of MASVS-CODE-2/RESILIENCE-2 and the stage-9 supply-chain lesson.",
+    "fix": "Add a subsection 'Seguridad de las OTA' before 'Rollback': (1) treat eas update as a production deploy: 2FA on every Expo account, least-privilege roles, robot tokens only in CI secrets and rotated; (2) publish only from a reviewed commit/CI, never from a laptop with uncommitted changes; (3) mention update code signing with its plan requirement and that without it you rely on TLS to EAS; add Checklist items 'La cuenta de Expo tiene 2FA y el EXPO_TOKEN de CI es secret' and 'Decidí si activo code signing de EAS Update'."
+  },
+  {
+    "file": "content/10-build-release-operaciones/09-monitoreo-sentry.mdx",
+    "line": 56,
+    "severity": "major",
+    "category": "pii-scrubbing",
+    "summary": "This Sentry.init (and the checklist at lines 187-198) drops the beforeSend, beforeBreadcrumb and enabled: !__DEV__ configuration that stage 9 lesson 08 made mandatory ('Sentry.init tiene sendDefaultPii: false y enabled: !__DEV__', 'beforeSend enmascara correos y tokens'), even though the stage-10 project explicitly builds on the audited app; a learner following the wizard flow here ends up shipping Sentry without scrubbing and with console breadcrumbs enabled.",
+    "fix": "Import scrubEvent and dropSensitiveBreadcrumb from src/infrastructure/monitoring/scrub and pass beforeSend, beforeBreadcrumb and enabled: !__DEV__ in the snippet; add a sentence 'la política de limpieza de la etapa 9 se mantiene; el wizard no la conoce'; add Checklist item 'beforeSend y beforeBreadcrumb de la lección de crash reporting siguen configurados y probados con un evento de prueba'."
+  },
+  {
+    "file": "content/10-build-release-operaciones/09-monitoreo-sentry.mdx",
+    "line": 57,
+    "severity": "minor",
+    "category": "config-consistency",
+    "summary": "The snippet hardcodes the DSN literal in Sentry.init while the prose (line 69), the checklist (line 191) and the project lesson (11 line 29) require EXPO_PUBLIC_SENTRY_DSN; the inconsistency teaches hardcoding a per-environment value and makes preview/production share one Sentry project.",
+    "fix": "Use dsn: process.env.EXPO_PUBLIC_SENTRY_DSN and environment: process.env.EXPO_PUBLIC_ENVIRONMENT ?? \"production\" as in stage 9; mention that the wizard writes a literal DSN and that it must be replaced."
+  }
+]

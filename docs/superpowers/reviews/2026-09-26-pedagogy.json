@@ -1,0 +1,34 @@
+[
+  {
+    "file": "content/02-typescript/06-utility-types.mdx",
+    "line": 36,
+    "severity": "blocker",
+    "category": "forward-reference",
+    "summary": "The main Concepto explanation of Partial<T> depends entirely on reading `return { ...task, ...changes };` (object spread with override semantics), but the spread operator (`...`) is never introduced or explained anywhere in stages 0-2, or in any earlier lesson, before this code is presented as the primary teaching example.",
+    "fix": "Add 2-3 sentences the first time spread is used in this lesson explaining that `{ ...task, ...changes }` copies all fields of `task` into a new object and then overwrites them with any matching fields from `changes` (later keys win). Alternatively, introduce object spread explicitly in stage 1 (e.g., content/01-javascript/05-objetos.mdx) so this lesson can build on a taught concept instead of a silent one, per writer-brief.md 1.5's rule that forward references must at least be named with the stage that covers them."
+  },
+  {
+    "file": "content/01-javascript/07-metodos-de-array.mdx",
+    "line": 138,
+    "severity": "major",
+    "category": "forward-reference",
+    "summary": "The Challenge solution for \"Precios con descuento\" uses `{ ...product, price: product.price * 0.9 }` (object spread) even though the task itself only asks to build an array of discounted prices and does not require preserving the other fields; a learner who reveals the solution meets unexplained syntax with no support in the lesson.",
+    "fix": "Rewrite the solution without spread, e.g. `{ name: product.name, price: product.price * 0.9 }`, which is fully solvable with what stage 1 has taught so far (object literals, map). Save the spread operator for a lesson that explicitly teaches it."
+  },
+  {
+    "file": "content/01-javascript/06-bucles.mdx",
+    "line": 59,
+    "severity": "major",
+    "category": "forward-reference",
+    "summary": "Template literal syntax (backticks with `${count}` interpolation) appears in the main Concepto code sample and is then reused as runnable code in the Práctica Playground (line 111), but template literals are never introduced, named, or explained anywhere in the course before or after this lesson — a true beginner has only seen string concatenation with `+` up to this point (01-javascript/00 through 05).",
+    "fix": "Either add a one-sentence explanation the first time a template literal is used (\"this is a template literal: text inside backticks can embed `${expression}`, which is replaced by its value\") or replace it with string concatenation (`\"iteration \" + count`), consistent with every other string example in the lesson, and introduce template literals explicitly in a later lesson before reusing them in 08-scope-y-closures.mdx, 10-modulos.mdx and 13-proyecto-app-de-tareas.mdx."
+  },
+  {
+    "file": "content/03-react/07-custom-hooks.mdx",
+    "line": 27,
+    "severity": "minor",
+    "category": "forward-reference",
+    "summary": "`function useToggle(initialValue = false)` is the first use of default parameter syntax in the whole course; it is never explained, and the course had earlier (01-javascript/01-operadores.mdx) specifically taught learners to be alert to confusing `=` (assignment) with `===` (comparison), which makes an unexplained `=` inside a parameter list a plausible source of confusion.",
+    "fix": "Add a short parenthetical the first time this appears, e.g. \"initialValue = false le da un valor por defecto: si se llama useToggle() sin argumento, initialValue vale false\", so the meaning of `=` in this new position is disambiguated from the assignment/comparison distinction taught earlier."
+  }
+]

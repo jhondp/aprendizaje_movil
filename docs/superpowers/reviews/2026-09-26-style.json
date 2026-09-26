@@ -1,0 +1,162 @@
+[
+  {
+    "file": "content/00-aprender-a-programar/99-demo-componentes.mdx",
+    "line": 27,
+    "severity": "blocker",
+    "category": "component_restricted",
+    "summary": "Sandpack not allowed in stage 0",
+    "fix": "Use Playground instead"
+  },
+  {
+    "file": "content/03-react/08-composicion-y-container-presentational.mdx",
+    "line": 9,
+    "severity": "minor",
+    "category": "summary_length",
+    "summary": "Summary is 164 chars (max 160)",
+    "fix": "Shorten summary to under 160 characters"
+  },
+  {
+    "file": "content/03-react/10-formularios.mdx",
+    "line": 9,
+    "severity": "minor",
+    "category": "summary_length",
+    "summary": "Summary is 162 chars (max 160)",
+    "fix": "Shorten summary to under 160 characters"
+  },
+  {
+    "file": "content/03-react/11-proyecto-tablero-de-tareas.mdx",
+    "line": 9,
+    "severity": "minor",
+    "category": "summary_length",
+    "summary": "Summary is 161 chars (max 160)",
+    "fix": "Shorten summary to under 160 characters"
+  },
+  {
+    "file": "content/07-nativo-ux-avanzada/06-accesibilidad.mdx",
+    "line": 9,
+    "severity": "minor",
+    "category": "summary_length",
+    "summary": "Summary is 166 chars (max 160)",
+    "fix": "Shorten summary to under 160 characters"
+  },
+  {
+    "file": "content/07-nativo-ux-avanzada/09-offline-first.mdx",
+    "line": 9,
+    "severity": "minor",
+    "category": "summary_length",
+    "summary": "Summary is 171 chars (max 160)",
+    "fix": "Shorten summary to under 160 characters"
+  },
+  {
+    "file": "content/07-nativo-ux-avanzada/11-proyecto-modulo-nativo.mdx",
+    "line": 9,
+    "severity": "minor",
+    "category": "summary_length",
+    "summary": "Summary is 163 chars (max 160)",
+    "fix": "Shorten summary to under 160 characters"
+  },
+  {
+    "file": "content/08-autenticacion-backend/07-proyecto-app-con-usuarios.mdx",
+    "line": 9,
+    "severity": "minor",
+    "category": "summary_length",
+    "summary": "Summary is 179 chars (max 160)",
+    "fix": "Shorten summary to under 160 characters"
+  },
+  {
+    "file": "content/09-seguridad-movil/04-https-y-certificate-pinning.mdx",
+    "line": 9,
+    "severity": "minor",
+    "category": "summary_length",
+    "summary": "Summary is 162 chars (max 160)",
+    "fix": "Shorten summary to under 160 characters"
+  },
+  {
+    "file": "content/09-seguridad-movil/05-validacion-de-entrada.mdx",
+    "line": 9,
+    "severity": "minor",
+    "category": "summary_length",
+    "summary": "Summary is 163 chars (max 160)",
+    "fix": "Shorten summary to under 160 characters"
+  },
+  {
+    "file": "content/09-seguridad-movil/06-supply-chain.mdx",
+    "line": 9,
+    "severity": "minor",
+    "category": "summary_length",
+    "summary": "Summary is 171 chars (max 160)",
+    "fix": "Shorten summary to under 160 characters"
+  },
+  {
+    "file": "content/09-seguridad-movil/07-privacidad-y-permisos-minimos.mdx",
+    "line": 9,
+    "severity": "minor",
+    "category": "summary_length",
+    "summary": "Summary is 180 chars (max 160)",
+    "fix": "Shorten summary to under 160 characters"
+  },
+  {
+    "file": "content/10-build-release-operaciones/09-monitoreo-sentry.mdx",
+    "line": 9,
+    "severity": "minor",
+    "category": "summary_length",
+    "summary": "Summary is 162 chars (max 160)",
+    "fix": "Shorten summary to under 160 characters"
+  },
+  {
+    "file": "content/10-build-release-operaciones/10-salir-de-managed.mdx",
+    "line": 9,
+    "severity": "minor",
+    "category": "summary_length",
+    "summary": "Summary is 171 chars (max 160)",
+    "fix": "Shorten summary to under 160 characters"
+  },
+  {
+    "file": "content/10-build-release-operaciones/11-proyecto-publicar.mdx",
+    "line": 9,
+    "severity": "minor",
+    "category": "summary_length",
+    "summary": "Summary is 187 chars (max 160)",
+    "fix": "Shorten summary to under 160 characters"
+  },
+  {
+    "file": "content/11-capstone/01-arquitectura-y-plan.mdx",
+    "line": 9,
+    "severity": "minor",
+    "category": "summary_length",
+    "summary": "Summary is 170 chars (max 160)",
+    "fix": "Shorten summary to under 160 characters"
+  },
+  {
+    "file": "content/11-capstone/02-rubrica-y-checklist-final.mdx",
+    "line": 9,
+    "severity": "minor",
+    "category": "summary_length",
+    "summary": "Summary is 161 chars (max 160)",
+    "fix": "Shorten summary to under 160 characters"
+  },
+  {
+    "file": "content/11-capstone/03-publicar-y-presentar.mdx",
+    "line": 9,
+    "severity": "minor",
+    "category": "summary_length",
+    "summary": "Summary is 175 chars (max 160)",
+    "fix": "Shorten summary to under 160 characters"
+  },
+  {
+    "file": "content/05-estado-datos-arquitectura/README.md",
+    "line": 23,
+    "severity": "major",
+    "category": "english_prose",
+    "summary": "English heading in README: \"## Closing project\"",
+    "fix": "Translate to Spanish"
+  },
+  {
+    "file": "content/05-estado-datos-arquitectura/README.md",
+    "line": 29,
+    "severity": "major",
+    "category": "english_prose",
+    "summary": "English heading in README: \"## Notes for maintainers\"",
+    "fix": "Translate to Spanish"
+  }
+]
