@@ -1,0 +1,110 @@
+---
+id: "00-aprender-a-programar/00-que-es-un-programa"
+title: "Qué es un programa"
+stage: 0
+module: "Antes de escribir código"
+order: 0
+minutes: 10
+prereqs: []
+summary: "Entiende qué hace una computadora cuando ejecuta un programa y por qué el orden importa."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a poder explicar con tus palabras qué es un programa, qué es una instrucción y por qué la computadora necesita que todo esté escrito en orden y sin ambigüedad.
+
+**Prerrequisitos:** ninguno. Esta es la primera lección del curso.
+
+## Concepto
+
+Una computadora no piensa. Solo sigue instrucciones, una detrás de otra, exactamente como están escritas. Un **programa** es esa lista de instrucciones.
+
+Piensa en una receta de cocina. La receta dice "bate tres huevos, agrega una taza de harina, mezcla durante dos minutos". Quien cocina no decide nada: sigue los pasos. Si la receta dice "agrega harina" antes de "rompe los huevos", el resultado es un desastre, aunque cada paso por separado sea correcto. Programar es escribir recetas para una cocinera que obedece al pie de la letra y nunca improvisa.
+
+Tres ideas que vas a usar todos los días:
+
+- **Instrucción**: un paso concreto. "Muestra el texto Hola en pantalla" es una instrucción.
+- **Secuencia**: las instrucciones se ejecutan en orden, de arriba hacia abajo, salvo que una instrucción diga lo contrario.
+- **Ambigüedad**: la computadora no entiende "más o menos". Si una instrucción puede interpretarse de dos formas, el programa no funciona o hace algo inesperado.
+
+Todo lo que vas a aprender en este curso, desde una variable hasta una app publicada en la tienda, se construye sobre estas tres ideas. Cuando algo falle, y va a fallar muchas veces, la primera pregunta siempre es la misma: ¿qué instrucción se ejecutó, en qué orden, y qué entendió la computadora?
+
+<Callout kind="tip">
+  La palabra "código" es solo otra forma de decir "programa escrito en un lenguaje que la computadora entiende". En este curso el lenguaje será JavaScript.
+</Callout>
+
+## Práctica
+
+Este es tu primer programa. Cada línea es una instrucción que muestra un texto. Pulsa "Ejecutar" y observa la salida. Después cambia el orden de las líneas y vuelve a ejecutar: la salida cambia porque la secuencia cambió.
+
+<Playground
+  lang="js"
+  code={`console.log("Rompe tres huevos");
+console.log("Agrega una taza de harina");
+console.log("Mezcla dos minutos");`}
+  expected={`Rompe tres huevos
+Agrega una taza de harina
+Mezcla dos minutos`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Tu primera receta como programa"
+  solution={
+    <Playground
+      lang="js"
+      code={`console.log("Hierve el agua");
+console.log("Pon la bolsita en la taza");
+console.log("Vierte el agua en la taza");
+console.log("Espera tres minutos");`}
+    />
+  }
+>
+  Escribe un programa de cuatro instrucciones que muestre, en orden, los pasos para preparar un té: hervir agua, poner la bolsita en la taza, verter el agua, esperar tres minutos. Usa una línea `console.log` por paso.
+
+  <Playground lang="js" code={`// Escribe aquí tus cuatro instrucciones`} />
+</Challenge>
+
+## Errores comunes
+
+- **Pensar que la computadora "sabe lo que quisiste decir".** No lo sabe. Si escribes `console.log(Hola)` sin comillas, la computadora busca algo llamado `Hola` que no existe y falla. Cómo detectarlo: el mensaje de error menciona "is not defined".
+- **Cambiar el orden y esperar el mismo resultado.** Dos programas con las mismas instrucciones en distinto orden son programas distintos. Cómo detectarlo: compara la salida línea por línea con lo que esperabas.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué es un programa?", back: "Una lista de instrucciones que la computadora ejecuta en orden." },
+    { front: "¿Qué es una instrucción?", back: "Un paso concreto y sin ambigüedad, como mostrar un texto en pantalla." },
+    { front: "¿Por qué importa el orden de las instrucciones?", back: "Porque la computadora las ejecuta de arriba hacia abajo y no corrige el orden por ti." },
+    { front: "¿Qué pasa con una instrucción ambigua?", back: "El programa falla o hace algo inesperado; la computadora no interpreta intenciones." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué hace una computadora cuando ejecuta un programa?",
+      options: [
+        { text: "Interpreta la intención de quien lo escribió", correct: false, feedback: "No. La computadora no interpreta intenciones, solo sigue instrucciones." },
+        { text: "Sigue las instrucciones en orden, tal como están escritas", correct: true, feedback: "Correcto. Esa es la definición de ejecutar un programa." },
+        { text: "Elige el mejor orden para las instrucciones", correct: false, feedback: "No. El orden lo decide quien programa." },
+      ],
+    },
+    {
+      prompt: "Si intercambias dos líneas de un programa, ¿qué ocurre?",
+      options: [
+        { text: "Nada, el resultado es el mismo", correct: false, feedback: "Solo si las líneas no dependen entre sí; en general el resultado cambia." },
+        { text: "El programa deja de ser válido siempre", correct: false, feedback: "Puede seguir siendo válido, pero hacer otra cosa." },
+        { text: "Puede cambiar el resultado, porque la secuencia cambió", correct: true, feedback: "Correcto. El orden forma parte del programa." },
+      ],
+    },
+    {
+      prompt: "¿Cuál de estas es una instrucción sin ambigüedad?",
+      options: [
+        { text: "Muestra un saludo bonito", correct: false, feedback: "\"Bonito\" es ambiguo; la computadora no puede decidir qué significa." },
+        { text: "Muestra el texto Hola en pantalla", correct: true, feedback: "Correcto. Es concreto y solo tiene una interpretación." },
+        { text: "Haz algo útil", correct: false, feedback: "Demasiado vago para ser una instrucción." },
+      ],
+    },
+  ]}
+/>
