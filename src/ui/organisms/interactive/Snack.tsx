@@ -12,15 +12,18 @@ export function buildSnackUrl({
   code,
   dependencies,
   platform,
+  sdkVersion,
 }: {
   code: string;
   dependencies?: Record<string, string>;
   platform: SnackPlatform;
+  sdkVersion?: string;
 }): string {
   const params = new URLSearchParams({ platform, preview: 'true', theme: 'light', code });
   if (dependencies && Object.keys(dependencies).length > 0) {
     params.set('dependencies', serializeDependencies(dependencies));
   }
+  if (sdkVersion) params.set('sdkversion', sdkVersion);
   return `https://snack.expo.dev/embedded?${params.toString()}`;
 }
 
@@ -28,19 +31,22 @@ export function Snack({
   code,
   dependencies,
   platform = 'ios',
+  sdkVersion,
 }: {
   code: string;
   dependencies?: Record<string, string>;
   platform?: SnackPlatform;
+  /** Expo SDK version, e.g. "52.0.0"; Snack picks its default when omitted. */
+  sdkVersion?: string;
 }) {
   return (
     <div className={styles.root}>
       <iframe
         title="Expo Snack"
         className={styles.frame}
-        src={buildSnackUrl({ code, dependencies, platform })}
+        src={buildSnackUrl({ code, dependencies, platform, sdkVersion })}
         loading="lazy"
-        allow="geolocation; camera; microphone"
+        referrerPolicy="no-referrer"
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals"
       />
       <p className={styles.note}>

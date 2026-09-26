@@ -18,6 +18,14 @@ describe('buildSnackUrl', () => {
     expect(url.searchParams.get('theme')).toBe('light');
   });
 
+  it('passes the SDK version when given', () => {
+    const url = new URL(buildSnackUrl({ code: 'x', platform: 'ios', sdkVersion: '52.0.0' }));
+    expect(url.searchParams.get('sdkversion')).toBe('52.0.0');
+    expect(
+      new URL(buildSnackUrl({ code: 'x', platform: 'ios' })).searchParams.has('sdkversion'),
+    ).toBe(false);
+  });
+
   it('omits the dependencies param when none are given', () => {
     const url = new URL(buildSnackUrl({ code: 'x', platform: 'ios' }));
     expect(url.searchParams.has('dependencies')).toBe(false);
@@ -39,9 +47,16 @@ describe('Snack', () => {
     expect(screen.getByText(/necesita conexión/)).toBeInTheDocument();
   });
 
+  it('forwards the SDK version to the embed URL', () => {
+    render(<Snack code="x" sdkVersion="52.0.0" />);
+    expect(screen.getByTitle('Expo Snack').getAttribute('src')).toContain('sdkversion=52.0.0');
+  });
+
   it('sandboxes the iframe without top-navigation privileges', () => {
     render(<Snack code="export default function App() { return null }" />);
     const frame = screen.getByTitle('Expo Snack');
+    expect(frame).not.toHaveAttribute('allow');
+    expect(frame).toHaveAttribute('referrerpolicy', 'no-referrer');
     expect(frame.getAttribute('sandbox')).toBe(
       'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals',
     );

@@ -18,4 +18,13 @@ describe('Terminal', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Reiniciar' }));
     expect(screen.queryByText('git --version')).not.toBeInTheDocument();
   });
+
+  it('announces revealed output in a polite log with valid pre content', async () => {
+    const { container } = render(<Terminal steps={steps} />);
+    const log = screen.getByRole('log');
+    expect(log).toHaveAttribute('aria-live', 'polite');
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente paso' }));
+    expect(log).toHaveTextContent('git version 2.47.0');
+    expect(container.querySelector('pre div')).toBeNull();
+  });
 });

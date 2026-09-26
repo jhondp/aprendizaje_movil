@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useCourse } from '@/application/CourseContext';
+import { useRepositories } from '@/application/RepositoriesContext';
 import { useContinueLearning } from '@/application/hooks/useContinueLearning';
 import { useProgress } from '@/application/hooks/useProgress';
 import { useSrs } from '@/application/hooks/useSrs';
@@ -28,6 +29,7 @@ function greeting(hour: number): string {
 
 export function LibraryPage() {
   const course = useCourse();
+  const { clock } = useRepositories();
   const { state } = useProgress();
   const { streak, week } = useStreak();
   const { due } = useSrs();
@@ -42,7 +44,7 @@ export function LibraryPage() {
   const cards = course.stages
     .map((stage) => ({ stage, progress: stageProgress(stage, state.completed) }))
     .filter(({ progress }) => {
-      if (filter === 'inProgress') return progress.pct < 100;
+      if (filter === 'inProgress') return progress.done > 0 && progress.pct < 100;
       if (filter === 'finished') return progress.total > 0 && progress.pct === 100;
       return true;
     });
@@ -50,7 +52,7 @@ export function LibraryPage() {
   return (
     <div className={styles.root}>
       <section className={styles.hero}>
-        <div className={styles.greeting}>{greeting(new Date().getHours())}</div>
+        <div className={styles.greeting}>{greeting(new Date(clock.now()).getHours())}</div>
         <h1 className={styles.headline}>Todo lo que aprendes, en un solo lugar.</h1>
       </section>
       <section className={styles.dashboard}>

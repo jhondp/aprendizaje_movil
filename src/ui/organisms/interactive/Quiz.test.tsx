@@ -29,8 +29,16 @@ describe('Quiz', () => {
       </LessonProvider>,
     );
     await userEvent.click(screen.getByRole('button', { name: '3' }));
-    expect(screen.getByText('No, revisa la suma.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '4' })).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent('No, revisa la suma.');
+    const right = screen.getByRole('button', { name: /^4/ });
+    expect(right).toHaveAttribute('aria-disabled', 'true');
+    expect(right).not.toBeDisabled();
+    expect(right).toHaveAccessibleName('4 (respuesta correcta)');
+    expect(screen.getByRole('button', { name: /^3/ })).toHaveAccessibleName(
+      '3 (respuesta incorrecta)',
+    );
+    await userEvent.click(right);
+    expect(screen.getByRole('status')).toHaveTextContent('No, revisa la suma.');
     expect(screen.queryByText(/Resultado/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'París' }));
     expect(screen.getByText('Resultado: 1 de 2 correctas')).toBeInTheDocument();

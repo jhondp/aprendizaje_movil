@@ -17,15 +17,15 @@ export function Terminal({ steps }: { steps: TerminalStep[] }) {
         <span className={styles.dot} />
         <span className={styles.barTitle}>terminal</span>
       </div>
-      <pre className={styles.screen}>
+      <pre className={styles.screen} role="log" aria-live="polite">
         {steps.slice(0, visible).map((step, i) => (
-          <div key={i} className={styles.step}>
-            <div>
+          <code key={i} className={styles.step}>
+            <span className={styles.line}>
               <span className={styles.prompt}>$ </span>
               <span className={styles.cmd}>{step.cmd}</span>
-            </div>
-            {step.out !== '' && <div className={styles.out}>{step.out}</div>}
-          </div>
+            </span>
+            {step.out !== '' && <span className={styles.out}>{step.out}</span>}
+          </code>
         ))}
       </pre>
       <div className={styles.actions}>

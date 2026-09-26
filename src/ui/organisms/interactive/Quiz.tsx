@@ -50,22 +50,39 @@ export function Quiz({ questions }: { questions: QuizQuestion[] }) {
                       : pick === oi
                         ? 'wrong'
                         : 'idle';
+                const locked = pick !== undefined;
                 return (
                   <button
                     key={oi}
                     type="button"
                     className={styles.option}
                     data-state={state}
-                    disabled={pick !== undefined}
-                    onClick={() => setAnswers((a) => ({ ...a, [qi]: oi }))}
+                    aria-disabled={locked}
+                    onClick={() => {
+                      if (!locked) setAnswers((a) => ({ ...a, [qi]: oi }));
+                    }}
                   >
                     {option.text}
+                    {state !== 'idle' && (
+                      <>
+                        <span className={styles.marker} aria-hidden="true">
+                          {state === 'correct' ? '✓' : '✗'}
+                        </span>
+                        <span className={styles.srOnly}>
+                          {state === 'correct'
+                            ? ' (respuesta correcta)'
+                            : ' (respuesta incorrecta)'}
+                        </span>
+                      </>
+                    )}
                   </button>
                 );
               })}
             </div>
             {pick !== undefined && (
-              <p className={styles.feedback}>{question.options[pick]?.feedback}</p>
+              <p className={styles.feedback} role="status">
+                {question.options[pick]?.feedback}
+              </p>
             )}
           </div>
         );
