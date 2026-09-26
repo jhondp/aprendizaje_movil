@@ -1,0 +1,235 @@
+---
+id: "07-nativo-ux-avanzada/03-reanimated"
+title: "Animaciones con Reanimated"
+stage: 7
+module: "Movimiento"
+order: 3
+minutes: 15
+prereqs: ["07-nativo-ux-avanzada/02-notificaciones"]
+summary: "Crea animaciones fluidas que corren en el hilo de UI con useSharedValue, useAnimatedStyle y withSpring de Reanimated 4."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás animar un componente con `useSharedValue`, `useAnimatedStyle` y `withSpring`, y explicar por qué Reanimated corre en el hilo de UI.
+
+**Prerrequisitos:** `07-nativo-ux-avanzada/02-notificaciones`
+
+## Concepto
+
+Una animación es una secuencia de fotogramas. Para que se vea fluida, el teléfono debe dibujar 60 fotogramas por segundo (o 120 en pantallas modernas): uno cada 16 milisegundos o menos. Si un fotograma llega tarde, el ojo nota un tirón.
+
+En React Native hay dos hilos importantes. El **hilo de JavaScript** ejecuta tus componentes, tu estado y tu lógica. El **hilo de UI** dibuja la pantalla y recibe los toques. Si animas cambiando estado con `useState` en cada fotograma, cada paso cruza de JavaScript a la UI y vuelve a renderizar el componente. Cuando el hilo de JavaScript está ocupado (cargando datos, procesando una lista), los fotogramas se retrasan.
+
+La analogía: imagina a un director de orquesta (el hilo de JavaScript) que tuviera que indicar cada nota a cada músico en tiempo real. Si se distrae un segundo, la música se corta. Reanimated le da la partitura a los músicos (el hilo de UI) antes de empezar: el director solo dice "toquen esta pieza" y los músicos la tocan solos, a tiempo, aunque el director esté ocupado.
+
+Documentación oficial: https://docs.swmansion.com/react-native-reanimated/
+
+### Reanimated 4 en Expo
+
+Expo SDK 55 incluye Reanimated 4, que solo funciona con la New Architecture (la opción por defecto en Expo). Reanimated 4 depende del paquete `react-native-worklets`, que ejecuta funciones de JavaScript en el hilo de UI. La plantilla de Expo ya trae el plugin de Babel necesario; solo instalas los paquetes:
+
+```bash
+npx expo install react-native-reanimated react-native-worklets
+```
+
+### Valores compartidos
+
+Un **valor compartido** (`useSharedValue`) es una caja que tanto el hilo de JavaScript como el de UI pueden leer y escribir. A diferencia del estado, cambiarlo no vuelve a renderizar el componente. Se lee y se escribe con `.value`:
+
+```tsx
+import { useSharedValue } from "react-native-reanimated";
+
+const scale = useSharedValue(1);
+scale.value = 1.5; // Jumps immediately, without re-rendering.
+```
+
+### Estilos animados
+
+`useAnimatedStyle` recibe una función que devuelve un objeto de estilos calculado a partir de valores compartidos. Esa función corre en el hilo de UI cada vez que un valor cambia. El resultado se pasa a un componente animado, como `Animated.View`:
+
+```tsx
+import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+
+const offset = useSharedValue(0);
+
+const animatedStyle = useAnimatedStyle(() => ({
+  transform: [{ translateX: offset.value }],
+}));
+
+return <Animated.View style={[styles.box, animatedStyle]} />;
+```
+
+Fíjate en que el componente es `Animated.View`, importado de Reanimated. Un `View` normal no entiende estilos animados.
+
+### Funciones de animación
+
+Si asignas un número a `.value`, el cambio es instantáneo. Para que sea gradual, envuelve el destino en una función de animación:
+
+- `withTiming(destino, { duration })`: recorre la distancia en un tiempo fijo con una curva de aceleración. Útil para aparecer y desaparecer.
+- `withSpring(destino, config)`: simula un resorte. No tiene duración fija: depende de la masa, la rigidez y la amortiguación. Se siente natural para movimientos que responden al usuario.
+
+```tsx
+import { withSpring, withTiming } from "react-native-reanimated";
+
+scale.value = withSpring(1.2);
+opacity.value = withTiming(0, { duration: 300 });
+```
+
+Puedes ajustar el resorte: `withSpring(1, { damping: 8, stiffness: 120 })`. Menos amortiguación (`damping`) significa más rebote.
+
+### ¿Hace falta la directiva `"worklet"`?
+
+Un **worklet** es una función que corre en el hilo de UI. En versiones antiguas tenías que escribir `"worklet";` al inicio de cada una. Hoy, las funciones que pasas a `useAnimatedStyle`, `useDerivedValue` y a los gestos se convierten en worklets automáticamente. Solo necesitas la directiva si escribes una función auxiliar propia que llamas desde un worklet:
+
+```tsx
+function clamp(value: number, min: number, max: number) {
+  "worklet";
+  return Math.min(Math.max(value, min), max);
+}
+
+const animatedStyle = useAnimatedStyle(() => ({
+  transform: [{ translateX: clamp(offset.value, -100, 100) }],
+}));
+```
+
+Si desde el hilo de UI necesitas llamar a una función normal de JavaScript (por ejemplo, actualizar estado de React), usa `scheduleOnRN` de `react-native-worklets`. En código antiguo verás `runOnJS`, que cumplía la misma función.
+
+### Estado de React o valor compartido
+
+Usa estado de React para lo que cambia el contenido (textos, listas, qué pantalla se ve). Usa valores compartidos para lo que cambia fotograma a fotograma (posición, escala, opacidad). Si algo se anima, casi siempre es un valor compartido.
+
+## Práctica
+
+Toca el cuadrado. La escala usa `withSpring`, así que rebota; el desplazamiento usa `withTiming`. Cambia el `damping` del resorte y observa la diferencia.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  dependencies={{ 'react-native-reanimated': '4.2.1', 'react-native-worklets': '0.7.4' }}
+  code={`import { Pressable, StyleSheet, Text, View } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
+
+export default function App() {
+  const scale = useSharedValue(1);
+  const offset = useSharedValue(0);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: offset.value }, { scale: scale.value }]
+  }));
+
+  function handlePress() {
+    const grown = scale.value > 1;
+    scale.value = withSpring(grown ? 1 : 1.5, { damping: 6 });
+    offset.value = withTiming(grown ? 0 : 60, { duration: 400 });
+  }
+
+  return (
+    <View style={styles.container}>
+      <Pressable onPress={handlePress}>
+        <Animated.View style={[styles.box, animatedStyle]} />
+      </Pressable>
+      <Text style={styles.hint}>Toca el cuadrado</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", alignItems: "center", gap: 32 },
+  box: { width: 100, height: 100, borderRadius: 16, backgroundColor: "#10484a" },
+  hint: { fontSize: 16 }
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Aparecer con resorte"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="55.0.0"
+      dependencies={{ 'react-native-reanimated': '4.2.1', 'react-native-worklets': '0.7.4' }}
+      code={`import { useEffect } from "react";
+import { StyleSheet, Text, View } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
+
+export default function App() {
+  const opacity = useSharedValue(0);
+  const translateY = useSharedValue(40);
+
+  useEffect(() => {
+    opacity.value = withTiming(1, { duration: 300 });
+    translateY.value = withSpring(0, { damping: 10 });
+  }, [opacity, translateY]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }]
+  }));
+
+  return (
+    <View style={styles.container}>
+      <Animated.View style={[styles.card, animatedStyle]}>
+        <Text style={styles.title}>Nueva nota</Text>
+      </Animated.View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", alignItems: "center" },
+  card: { padding: 24, borderRadius: 12, backgroundColor: "#efe6da" },
+  title: { fontSize: 18, fontWeight: "600" }
+});`}
+    />
+  }
+>
+  Crea una tarjeta con el texto "Nueva nota" que, al montarse, aparezca desde 40 píxeles más abajo con `withSpring` y pase de opacidad 0 a 1 con `withTiming` en 300 ms. Usa dos valores compartidos y un `useEffect` para arrancar la animación.
+</Challenge>
+
+## Errores comunes
+
+**Usar un `View` normal con un estilo animado.** La animación no se mueve o aparece un error sobre valores no válidos. Ocurre porque solo los componentes de `Animated` de Reanimated entienden `useAnimatedStyle`. Se detecta porque el componente está importado de `react-native`. Solución: usa `Animated.View`, `Animated.Text` o `Animated.createAnimatedComponent`.
+
+**Leer el valor compartido sin `.value`.** Se ve como `transform: [{ translateX: offset }]` dentro de `useAnimatedStyle` y la vista no se mueve o lanza un error. Ocurre por costumbre con variables normales. Se detecta revisando cada uso dentro del estilo animado. Solución: lee y escribe siempre con `offset.value`.
+
+**Animar con `useState` en un bucle.** Se ve como un `setInterval` que llama a `setX` cada 16 ms. Ocurre porque es la forma que ya conoces de cambiar la UI. Se detecta porque la animación se entrecorta cuando la app hace otro trabajo. Solución: usa un valor compartido y una función de animación.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué es un valor compartido en Reanimated?", back: "Un valor creado con useSharedValue que leen y escriben el hilo de JavaScript y el de UI; cambiarlo no vuelve a renderizar." },
+    { front: "¿Qué diferencia hay entre withTiming y withSpring?", back: "withTiming dura un tiempo fijo con una curva; withSpring simula un resorte y su duración depende de la física." },
+    { front: "¿Cuándo necesitas escribir la directiva worklet en Reanimated 4?", back: "Solo en funciones auxiliares propias que llamas desde un worklet; las funciones de useAnimatedStyle y de los gestos se convierten solas." },
+    { front: "¿Por qué Reanimated consigue animaciones fluidas aunque JavaScript esté ocupado?", back: "Porque la animación corre en el hilo de UI y no depende de cada render de React." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Quieres que un botón crezca con un pequeño rebote al tocarlo. ¿Qué escribes?",
+      options: [
+        { text: "scale.value = withSpring(1.2)", correct: true, feedback: "Correcto: el resorte produce el rebote." },
+        { text: "scale.value = 1.2", correct: false, feedback: "Eso cambia la escala de golpe, sin animación." },
+        { text: "setScale(1.2)", correct: false, feedback: "Con estado de React no hay animación y además se vuelve a renderizar." }
+      ]
+    },
+    {
+      prompt: "¿Qué pasa cuando cambias scale.value?",
+      options: [
+        { text: "El componente se vuelve a renderizar", correct: false, feedback: "Los valores compartidos no disparan renders de React." },
+        { text: "useAnimatedStyle recalcula el estilo en el hilo de UI", correct: true, feedback: "Correcto: por eso es fluido." },
+        { text: "Nada, hasta que llamas a setState", correct: false, feedback: "Los estilos animados reaccionan solos al valor compartido." }
+      ]
+    },
+    {
+      prompt: "¿Qué paquete necesita Reanimated 4 además de react-native-reanimated?",
+      options: [
+        { text: "react-native-worklets", correct: true, feedback: "Correcto: ejecuta los worklets en el hilo de UI." },
+        { text: "react-native-gesture-handler", correct: false, feedback: "Se usan juntos a menudo, pero no es obligatorio." },
+        { text: "Ninguno", correct: false, feedback: "Desde la versión 4 la ejecución de worklets vive en un paquete aparte." }
+      ]
+    }
+  ]}
+/>

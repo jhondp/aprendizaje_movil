@@ -1,0 +1,271 @@
+---
+id: "07-nativo-ux-avanzada/00-permisos"
+title: "Permisos"
+stage: 7
+module: "Nativo"
+order: 0
+minutes: 12
+prereqs: ["06-calidad-ci/07-proyecto-pipeline-verde"]
+summary: "Aprende a pedir permisos del sistema en el momento justo, con un texto claro y un plan para cuando el usuario dice que no."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás pedir un permiso del sistema operativo desde una app Expo, manejar sus tres estados y declarar el texto de propósito en `app.json`.
+
+**Prerrequisitos:** `06-calidad-ci/07-proyecto-pipeline-verde`
+
+## Concepto
+
+Hasta ahora tu app de notas vivía dentro de su propia caja: pantallas, estado, base de datos local y una API pública. En esta etapa empieza a usar el hardware y los servicios del teléfono: ubicación, cámara, notificaciones. Todo eso está protegido por **permisos**.
+
+Piensa en un edificio de oficinas. Para entrar a la sala de servidores no basta con trabajar ahí: la recepción te pregunta a qué vas, lo anota y decide si te deja pasar. Si te niegan el acceso dos veces, ya no te vuelven a preguntar; tienes que hablar con el administrador. El sistema operativo es esa recepción, el texto de propósito es tu explicación y la pantalla de Ajustes es el administrador.
+
+Documentación oficial: https://docs.expo.dev/guides/permissions/ y https://docs.expo.dev/versions/latest/sdk/location/
+
+### Los tres estados de un permiso
+
+Cada módulo de Expo que accede a algo sensible expone funciones `get...PermissionsAsync` (consulta sin preguntar) y `request...PermissionsAsync` (muestra el diálogo del sistema). Ambas devuelven un objeto con, entre otros, estos campos:
+
+- `status`: `"undetermined"` (nunca se preguntó), `"granted"` (concedido) o `"denied"` (rechazado).
+- `granted`: atajo booleano, `true` solo si el estado es `"granted"`.
+- `canAskAgain`: si es `false`, el sistema ya no mostrará el diálogo. La única salida es enviar al usuario a Ajustes.
+
+```tsx
+import * as Location from "expo-location";
+import { Linking } from "react-native";
+
+async function getPosition() {
+  const permission = await Location.requestForegroundPermissionsAsync();
+
+  if (permission.status !== "granted") {
+    if (!permission.canAskAgain) {
+      // The OS will not show the dialog again: send the user to Settings.
+      await Linking.openSettings();
+    }
+    return null;
+  }
+
+  const position = await Location.getCurrentPositionAsync({});
+  return position.coords;
+}
+```
+
+Observa el orden: primero el permiso, después la función protegida. Si llamas a `getCurrentPositionAsync` sin permiso, la promesa se rechaza con un error.
+
+### Pedir en el momento justo
+
+El sistema solo muestra el diálogo una vez de forma fiable (en iOS literalmente una vez; en Android, dos). Si lo gastas al abrir la app, sin contexto, la respuesta más probable es "No permitir". La regla práctica:
+
+1. Pide el permiso **cuando el usuario toca la función que lo necesita**, no al arrancar.
+2. Si quieres, muestra antes una pantalla propia que explique el beneficio ("Guarda la ubicación de tus notas para encontrarlas en el mapa") con un botón "Continuar" que dispara el diálogo real.
+3. Si el usuario rechaza, la app sigue funcionando sin esa función. Nunca bloquees toda la app por un permiso opcional.
+
+### El texto de propósito y dónde vive
+
+En iOS, cada permiso necesita una **cadena de propósito** (purpose string): la frase que aparece debajo del título del diálogo. Si falta, la app se cierra al pedir el permiso y Apple rechaza la app en revisión. En Android, cada permiso debe estar declarado en el manifiesto; si no está, el diálogo nunca aparece.
+
+En un proyecto Expo no editas `Info.plist` ni `AndroidManifest.xml` a mano. Los declaras en `app.json`, y Expo genera los archivos nativos al compilar:
+
+```json
+{
+  "expo": {
+    "ios": {
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Saber usa tu ubicación para etiquetar dónde escribiste cada nota."
+      }
+    },
+    "android": {
+      "permissions": ["android.permission.ACCESS_COARSE_LOCATION", "android.permission.ACCESS_FINE_LOCATION"],
+      "blockedPermissions": ["android.permission.RECORD_AUDIO"]
+    }
+  }
+}
+```
+
+- `ios.infoPlist` recibe las claves `NS...UsageDescription` con el texto que verá el usuario.
+- `android.permissions` agrega permisos al manifiesto.
+- `android.blockedPermissions` quita permisos que alguna librería agregó y tu app no usa. Menos permisos significa menos preguntas en la ficha de la tienda.
+
+Muchos módulos traen además un **config plugin** que escribe esas claves por ti. Es la forma recomendada cuando existe:
+
+```json
+{
+  "expo": {
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Saber usa tu ubicación para etiquetar dónde escribiste cada nota."
+        }
+      ]
+    ]
+  }
+}
+```
+
+Un buen texto de propósito dice **qué** usa la app y **para qué** le sirve al usuario. "Necesitamos tu ubicación" es un mal texto; "Saber usa tu ubicación para etiquetar dónde escribiste cada nota" es un buen texto.
+
+<Callout kind="warning">
+  Los cambios en `app.json` que afectan permisos solo se aplican en una compilación nativa nueva. En Expo Go los textos son los de Expo Go, no los tuyos. La etapa 10 cubre las compilaciones con EAS Build.
+</Callout>
+
+### Primer plano y segundo plano
+
+La ubicación distingue entre primer plano (la app está abierta) y segundo plano (la app está cerrada o minimizada). Pide siempre primero el de primer plano con `requestForegroundPermissionsAsync`. El de segundo plano exige textos adicionales, revisión extra de las tiendas y una justificación fuerte. Para una app de notas no lo necesitas.
+
+## Práctica
+
+Abre el Snack, toca "Obtener ubicación" y observa cómo cambia el estado. En la vista previa web el navegador pide el permiso; en tu teléfono, escanea el código QR con Expo Go para ver el diálogo nativo. Prueba a rechazar el permiso y luego vuelve a tocar el botón.
+
+<Snack
+  platform="web"
+  sdkVersion="55.0.0"
+  dependencies={{ 'expo-location': '~55.1.14' }}
+  code={`import { useState } from "react";
+import { Button, Linking, StyleSheet, Text, View } from "react-native";
+import * as Location from "expo-location";
+
+export default function App() {
+  const [status, setStatus] = useState("sin solicitar");
+  const [canAskAgain, setCanAskAgain] = useState(true);
+  const [coords, setCoords] = useState<string | null>(null);
+
+  async function locate() {
+    const permission = await Location.requestForegroundPermissionsAsync();
+    setStatus(permission.status);
+    setCanAskAgain(permission.canAskAgain);
+    if (permission.status !== "granted") return;
+
+    const position = await Location.getCurrentPositionAsync({});
+    const { latitude, longitude } = position.coords;
+    setCoords(latitude.toFixed(4) + ", " + longitude.toFixed(4));
+  }
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.label}>Estado del permiso: {status}</Text>
+      <Text style={styles.label}>Coordenadas: {coords ?? "sin datos"}</Text>
+      <Button title="Obtener ubicación" onPress={locate} />
+      {status === "denied" && !canAskAgain && (
+        <Button title="Abrir Ajustes" onPress={() => Linking.openSettings()} />
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12, padding: 24 },
+  label: { fontSize: 16 }
+});`}
+/>
+
+Antes de publicar cualquier app que pida permisos, repasa esta lista:
+
+<Checklist
+  id="07-nativo-ux-avanzada/00-permisos-app-json"
+  items={[
+    "Cada permiso de iOS tiene su clave NS...UsageDescription en ios.infoPlist o en el config plugin",
+    "Cada texto de propósito explica qué usa la app y para qué le sirve al usuario",
+    "android.permissions contiene solo los permisos que la app usa",
+    "Los permisos que agregan librerías y no uso están en android.blockedPermissions",
+    "El permiso se pide al tocar la función, no al abrir la app",
+    "Si el permiso se rechaza, la app sigue funcionando y ofrece abrir Ajustes cuando canAskAgain es false"
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Consultar antes de preguntar"
+  solution={
+    <Snack
+      platform="web"
+      sdkVersion="55.0.0"
+      dependencies={{ 'expo-location': '~55.1.14' }}
+      code={`import { useEffect, useState } from "react";
+import { Button, StyleSheet, Text, View } from "react-native";
+import * as Location from "expo-location";
+
+export default function App() {
+  const [status, setStatus] = useState("cargando");
+
+  useEffect(() => {
+    Location.getForegroundPermissionsAsync().then((p) => setStatus(p.status));
+  }, []);
+
+  async function ask() {
+    const permission = await Location.requestForegroundPermissionsAsync();
+    setStatus(permission.status);
+  }
+
+  return (
+    <View style={styles.container}>
+      {status === "undetermined" && (
+        <>
+          <Text style={styles.text}>Guarda dónde escribiste cada nota.</Text>
+          <Button title="Continuar" onPress={ask} />
+        </>
+      )}
+      {status === "granted" && <Text style={styles.text}>Ubicación activada.</Text>}
+      {status === "denied" && <Text style={styles.text}>Puedes seguir usando la app sin ubicación.</Text>}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12, padding: 24 },
+  text: { fontSize: 16, textAlign: "center" }
+});`}
+    />
+  }
+>
+  Modifica el Snack para que, al montarse, consulte el estado con `Location.getForegroundPermissionsAsync()` sin mostrar ningún diálogo. Si el estado es `"undetermined"`, muestra una explicación propia y un botón "Continuar" que llame a `requestForegroundPermissionsAsync`. Si es `"granted"` o `"denied"`, muestra un mensaje distinto para cada caso.
+</Challenge>
+
+## Errores comunes
+
+**Pedir todos los permisos al abrir la app.** Se ve como una cascada de diálogos antes de que el usuario sepa qué hace la app. Ocurre porque es más fácil centralizar las peticiones en el arranque. Se detecta en las métricas: una tasa de rechazo alta y reseñas que se quejan de permisos. Solución: pide cada permiso en el momento en que se usa.
+
+**Olvidar el texto de propósito en iOS.** La app funciona en Expo Go pero se cierra en una compilación propia justo al pedir el permiso, o Apple la rechaza en revisión. Ocurre porque Expo Go ya trae sus propios textos. Se detecta porque el cierre aparece solo en builds nativos y el registro menciona la clave `NS...UsageDescription` que falta. Solución: declara la clave en `ios.infoPlist` o en el config plugin.
+
+**Ignorar `canAskAgain`.** El botón "Permitir" de la app no hace nada después de dos rechazos. Ocurre porque el código llama a `request...` y espera un diálogo que el sistema ya no muestra. Se detecta porque `status` vuelve `"denied"` al instante. Solución: si `canAskAgain` es `false`, ofrece `Linking.openSettings()`.
+
+<Flashcards
+  cards={[
+    { front: "¿Cuáles son los tres valores posibles de status en un permiso de Expo?", back: "undetermined, granted y denied." },
+    { front: "¿Qué indica canAskAgain igual a false en un permiso de Expo?", back: "Que el sistema ya no mostrará el diálogo; hay que enviar al usuario a Ajustes con Linking.openSettings()." },
+    { front: "¿Dónde se declara el texto de propósito de un permiso de iOS en un proyecto Expo?", back: "En app.json, dentro de ios.infoPlist (claves NS...UsageDescription) o en las opciones del config plugin del módulo." },
+    { front: "¿Para qué sirve android.blockedPermissions en app.json?", back: "Para quitar del manifiesto permisos que agregó una librería y que la app no usa." },
+    { front: "¿En qué momento conviene pedir un permiso del sistema?", back: "Cuando el usuario toca la función que lo necesita, no al abrir la app." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Un usuario rechazó el permiso de ubicación dos veces en Android y canAskAgain es false. ¿Qué debe hacer la app?",
+      options: [
+        { text: "Llamar otra vez a requestForegroundPermissionsAsync", correct: false, feedback: "El sistema ya no mostrará el diálogo; la llamada devuelve denied al instante." },
+        { text: "Explicar el beneficio y ofrecer abrir Ajustes con Linking.openSettings()", correct: true, feedback: "Correcto: Ajustes es la única vía para conceder el permiso a partir de ese momento." },
+        { text: "Cerrar la app", correct: false, feedback: "La app debe seguir funcionando sin la función opcional." }
+      ]
+    },
+    {
+      prompt: "¿Qué ocurre en iOS si pides la cámara en una compilación propia sin NSCameraUsageDescription?",
+      options: [
+        { text: "El diálogo muestra un texto genérico", correct: false, feedback: "iOS no inventa el texto: exige la clave." },
+        { text: "La app se cierra al pedir el permiso", correct: true, feedback: "Correcto: iOS termina la app si falta la cadena de propósito." },
+        { text: "El permiso se concede automáticamente", correct: false, feedback: "Ningún permiso sensible se concede sin preguntar al usuario." }
+      ]
+    },
+    {
+      prompt: "¿Cuál es el mejor texto de propósito para la ubicación en una app de notas?",
+      options: [
+        { text: "Necesitamos tu ubicación", correct: false, feedback: "No dice para qué la usa ni qué gana el usuario." },
+        { text: "Permiso requerido por el sistema", correct: false, feedback: "Es vago y suena a obligación." },
+        { text: "La app usa tu ubicación para etiquetar dónde escribiste cada nota", correct: true, feedback: "Correcto: dice qué usa y qué beneficio obtiene el usuario." }
+      ]
+    }
+  ]}
+/>

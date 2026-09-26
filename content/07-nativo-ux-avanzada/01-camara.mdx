@@ -1,0 +1,300 @@
+---
+id: "07-nativo-ux-avanzada/01-camara"
+title: "Cámara"
+stage: 7
+module: "Nativo"
+order: 1
+minutes: 15
+prereqs: ["07-nativo-ux-avanzada/00-permisos"]
+summary: "Muestra la vista previa de la cámara con CameraView, pide el permiso con useCameraPermissions y toma una foto."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás mostrar la cámara con `CameraView`, pedir su permiso con `useCameraPermissions` y tomar una foto que luego muestras en pantalla.
+
+**Prerrequisitos:** `07-nativo-ux-avanzada/00-permisos`
+
+## Concepto
+
+La cámara es el primer módulo nativo "de verdad" que vas a usar: hay un sensor físico, un permiso, una vista que dibuja lo que ve el sensor y una acción que produce un archivo. Expo lo empaqueta en `expo-camera`.
+
+Piensa en una cabina de fotos de un centro comercial. Primero pagas (el permiso). Luego ves tu cara en una pantalla (la vista previa en vivo). Cuando pulsas el botón, la máquina congela un instante y te entrega una foto impresa (un archivo con una ruta). La pantalla y la foto son cosas distintas: la pantalla se mueve todo el tiempo, la foto queda fija.
+
+Documentación oficial: https://docs.expo.dev/versions/latest/sdk/camera/
+
+### La API actual: `CameraView` y `useCameraPermissions`
+
+Si buscas tutoriales antiguos verás un componente `Camera` importado de `expo-camera`. Esa API está obsoleta. La actual tiene dos piezas:
+
+- `useCameraPermissions()`: un hook que devuelve `[permission, requestPermission]`. `permission` es `null` mientras carga y luego un objeto con `granted`, `status` y `canAskAgain`, igual que viste en la lección anterior.
+- `CameraView`: el componente que dibuja la vista previa. Acepta props como `facing` (`"back"` o `"front"`), `flash` y `ref`.
+
+```tsx
+import { CameraView, useCameraPermissions } from "expo-camera";
+import { Button, Text, View } from "react-native";
+
+export default function CameraScreen() {
+  const [permission, requestPermission] = useCameraPermissions();
+
+  if (!permission) {
+    return <View />; // Still loading the permission status.
+  }
+
+  if (!permission.granted) {
+    return (
+      <View>
+        <Text>Necesitamos la cámara para adjuntar fotos a tus notas.</Text>
+        <Button title="Permitir cámara" onPress={requestPermission} />
+      </View>
+    );
+  }
+
+  return <CameraView style={{ flex: 1 }} facing="back" />;
+}
+```
+
+Los tres estados de la pantalla (cargando, sin permiso, con permiso) son el patrón que vas a repetir con cualquier módulo nativo.
+
+### Tomar una foto con una ref
+
+La vista previa no es una foto. Para capturar un instante necesitas llamar a un método del componente, y en React eso se hace con una **ref**: una referencia directa a la instancia del componente.
+
+```tsx
+import { useRef, useState } from "react";
+import { CameraView } from "expo-camera";
+
+const cameraRef = useRef<CameraView>(null);
+const [photoUri, setPhotoUri] = useState<string | null>(null);
+
+async function takePhoto() {
+  const photo = await cameraRef.current?.takePictureAsync({ quality: 0.7 });
+  if (photo) {
+    setPhotoUri(photo.uri);
+  }
+}
+
+// In the JSX: <CameraView ref={cameraRef} style={{ flex: 1 }} />
+```
+
+`takePictureAsync` devuelve un objeto con `uri` (ruta del archivo en la caché de la app), `width` y `height`. La opción `quality` va de 0 a 1: con 0.7 la foto pesa mucho menos y sigue viéndose bien en un teléfono. Para mostrarla, usa un `Image` con `source={{ uri: photoUri }}`.
+
+<Callout kind="warning">
+  El archivo de `takePictureAsync` vive en la caché. El sistema puede borrarla cuando necesita espacio. Si la foto debe durar, cópiala a un directorio permanente con `expo-file-system` y guarda esa nueva ruta en tu base de datos. Lo harás en el proyecto de esta etapa.
+</Callout>
+
+### Cambiar de cámara
+
+`facing` es una prop normal, así que alternar entre la cámara trasera y la frontal es solo estado:
+
+```tsx
+const [facing, setFacing] = useState<"back" | "front">("back");
+
+function toggleFacing() {
+  setFacing((current) => (current === "back" ? "front" : "back"));
+}
+```
+
+### Configurar el permiso en `app.json`
+
+`expo-camera` trae un config plugin que escribe el texto de propósito en iOS y el permiso en Android:
+
+```json
+{
+  "expo": {
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Saber usa la cámara para adjuntar fotos a tus notas.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ]
+    ]
+  }
+}
+```
+
+Si tu app solo toma fotos, desactiva el micrófono: `microphonePermission: false` evita el texto de micrófono en iOS y `recordAudioAndroid: false` evita pedir `RECORD_AUDIO` en Android. Cada permiso que no declaras es una pregunta menos en la revisión de la tienda.
+
+### Dónde se puede probar
+
+La cámara necesita un sensor. El reproductor web de Snack no tiene acceso a la cámara de tu computadora, y los simuladores de iOS no tienen cámara. Para probar de verdad necesitas un teléfono físico con Expo Go o una compilación propia. El emulador de Android sí simula una cámara con una escena virtual, útil para desarrollo.
+
+### Liberar recursos
+
+La cámara consume batería y bloquea el sensor para otras apps. Monta `CameraView` solo en la pantalla que la necesita y desmóntala al salir. Con Expo Router esto ocurre solo si la cámara está en su propia ruta, por ejemplo `src/app/note/[id]/camera.tsx`, y vuelves atrás con `router.back()` al terminar.
+
+## Práctica
+
+Este Snack no funciona en la vista previa web del navegador. Escanea el código QR desde la pestaña "My Device" con Expo Go en tu teléfono. Concede el permiso, toma una foto y cambia de cámara.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  dependencies={{ 'expo-camera': '~55.0.23' }}
+  code={`import { useRef, useState } from "react";
+import { Button, Image, StyleSheet, Text, View } from "react-native";
+import { CameraView, useCameraPermissions } from "expo-camera";
+
+export default function App() {
+  const [permission, requestPermission] = useCameraPermissions();
+  const [facing, setFacing] = useState<"back" | "front">("back");
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const cameraRef = useRef<CameraView>(null);
+
+  if (!permission) return <View style={styles.center} />;
+
+  if (!permission.granted) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.text}>La app usa la cámara para adjuntar fotos a tus notas.</Text>
+        <Button title="Permitir cámara" onPress={requestPermission} />
+      </View>
+    );
+  }
+
+  async function takePhoto() {
+    const photo = await cameraRef.current?.takePictureAsync({ quality: 0.7 });
+    if (photo) setPhotoUri(photo.uri);
+  }
+
+  if (photoUri) {
+    return (
+      <View style={styles.center}>
+        <Image source={{ uri: photoUri }} style={styles.preview} />
+        <Button title="Tomar otra" onPress={() => setPhotoUri(null)} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <CameraView ref={cameraRef} style={styles.camera} facing={facing} />
+      <View style={styles.actions}>
+        <Button title="Cambiar cámara" onPress={() => setFacing(facing === "back" ? "front" : "back")} />
+        <Button title="Tomar foto" onPress={takePhoto} />
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  camera: { flex: 1 },
+  actions: { flexDirection: "row", justifyContent: "space-around", padding: 16 },
+  center: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12, padding: 24 },
+  text: { fontSize: 16, textAlign: "center" },
+  preview: { width: 280, height: 380, borderRadius: 12 }
+});`}
+/>
+
+Si no tienes un teléfono a mano, estos son los pasos para probarlo en un dispositivo cuando lo tengas:
+
+<Checklist
+  id="07-nativo-ux-avanzada/01-camara-dispositivo"
+  items={[
+    "Instalé Expo Go en el teléfono",
+    "Abrí el Snack en Expo Go escaneando el código QR",
+    "Concedí el permiso de cámara y vi la vista previa",
+    "Tomé una foto y apareció en pantalla",
+    "Cambié entre la cámara trasera y la frontal"
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Flash con tres estados"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="55.0.0"
+      dependencies={{ 'expo-camera': '~55.0.23' }}
+      code={`import { useRef, useState } from "react";
+import { Button, StyleSheet, View } from "react-native";
+import { CameraView, useCameraPermissions, type FlashMode } from "expo-camera";
+
+const NEXT_FLASH: Record<FlashMode, FlashMode> = { off: "on", on: "auto", auto: "off" };
+
+export default function App() {
+  const [permission, requestPermission] = useCameraPermissions();
+  const [flash, setFlash] = useState<FlashMode>("off");
+  const cameraRef = useRef<CameraView>(null);
+
+  if (!permission?.granted) {
+    return (
+      <View style={styles.center}>
+        <Button title="Permitir cámara" onPress={requestPermission} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <CameraView ref={cameraRef} style={styles.container} flash={flash} />
+      <View style={styles.actions}>
+        <Button title={"Flash: " + flash} onPress={() => setFlash(NEXT_FLASH[flash])} />
+        <Button title="Tomar foto" onPress={() => cameraRef.current?.takePictureAsync()} />
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
+  actions: { flexDirection: "row", justifyContent: "space-around", padding: 16 }
+});`}
+    />
+  }
+>
+  Agrega un botón que recorra los modos de flash `"off"`, `"on"` y `"auto"` en ese orden, muestre el modo actual en su título y pase el valor a la prop `flash` de `CameraView`. Pruébalo en tu teléfono con Expo Go.
+</Challenge>
+
+## Errores comunes
+
+**Usar el componente `Camera` de tutoriales antiguos.** Se ve como un error de importación o una advertencia de API obsoleta. Ocurre porque muchos artículos se escribieron antes de `CameraView`. Se detecta porque el import es `import { Camera } from "expo-camera"`. Solución: usa `CameraView` y `useCameraPermissions`, y consulta siempre la documentación de la versión de tu SDK.
+
+**Llamar a `takePictureAsync` sin ref.** Se ve como `Cannot read property 'takePictureAsync' of null`. Ocurre porque la ref no está conectada a `CameraView` o porque se llama antes de que la cámara se monte. Se detecta con ese mensaje exacto en la consola. Solución: pasa `ref={cameraRef}` y usa encadenamiento opcional `cameraRef.current?.takePictureAsync()`.
+
+**Guardar la `uri` de la caché como si fuera permanente.** La foto aparece al principio y días después la nota muestra una imagen rota. Ocurre porque el sistema limpió la caché. Se detecta porque la ruta contiene `Cache` o `cache`. Solución: copia el archivo a un directorio permanente antes de guardar la ruta.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué componente de expo-camera muestra la vista previa en la versión actual?", back: "CameraView. El componente Camera antiguo está obsoleto." },
+    { front: "¿Qué devuelve el hook useCameraPermissions?", back: "Un arreglo [permission, requestPermission]; permission es null mientras carga." },
+    { front: "¿Cómo se toma una foto con expo-camera?", back: "Con una ref conectada a CameraView y llamando a ref.current.takePictureAsync()." },
+    { front: "¿Por qué no basta con guardar la uri que devuelve takePictureAsync?", back: "Porque apunta a la caché, que el sistema puede borrar; hay que copiar el archivo a un directorio permanente." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué valor tiene permission justo después de montar un componente que usa useCameraPermissions?",
+      options: [
+        { text: "null, mientras se consulta el estado", correct: true, feedback: "Correcto: por eso la pantalla necesita un estado de carga." },
+        { text: "Siempre un objeto con granted: false", correct: false, feedback: "Primero es null; el objeto llega después." },
+        { text: "Un booleano", correct: false, feedback: "Es un objeto de permiso o null, no un booleano." }
+      ]
+    },
+    {
+      prompt: "¿Dónde puedes probar la captura de fotos de este Snack?",
+      options: [
+        { text: "En la vista previa web del navegador", correct: false, feedback: "El reproductor web de Snack no accede a la cámara." },
+        { text: "En el simulador de iOS", correct: false, feedback: "El simulador de iOS no tiene cámara." },
+        { text: "En un teléfono físico con Expo Go", correct: true, feedback: "Correcto: la cámara necesita un sensor real." }
+      ]
+    },
+    {
+      prompt: "Tu app solo toma fotos. ¿Qué opción del config plugin de expo-camera evita pedir el micrófono en iOS?",
+      options: [
+        { text: "microphonePermission: false", correct: true, feedback: "Correcto: así no se declara el texto de micrófono." },
+        { text: "cameraPermission: false", correct: false, feedback: "Eso afecta a la cámara, que sí necesitas." },
+        { text: "No hay forma de evitarlo", correct: false, feedback: "El plugin permite desactivar el micrófono." }
+      ]
+    }
+  ]}
+/>
