@@ -96,8 +96,8 @@ describe('ReviewCard', () => {
   const card = {
     key: 'a/b#0',
     lessonId: 'a/b',
-    front: 'Pregunta',
-    back: 'Respuesta',
+    front: '¿Qué es una variable?',
+    back: 'Un nombre para un valor.',
     state: newCardState('2026-09-26'),
     graded: false,
   };
@@ -108,11 +108,13 @@ describe('ReviewCard', () => {
       <ReviewCard card={card} flipped={false} onFlip={onFlip} onGrade={onGrade} />,
     );
     expect(screen.getByText('Pregunta')).toBeInTheDocument();
+    expect(screen.getByText('¿Qué es una variable?')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Bien/ })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /Toca para girar/ }));
     expect(onFlip).toHaveBeenCalled();
     rerender(<ReviewCard card={card} flipped onFlip={onFlip} onGrade={onGrade} />);
     expect(screen.getByText('Respuesta')).toBeInTheDocument();
+    expect(screen.getByText('Un nombre para un valor.')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /Fácil/ }));
     expect(onGrade).toHaveBeenCalledWith('easy');
   });

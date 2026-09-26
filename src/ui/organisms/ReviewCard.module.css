@@ -34,14 +34,6 @@
   color: var(--color-lime);
 }
 
-.card[data-side='front'] .side::before {
-  content: 'Pregunta';
-}
-
-.card[data-side='back'] .side::before {
-  content: 'Respuesta';
-}
-
 .card[data-side='back'] .side,
 .card[data-side='back'] .hint {
   color: var(--color-accent);

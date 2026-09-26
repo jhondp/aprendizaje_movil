@@ -26,7 +26,7 @@ export function ReviewCard({
         data-side={flipped ? 'back' : 'front'}
         onClick={onFlip}
       >
-        <span className={styles.side} aria-hidden="true" />
+        <span className={styles.side}>{flipped ? 'Respuesta' : 'Pregunta'}</span>
         <span className={styles.text}>{flipped ? card.back : card.front}</span>
         <span className={styles.hint}>Toca para girar</span>
       </button>
