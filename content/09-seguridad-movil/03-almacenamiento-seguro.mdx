@@ -51,7 +51,7 @@ const SESSION_KEY = "session-token";
 
 export async function saveSession(token: string) {
   await SecureStore.setItemAsync(SESSION_KEY, token, {
-    keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
+    keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
   });
 }
 
@@ -67,7 +67,7 @@ export async function clearSession() {
 Cuatro detalles de SecureStore que conviene saber:
 
 - **Tamaño.** Guarda cadenas cortas. Versiones anteriores de iOS rechazaban valores de más de unos 2048 bytes y Expo no impone límite propio, así que maneja el error. Un token JWT cabe; una lista de notas no.
-- **Accesibilidad en iOS.** `keychainAccessible` controla cuándo se puede leer el valor. `AFTER_FIRST_UNLOCK` permite leerlo tras el primer desbloqueo desde el arranque; las variantes `_THIS_DEVICE_ONLY` impiden que el valor migre a otro dispositivo al restaurar un backup.
+- **Accesibilidad en iOS.** `keychainAccessible` controla cuándo se puede leer el valor. Elige la clase más restrictiva que funcione: `WHEN_UNLOCKED_THIS_DEVICE_ONLY` solo permite leerlo con el teléfono desbloqueado, y el sufijo `_THIS_DEVICE_ONLY` impide que el valor migre a otro dispositivo al restaurar un backup. Relájalo a `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY` (legible tras el primer desbloqueo desde el arranque, aunque el teléfono vuelva a bloquearse) solo si una tarea en segundo plano necesita leer el token.
 - **Persistencia tras desinstalar.** En iOS, un valor del Keychain puede sobrevivir a la desinstalación de la app. Borra la sesión explícitamente cuando el usuario cierra sesión y no des por hecho que reinstalar limpia todo.
 - **Sin web.** En web no hay Keychain ni Keystore; si tu app también corre en navegador, la sesión va en una cookie `HttpOnly` gestionada por el servidor, no en `localStorage`.
 
@@ -75,7 +75,7 @@ Cuatro detalles de SecureStore que conviene saber:
 
 MASVS-STORAGE-2 recuerda que un dato bien guardado puede escaparse por otro lado:
 
-- **Backups.** En Android, `android:allowBackup` incluye los archivos privados de la app en las copias de seguridad. Con Expo puedes desactivarlo desde la configuración nativa mediante `expo-build-properties` o un config plugin si tu modelo de amenazas lo exige.
+- **Backups.** En Android, `android:allowBackup` incluye los archivos privados de la app en las copias de seguridad. Con Expo se desactiva con `"android": { "allowBackup": false }` en `app.json` o `app.config.ts` (https://docs.expo.dev/versions/latest/config/app/#allowbackup). Por defecto es `true`, así que, por ejemplo, las notas en SQLite se copian a Google Drive; decide según tu modelo de amenazas.
 - **Portapapeles.** Si la app copia una nota al portapapeles, cualquier otra app en primer plano puede leerlo. No copies tokens ni contraseñas; para contenido del usuario, avisa.
 - **Capturas y apps recientes.** Esto pertenece a MASVS-PLATFORM-3: las pantallas con datos sensibles pueden ocultarse en el selector de apps. Lo anotarás como decisión en la auditoría.
 
@@ -109,7 +109,7 @@ export default function App() {
 
   async function saveRight() {
     await SecureStore.setItemAsync("session", TOKEN, {
-      keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
+      keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
     });
     log("SecureStore: Keychain (iOS) / Keystore-encrypted prefs (Android)");
   }
@@ -158,7 +158,7 @@ Ahora clasifica lo que guarda tu app de notas. Marca cada punto cuando lo hayas 
     "Busqué AsyncStorage.setItem en todo el proyecto y ningún valor es de clase sensible o secreta",
     "Las notas viven en SQLite y ninguna tabla guarda tokens ni contraseñas",
     "clearSession borra el token de SecureStore al cerrar sesión",
-    "Decidí y anoté si desactivo el backup de Android y por qué",
+    "Decidí y anoté si pongo android.allowBackup en false en app.json y por qué",
     "La app no copia tokens al portapapeles",
     "Si la app corre en web, la sesión no está en localStorage"
   ]}
@@ -231,10 +231,10 @@ device-private-key -> REVIEW`}
       ]
     },
     {
-      prompt: "¿Qué hace la opción keychainAccessible: AFTER_FIRST_UNLOCK?",
+      prompt: "¿Qué hace la opción keychainAccessible: AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY?",
       options: [
         { text: "Cifra el valor con la huella del usuario", correct: false, feedback: "Eso sería requireAuthentication; esta opción solo define cuándo es legible." },
-        { text: "Permite leer el valor tras el primer desbloqueo desde el arranque", correct: true, feedback: "Correcto: útil para tareas en segundo plano con el teléfono bloqueado." },
+        { text: "Permite leer el valor tras el primer desbloqueo desde el arranque, sin migrarlo a otro dispositivo", correct: true, feedback: "Correcto: úsala solo si una tarea en segundo plano necesita el token; si no, WHEN_UNLOCKED_THIS_DEVICE_ONLY es más restrictiva." },
         { text: "Hace que el valor se borre al reiniciar", correct: false, feedback: "El valor persiste; la opción solo controla la accesibilidad." }
       ]
     },

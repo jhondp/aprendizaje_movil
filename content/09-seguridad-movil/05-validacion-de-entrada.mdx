@@ -6,7 +6,7 @@ module: "Red y entrada"
 order: 5
 minutes: 12
 prereqs: ["09-seguridad-movil/04-https-y-certificate-pinning"]
-summary: "Trata toda entrada como no confiable: valida con esquemas en las fronteras de la app y usa consultas parametrizadas para que un texto nunca se convierta en código."
+summary: "Trata toda entrada como no confiable: valida con esquemas en las fronteras de la app y usa consultas parametrizadas para que un texto nunca se vuelva código."
 ---
 
 ## Objetivo
@@ -109,14 +109,14 @@ Este formulario valida con zod antes de "guardar". Prueba un título vacío, un 
 <Snack
   platform="ios"
   sdkVersion="55.0.0"
-  dependencies={{ zod: '3.23.8' }}
+  dependencies={{ zod: '^4.0.0' }}
   code={`import { useState } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet } from "react-native";
 import { z } from "zod";
 
 const noteSchema = z.object({
   title: z.string().trim().min(1, "Title is required").max(80, "Max 80 characters"),
-  email: z.string().trim().email("Invalid email"),
+  email: z.email("Invalid email"),
   tag: z.enum(["work", "personal", "ideas"]),
 });
 

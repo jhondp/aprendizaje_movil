@@ -38,7 +38,7 @@ Expo recomienda `@sentry/react-native` con su config plugin; el antiguo paquete 
 ### La configuración que no filtra
 
 ```ts
-// app/_layout.tsx
+// src/app/_layout.tsx
 import * as Sentry from "@sentry/react-native";
 import { scrubEvent, dropSensitiveBreadcrumb } from "@/infrastructure/monitoring/scrub";
 
@@ -54,7 +54,7 @@ Sentry.init({
 
 `sendDefaultPii: false` evita que el SDK adjunte por su cuenta datos identificativos como la dirección IP. El DSN es configuración pública (solo permite enviar eventos a tu proyecto, no leerlos), así que puede ir en `EXPO_PUBLIC_`. `enabled: !__DEV__` evita ruido y fugas durante el desarrollo.
 
-`beforeSend` recibe cada evento justo antes de enviarlo: puedes modificarlo o devolver `null` para descartarlo. Es la última línea de defensa y debe cubrir tres cosas: eliminar el correo del usuario, enmascarar cualquier cadena que parezca token o correo, y vaciar los campos que tu app usa para contenido:
+`beforeSend` recibe cada evento justo antes de enviarlo: puedes modificarlo o devolver `null` para descartarlo. Es la última línea de defensa y debe cubrir tres cosas: eliminar el correo del usuario, enmascarar cualquier cadena que parezca token o correo, y vaciar los campos que tu app usa para contenido. Ojo con dónde viaja cada dato: el texto de un `Error` lanzado no va en `event.message` sino en `event.exception.values[].value`, y también pueden llevar datos personales los `tags`, los `contexts`, la `request` (URL, query string, cabeceras), las variables de los frames de la pila y las migas ya adjuntas. La limpieza recorre todos esos lugares:
 
 ```ts
 // src/infrastructure/monitoring/scrub.ts
@@ -62,7 +62,7 @@ import type { Breadcrumb, ErrorEvent } from "@sentry/react-native";
 
 const EMAIL = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
 const BEARER = /Bearer\s+[A-Za-z0-9._-]+/g;
-const SENSITIVE_KEYS = new Set(["password", "token", "authorization", "body", "noteBody", "email"]);
+const SENSITIVE_KEYS = new Set(["password", "token", "authorization", "cookie", "body", "notebody", "email"]);
 
 export function scrubText(text: string): string {
   return text.replace(EMAIL, "[email]").replace(BEARER, "Bearer [token]");
@@ -74,7 +74,7 @@ export function scrubValue(value: unknown): unknown {
   if (value && typeof value === "object") {
     const out: Record<string, unknown> = {};
     for (const [key, inner] of Object.entries(value)) {
-      out[key] = SENSITIVE_KEYS.has(key) ? "[redacted]" : scrubValue(inner);
+      out[key] = SENSITIVE_KEYS.has(key.toLowerCase()) ? "[redacted]" : scrubValue(inner);
     }
     return out;
   }
@@ -84,13 +84,28 @@ export function scrubValue(value: unknown): unknown {
 export function scrubEvent(event: ErrorEvent): ErrorEvent {
   if (event.user) event.user = { id: event.user.id };
   if (event.message) event.message = scrubText(event.message);
-  if (event.extra) event.extra = scrubValue(event.extra) as Record<string, unknown>;
-  if (event.request) delete event.request.cookies;
+  for (const exception of event.exception?.values ?? []) {
+    if (exception.value) exception.value = scrubText(exception.value);
+    for (const frame of exception.stacktrace?.frames ?? []) {
+      if (frame.vars) frame.vars = scrubValue(frame.vars) as Record<string, unknown>;
+    }
+  }
+  if (event.extra) event.extra = scrubValue(event.extra) as ErrorEvent["extra"];
+  if (event.tags) event.tags = scrubValue(event.tags) as ErrorEvent["tags"];
+  if (event.contexts) event.contexts = scrubValue(event.contexts) as ErrorEvent["contexts"];
+  if (event.request) {
+    delete event.request.cookies;
+    event.request = scrubValue(event.request) as ErrorEvent["request"];
+  }
+  if (event.breadcrumbs) {
+    event.breadcrumbs = event.breadcrumbs.map((crumb) => scrubValue(crumb) as Breadcrumb);
+  }
   return event;
 }
 
 export function dropSensitiveBreadcrumb(crumb: Breadcrumb): Breadcrumb | null {
   if (crumb.category === "console") return null;
+  if (crumb.message) crumb.message = scrubText(crumb.message);
   if (crumb.data) crumb.data = scrubValue(crumb.data) as Record<string, unknown>;
   return crumb;
 }
@@ -132,7 +147,7 @@ function scrubValue(value: unknown): unknown {
   if (value && typeof value === "object") {
     const out: Record<string, unknown> = {};
     for (const [key, inner] of Object.entries(value as Record<string, unknown>)) {
-      out[key] = SENSITIVE_KEYS.has(key) ? "[redacted]" : scrubValue(inner);
+      out[key] = SENSITIVE_KEYS.has(key.toLowerCase()) ? "[redacted]" : scrubValue(inner);
     }
     return out;
   }
@@ -143,13 +158,19 @@ function beforeSend(event: any) {
   const clean = { ...event };
   if (clean.user) clean.user = { id: clean.user.id };
   if (clean.message) clean.message = scrubText(clean.message);
+  if (clean.exception) clean.exception = scrubValue(clean.exception);
   if (clean.extra) clean.extra = scrubValue(clean.extra);
+  if (clean.tags) clean.tags = scrubValue(clean.tags);
+  if (clean.contexts) clean.contexts = scrubValue(clean.contexts);
+  if (clean.request) clean.request = scrubValue(clean.request);
   return clean;
 }
 
 const sampleEvent = {
   message: "Failed to save note for ana@example.com",
+  exception: { values: [{ type: "Error", value: "Sync failed for ana@example.com" }] },
   user: { id: "u_42", email: "ana@example.com" },
+  tags: { account: "ana@example.com", screen: "NoteEditor" },
   extra: {
     request: { authorization: "Bearer demo.token.value", noteId: "n_7" },
     note: { body: "Doctor appointment on Friday", title: "Health" },
@@ -188,7 +209,7 @@ Marca lo que ya cumple la configuración de tu app:
     "Uso @sentry/react-native con su config plugin; no uso sentry-expo",
     "Sentry.init tiene sendDefaultPii: false y enabled: !__DEV__",
     "beforeSend deja en user solo el id",
-    "beforeSend enmascara correos y tokens en message y extra",
+    "beforeSend enmascara correos y tokens en message, exception, extra, tags, contexts y request",
     "beforeBreadcrumb descarta las migas de categoría console",
     "Ningún mensaje de error incluye contenido de notas, correos ni tokens",
     "Sentry.setUser(null) se llama al cerrar sesión",
@@ -216,7 +237,7 @@ function scrubValue(value: unknown): unknown {
   if (value && typeof value === "object") {
     const out: Record<string, unknown> = {};
     for (const [key, inner] of Object.entries(value as Record<string, unknown>)) {
-      out[key] = SENSITIVE_KEYS.has(key) ? "[redacted]" : scrubValue(inner);
+      out[key] = SENSITIVE_KEYS.has(key.toLowerCase()) ? "[redacted]" : scrubValue(inner);
     }
     return out;
   }

@@ -57,7 +57,7 @@ Usa las lecciones de la etapa como guía de comprobación:
 
 - **STORAGE**: la clasificación de datos y el uso de SecureStore (lección 03); la ausencia de secretos en el bundle y en el historial (lección 02); la limpieza del crash reporting (lección 08).
 - **CRYPTO**: la app de notas no implementa criptografía propia; el estado esperado es "Cumple" con la evidencia de que TLS y SecureStore delegan en la plataforma, y de que no hay ningún `crypto` casero en el código. Si lo hay, es un hallazgo a evaluar.
-- **AUTH**: lo que construiste en la etapa 8. Evidencia: el backend comprueba el dueño de cada nota en cada endpoint; los tokens expiran; el cierre de sesión borra el token local y lo invalida en el servidor. Los controles AUTH-2 y AUTH-3 (autenticación local y adicional) suelen ser "No aplica" en una app de notas, salvo que hayas añadido bloqueo biométrico.
+- **AUTH**: lo que construiste en la etapa 8. Evidencia: el backend comprueba el dueño de cada nota en cada endpoint; los tokens expiran; el cierre de sesión borra el token local y lo invalida en el servidor. Tu app tiene bloqueo biométrico (etapa 8), así que AUTH-2 aplica: la evidencia es el uso de `expo-local-authentication` con `disableDeviceFallback: false` y la nota de que es un control local, no una prueba de identidad ante el servidor. AUTH-3 aplica si el borrado de cuenta u otra operación sensible pide reautenticación.
 - **NETWORK**: HTTPS sin excepciones y la decisión de pinning (lección 04).
 - **PLATFORM**: deep links validados y sin datos sensibles (lección 05); WebViews, si las hay; y la decisión sobre ocultar la pantalla en el selector de apps.
 - **CODE**: versión mínima de plataforma actual (`CODE-1`), mecanismo de actualización forzada o su ausencia justificada (`CODE-2`), auditoría de dependencias (`CODE-3`, lección 06) y validación de entrada (`CODE-4`, lección 05).
@@ -95,7 +95,7 @@ Esta es la lista de comprobación completa. Cada punto corresponde a una fila de
     "MASVS-CRYPTO-1: sin criptografía casera; TLS y SecureStore delegan en la plataforma; evidencia: búsqueda de 'crypto' en src",
     "MASVS-CRYPTO-2: sin claves criptográficas gestionadas por la app, o gestionadas vía SecureStore; evidencia",
     "MASVS-AUTH-1: el backend valida sesión y dueño en cada endpoint; tokens expiran; logout invalida; evidencia: rutas del backend",
-    "MASVS-AUTH-2: autenticación local (biometría/PIN) no aplica o está implementada con la API de la plataforma; evidencia",
+    "MASVS-AUTH-2: bloqueo biométrico con expo-local-authentication y disableDeviceFallback: false, documentado como control local; evidencia",
     "MASVS-AUTH-3: operaciones sensibles (borrar cuenta) piden confirmación o reautenticación; evidencia: pantalla de borrado",
     "MASVS-NETWORK-1: todas las URLs https; sin NSAllowsArbitraryLoads ni usesCleartextTraffic; evidencia: grep y app.json",
     "MASVS-NETWORK-2: decisión de pinning documentada con justificación y condición de cambio",
@@ -104,10 +104,10 @@ Esta es la lista de comprobación completa. Cada punto corresponde a una fila de
     "MASVS-PLATFORM-3: decisión sobre ocultar contenido en el selector de apps y sobre el portapapeles; evidencia",
     "MASVS-CODE-1: versión mínima de iOS y Android actual según el SDK de Expo; evidencia: app.json / expo-build-properties",
     "MASVS-CODE-2: mecanismo de actualización forzada o decisión justificada de no tenerlo; evidencia",
-    "MASVS-CODE-3: pnpm audit sin altas/críticas en producción; lockfile versionado; --frozen-lockfile en CI; evidencia: salida de audit",
+    "MASVS-CODE-3: pnpm audit sin altas/críticas en producción; lockfile versionado; --frozen-lockfile en CI; builds en EAS desde el lockfile; evidencia: salida de audit",
     "MASVS-CODE-4: esquemas en fronteras y SQL parametrizado; evidencia: archivos de esquemas y búsqueda de interpolación en SQL",
     "MASVS-RESILIENCE-1: decisión sobre detección de root/jailbreak (defensa en profundidad, no garantía)",
-    "MASVS-RESILIENCE-2: decisión sobre anti-tampering; integridad del build vía lockfile y EAS",
+    "MASVS-RESILIENCE-2: decisión sobre anti-tampering en tiempo de ejecución (integridad de la app instalada)",
     "MASVS-RESILIENCE-3: decisión sobre ofuscación del bundle",
     "MASVS-RESILIENCE-4: decisión sobre anti-depuración en producción",
     "MASVS-PRIVACY-1: inventario de datos; permisos mínimos y en contexto; evidencia: inventario y app.json",

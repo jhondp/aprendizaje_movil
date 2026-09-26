@@ -6,7 +6,7 @@ module: "Cadena y privacidad"
 order: 6
 minutes: 12
 prereqs: ["09-seguridad-movil/05-validacion-de-entrada"]
-summary: "Audita las dependencias de tu app, entiende qué garantiza el lockfile y establece una rutina para que el código de terceros que envías a tus usuarios sea el que revisaste."
+summary: "Audita las dependencias de tu app, entiende qué garantiza el lockfile y crea una rutina para que el código de terceros que envías sea el que revisaste."
 ---
 
 ## Objetivo
@@ -17,7 +17,7 @@ Al terminar esta lección podrás ejecutar una auditoría de dependencias, inspe
 
 ## Concepto
 
-Esta lección cubre **MASVS-CODE-3** (la app solo usa componentes sin vulnerabilidades conocidas) y se apoya en **MASVS-RESILIENCE-2** en un sentido concreto: la integridad de lo que compilas y envías, que empieza por saber exactamente qué código entra en el build.
+Esta lección cubre **MASVS-CODE-3** (la app solo usa componentes sin vulnerabilidades conocidas), que en OWASP Mobile Top 10 corresponde a M2, seguridad inadecuada de la cadena de suministro. Saber exactamente qué código entra en el build, con un lockfile y builds reproducibles, es parte de la evidencia de ese control.
 
 ### Los ingredientes de un restaurante
 
@@ -30,7 +30,7 @@ Una app de Expo típica declara entre 20 y 40 dependencias directas y arrastra v
 - **Vulnerabilidades conocidas**: un fallo publicado con un identificador (CVE o aviso de GitHub) en una versión que usas.
 - **Paquetes abandonados**: sin mantenimiento, las vulnerabilidades nunca se corrigen.
 - **Cuentas comprometidas o paquetes maliciosos**: alguien publica una versión con código dañino en un paquete popular, o crea uno con nombre casi idéntico (typosquatting) esperando errores de tipeo.
-- **Scripts de instalación**: un paquete puede ejecutar código en tu máquina durante `install`, antes de que lo importes.
+- **Scripts de instalación**: un paquete puede ejecutar código en tu máquina durante `install`, antes de que lo importes. npm los ejecuta por defecto; pnpm 10 o posterior no ejecuta los scripts de las dependencias salvo las que apruebes de forma explícita (`pnpm approve-builds` las anota en la lista de permitidas, `onlyBuiltDependencies`). Revisa esa lista en cada pull request igual que el lockfile: cada paquete que agregas ahí puede ejecutar código en tu máquina y en CI.
 
 ### El lockfile: la lista de compra exacta
 
@@ -91,7 +91,7 @@ Ejecuta esta secuencia en tu app de notas. Las salidas son de ejemplo; las tuyas
     { cmd: "npm view example-form-kit version time.modified maintainers repository.url", out: "version = '2.3.0'\ntime.modified = '2026-08-30T10:12:44.000Z'\nmaintainers = [ 'maintainer-a <a@example.com>', 'maintainer-b <b@example.com>' ]\nrepository.url = 'git+https://github.com/example/form-kit.git'" },
     { cmd: "pnpm update example-form-kit && pnpm audit", out: "Progress: resolved 412, reused 411, downloaded 1, added 1, done\nNo known vulnerabilities found" },
     { cmd: "git diff --stat -- pnpm-lock.yaml", out: " pnpm-lock.yaml | 12 ++++++------\n 1 file changed, 6 insertions(+), 6 deletions(-)" },
-    { cmd: "npx expo install --check", out: "The following packages should be updated for best compatibility with the installed expo version:\n  expo-secure-store@14.0.0 - expected version: 14.0.1\nYour project may not work correctly until you install the expected versions of the packages." },
+    { cmd: "npx expo install --check", out: "The following packages should be updated for best compatibility with the installed expo version:\n  expo-secure-store@57.0.2 - expected version: ~57.0.4\nYour project may not work correctly until you install the expected versions of the packages." },
     { cmd: "pnpm install --frozen-lockfile", out: "Lockfile is up to date, resolution step is skipped\nAlready up to date" }
   ]}
 />

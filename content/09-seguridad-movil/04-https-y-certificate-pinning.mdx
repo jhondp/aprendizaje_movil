@@ -6,7 +6,7 @@ module: "Red y entrada"
 order: 4
 minutes: 15
 prereqs: ["09-seguridad-movil/03-almacenamiento-seguro"]
-summary: "Asegura todo el tráfico de tu app con TLS, lee el certificado de tu API desde la terminal y decide con criterio si el certificate pinning vale su costo operativo."
+summary: "Asegura todo el tráfico de tu app con TLS, lee el certificado de tu API desde la terminal y decide con criterio si el certificate pinning vale su costo."
 ---
 
 ## Objetivo
@@ -45,6 +45,7 @@ Antes de hablar de pinning necesitas ver con qué estás tratando. `openssl s_cl
 El pinning protege contra un atacante que controla las CA del dispositivo. Su costo es operativo, y es alto:
 
 - **Rotación.** Cuando renueves el certificado con una clave nueva, o cambies de proveedor, la app con pins antiguos deja de conectar. Los usuarios que no actualicen quedan bloqueados. Por eso todo pin set lleva al menos un **pin de respaldo** para una clave que aún no está en producción, y a veces una **fecha de expiración** tras la cual el pinning se desactiva.
+- **Renovaciones automáticas.** Certbot y la mayoría de clientes ACME (Let's Encrypt, Caddy, Traefik, acme.sh) generan una **clave privada nueva en cada renovación** por defecto (https://eff-certbot.readthedocs.io/en/stable/using.html). Si fijas la clave del certificado hoja (leaf) de una API con Let's Encrypt, la app se rompe en la siguiente renovación, dentro de 90 días como máximo, aunque tengas un pin de respaldo que no corresponde a la clave nueva. Tienes dos opciones seguras: (a) reutilizar la clave de forma deliberada (`certbot --reuse-key` o el equivalente de tu herramienta), con una clave de respaldo ya generada y fijada, y rotar a ella de forma planificada; o (b) fijar la clave de la CA intermedia o raíz en lugar de la hoja (en iOS con `NSPinnedCAIdentities`; en Android, un `<pin>` del pin-set puede corresponder a cualquier certificado de la cadena), aceptando que proteges menos si esa CA emite para un atacante, y fijando también la intermedia de respaldo que tu CA publica.
 - **Terceros.** Solo se hace pinning de endpoints que controlas. Fijar la clave de una API ajena es apostar a que ese proveedor nunca rote.
 - **Depuración.** Las herramientas de inspección de tráfico dejan de funcionar; conviene desactivar el pinning en builds de desarrollo.
 
@@ -141,6 +142,7 @@ El paso 2 imprime el hash SPKI: ese es el valor que iría en un pin. El paso 3 c
     "El servidor redirige HTTP a HTTPS y envía HSTS",
     "Decidí si hago pinning y escribí la decisión con su justificación",
     "Si hago pinning: hay pin de respaldo, calendario de rotación y está desactivado en __DEV__",
+    "Si hago pinning de la hoja: la renovación reutiliza la clave a propósito; si no, fijo la CA intermedia",
     "No hago pinning de dominios de terceros que no controlo"
   ]}
 />
@@ -183,7 +185,9 @@ backup present`}
 
 **Apagar ATS o permitir cleartext "solo para probar".** El flag se agrega para conectar con un servidor de pruebas sin certificado y nadie lo quita. Ocurre porque el efecto es invisible en la app. Se detecta buscando `NSAllowsArbitraryLoads` y `usesCleartextTraffic` en `app.json` y en config plugins.
 
-**Fijar el hash del certificado en lugar del de la clave pública.** El pin deja de coincidir en la siguiente renovación automática (Let's Encrypt renueva cada 90 días) aunque la clave sea la misma. Ocurre por copiar el `fingerprint` del certificado en vez del hash SPKI. Se detecta porque el pinning falla justo después de una renovación sin cambio de clave.
+**Fijar el hash del certificado en lugar del de la clave pública.** El pin deja de coincidir en la siguiente renovación, incluso si configuraste la renovación para reutilizar la misma clave. Ocurre por copiar el `fingerprint` del certificado en vez del hash SPKI. Se detecta porque el pinning falla justo después de una renovación sin cambio de clave.
+
+**Fijar la clave hoja con renovación ACME por defecto.** Certbot y clientes similares crean una clave nueva en cada renovación, así que el hash SPKI de la hoja cambia cada 60 a 90 días. Ocurre por suponer que "la clave es la misma". Se detecta comparando el SPKI de la hoja antes y después de una renovación en staging, o revisando si la herramienta tiene activado `--reuse-key`; si no, fija la CA intermedia o configura la reutilización de clave con un plan de rotación.
 
 **Hacer pinning sin pin de respaldo ni plan de rotación.** Todo funciona hasta que cambia la clave del servidor, y entonces la app queda inutilizable para quien no actualice. Se detecta revisando la configuración: un solo pin es un hallazgo en sí mismo.
 
@@ -210,10 +214,10 @@ backup present`}
       ]
     },
     {
-      prompt: "Tu API renueva su certificado cada 90 días con la misma clave. ¿Qué valor debes fijar para que el pinning no se rompa?",
+      prompt: "Configuraste tu servidor para renovar el certificado cada 90 días reutilizando la misma clave (certbot --reuse-key). ¿Qué valor debes fijar para que el pinning no se rompa?",
       options: [
         { text: "El fingerprint SHA-256 del certificado", correct: false, feedback: "Cambia con cada renovación aunque la clave sea la misma." },
-        { text: "El hash SPKI de la clave pública", correct: true, feedback: "Correcto: solo cambia si cambia la clave." },
+        { text: "El hash SPKI de la clave pública", correct: true, feedback: "Correcto: solo cambia si cambia la clave. Sin --reuse-key la clave cambia en cada renovación y conviene fijar la CA intermedia." },
         { text: "La fecha notAfter del certificado", correct: false, feedback: "Una fecha no identifica al servidor." }
       ]
     },
