@@ -11,6 +11,7 @@ export interface ValidationResult {
 export interface LessonValidation {
   id: string | null;
   stage: number | null;
+  order: number | null;
   hidden: boolean;
   prereqs: string[];
   links: string[];
@@ -66,6 +67,49 @@ const FIELDS: Field[] = [
 function hasType(value: unknown, type: Field['type']): boolean {
   if (type === 'string[]') return Array.isArray(value) && value.every((v) => typeof v === 'string');
   return typeof value === type;
+}
+
+const PREREQS_LINE = /^\*\*Prerrequisitos:\*\*.*$/m;
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** True when `id` appears on `line` as a whole lesson id (not as part of a longer id). */
+function mentionsId(line: string, id: string): boolean {
+  return new RegExp(`(^|[^\\w/-])${escapeRegExp(id)}($|[^\\w/-])`).test(line);
+}
+
+/**
+ * Checks the `**Prerrequisitos:**` line inside the `## Objetivo` section. The line position is
+ * found on the masked body but its text is read from the real body, so ids written as inline code
+ * still count.
+ */
+function validatePrereqsLine(
+  body: string,
+  objective: string,
+  offset: number,
+  prereqs: string[],
+  err: (msg: string) => void,
+): void {
+  const match = PREREQS_LINE.exec(objective);
+  if (!match) {
+    err('"## Objetivo" needs a line starting with "**Prerrequisitos:**"');
+    return;
+  }
+  const start = offset + match.index;
+  const line = body.slice(start, start + match[0].length);
+  if (prereqs.length === 0) {
+    if (!/\bninguno\b/i.test(line)) {
+      err('"**Prerrequisitos:**" line must say "ninguno" when prereqs is empty');
+    }
+    return;
+  }
+  for (const id of prereqs) {
+    if (!mentionsId(line, id)) {
+      err(`prereq "${id}" is not listed on the "**Prerrequisitos:**" line`);
+    }
+  }
 }
 
 function describeError(e: unknown): string {
@@ -334,7 +378,7 @@ export function validateLesson(
     body = parsed.content;
   } catch (e) {
     err(`frontmatter could not be parsed (${describeError(e)})`);
-    return { id: null, stage: null, hidden: false, prereqs: [], links: [], errors };
+    return { id: null, stage: null, order: null, hidden: false, prereqs: [], links: [], errors };
   }
 
   for (const field of FIELDS) {
@@ -345,6 +389,19 @@ export function validateLesson(
     }
     if (!hasType(value, field.type)) err(`frontmatter.${field.name} must be a ${field.type}`);
   }
+  for (const name of ['title', 'summary']) {
+    const value = data[name];
+    if (typeof value === 'string' && value.trim() === '') {
+      err(`frontmatter.${name} must be a non-empty string`);
+    }
+  }
+  if (typeof data.minutes === 'number' && !(data.minutes > 0)) {
+    err('frontmatter.minutes must be greater than 0');
+  }
+  const prereqs =
+    Array.isArray(data.prereqs) && hasType(data.prereqs, 'string[]')
+      ? (data.prereqs as string[])
+      : [];
 
   const expectedId = relPath.replace(/\.mdx$/, '');
   const dir = expectedId.split('/')[0] ?? '';
@@ -380,6 +437,13 @@ export function validateLesson(
         err(`"${marker}" must appear after "${before ?? 'start'}" and before "${after ?? 'end'}"`);
       }
     });
+
+    const objective = positions[0];
+    if (objective !== undefined && objective !== -1) {
+      const concept = positions[1] ?? -1;
+      const section = maskedBody.slice(objective, concept === -1 ? undefined : concept);
+      validatePrereqsLine(body, section, objective, prereqs, err);
+    }
 
     const practice = positions[2];
     const exercise = positions[3];
@@ -447,10 +511,10 @@ export function validateLesson(
     links.push(match[1]!.replace(/\/$/, ''));
   }
 
-  const prereqs = Array.isArray(data.prereqs) ? (data.prereqs as string[]) : [];
   return {
     id: typeof data.id === 'string' ? data.id : null,
     stage: stage ? stage.id : null,
+    order: typeof data.order === 'number' ? data.order : null,
     hidden,
     prereqs,
     links,
@@ -500,6 +564,19 @@ export function validateContent(rootDir: string): ValidationResult {
     if (previous) errors.push(`${r.relPath}: duplicate id "${r.id}" already used by ${previous}`);
     seen.set(r.id, r.relPath);
     ids.add(r.id);
+  }
+  const orders = new Map<string, string>();
+  for (const r of results) {
+    if (r.stage === null || r.order === null) continue;
+    const key = `${r.stage}:${r.order}`;
+    const previous = orders.get(key);
+    if (previous) {
+      errors.push(
+        `${r.relPath}: duplicate order ${r.order} in stage ${r.stage}, already used by ${previous}`,
+      );
+    } else {
+      orders.set(key, r.relPath);
+    }
   }
   for (const r of results) {
     for (const p of r.prereqs)

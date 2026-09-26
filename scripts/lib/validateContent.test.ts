@@ -40,6 +40,8 @@ summary: "Resumen."
 
 Texto.
 
+**Prerrequisitos:** ninguno.
+
 ## Concepto
 
 Texto.
@@ -298,6 +300,64 @@ describe('validateLesson', () => {
     expect(errors).toContain('01-javascript/00-variables.mdx: "## Ejercicio" needs a Challenge');
   });
 
+  it('requires a Prerrequisitos line in Objetivo', () => {
+    const src = good.replace('**Prerrequisitos:** ninguno.\n', '');
+    const { errors } = validateLesson(src, '01-javascript/00-variables.mdx', stages);
+    expect(errors).toContain(
+      '01-javascript/00-variables.mdx: "## Objetivo" needs a line starting with "**Prerrequisitos:**"',
+    );
+  });
+
+  it('does not accept a Prerrequisitos line outside Objetivo', () => {
+    const src = good
+      .replace('**Prerrequisitos:** ninguno.\n', '')
+      .replace('## Concepto\n', '## Concepto\n\n**Prerrequisitos:** ninguno.\n');
+    const { errors } = validateLesson(src, '01-javascript/00-variables.mdx', stages);
+    expect(errors).toContain(
+      '01-javascript/00-variables.mdx: "## Objetivo" needs a line starting with "**Prerrequisitos:**"',
+    );
+  });
+
+  it('requires "ninguno" on the Prerrequisitos line when there are no prereqs', () => {
+    const src = good.replace('**Prerrequisitos:** ninguno.', '**Prerrequisitos:** variables.');
+    const { errors } = validateLesson(src, '01-javascript/00-variables.mdx', stages);
+    expect(errors).toContain(
+      '01-javascript/00-variables.mdx: "**Prerrequisitos:**" line must say "ninguno" when prereqs is empty',
+    );
+  });
+
+  it('requires every prereq id on the Prerrequisitos line', () => {
+    const withPrereqs = good.replace(
+      'prereqs: []',
+      'prereqs: ["00-aprender-a-programar/00-que-es-un-programa", "00-aprender-a-programar/01-terminal"]',
+    );
+    const listed = withPrereqs.replace(
+      '**Prerrequisitos:** ninguno.',
+      '**Prerrequisitos:** `00-aprender-a-programar/00-que-es-un-programa` y 00-aprender-a-programar/01-terminal.',
+    );
+    expect(validateLesson(listed, '01-javascript/00-variables.mdx', stages).errors).toEqual([]);
+    const titleOnly = withPrereqs.replace(
+      '**Prerrequisitos:** ninguno.',
+      '**Prerrequisitos:** Qué es un programa y 00-aprender-a-programar/01-terminal.',
+    );
+    expect(validateLesson(titleOnly, '01-javascript/00-variables.mdx', stages).errors).toEqual([
+      '01-javascript/00-variables.mdx: prereq "00-aprender-a-programar/00-que-es-un-programa" is not listed on the "**Prerrequisitos:**" line',
+    ]);
+  });
+
+  it('requires non-empty title and summary and positive minutes', () => {
+    const src = good
+      .replace('title: "Variables"', 'title: "  "')
+      .replace('summary: "Resumen."', 'summary: ""')
+      .replace('minutes: 8', 'minutes: 0');
+    const { errors } = validateLesson(src, '01-javascript/00-variables.mdx', stages);
+    expect(errors).toEqual([
+      '01-javascript/00-variables.mdx: frontmatter.title must be a non-empty string',
+      '01-javascript/00-variables.mdx: frontmatter.summary must be a non-empty string',
+      '01-javascript/00-variables.mdx: frontmatter.minutes must be greater than 0',
+    ]);
+  });
+
   it('skips section and stage checks for hidden lessons', () => {
     const src = good
       .replace('summary: "Resumen."', 'summary: "Resumen."\nhidden: true')
@@ -338,6 +398,35 @@ describe('validateContent', () => {
     expect(result.errors.some((e) => e.includes('duplicate id "01-javascript/00-variables"'))).toBe(
       true,
     );
+  });
+
+  it('reports duplicate order values inside a stage naming both files', () => {
+    const root = makeTmpDir();
+    mkdirSync(path.join(root, '01-javascript'));
+    writeFileSync(path.join(root, 'stages.json'), JSON.stringify(stages));
+    writeFileSync(path.join(root, '01-javascript', '00-variables.mdx'), good);
+    writeFileSync(
+      path.join(root, '01-javascript', '01-tipos.mdx'),
+      good.replace('id: "01-javascript/00-variables"', 'id: "01-javascript/01-tipos"'),
+    );
+    const result = validateContent(root);
+    expect(result.errors).toContain(
+      '01-javascript/01-tipos.mdx: duplicate order 0 in stage 1, already used by 01-javascript/00-variables.mdx',
+    );
+  });
+
+  it('accepts distinct order values inside a stage', () => {
+    const root = makeTmpDir();
+    mkdirSync(path.join(root, '01-javascript'));
+    writeFileSync(path.join(root, 'stages.json'), JSON.stringify(stages));
+    writeFileSync(path.join(root, '01-javascript', '00-variables.mdx'), good);
+    writeFileSync(
+      path.join(root, '01-javascript', '01-tipos.mdx'),
+      good
+        .replace('id: "01-javascript/00-variables"', 'id: "01-javascript/01-tipos"')
+        .replace('order: 0', 'order: 1'),
+    );
+    expect(validateContent(root).errors).toEqual([]);
   });
 
   it('returns a validation error instead of crashing when stages.json is missing', () => {
