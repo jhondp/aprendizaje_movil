@@ -1,0 +1,207 @@
+---
+id: "01-javascript/11-callbacks-y-promesas"
+title: "Callbacks y promesas"
+stage: 1
+module: "Asincronía"
+order: 11
+minutes: 15
+prereqs: ["01-javascript/10-modulos"]
+summary: "Trabaja con código que tarda en completarse usando callbacks, setTimeout y promesas con then/catch."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás usar `setTimeout` con un callback, crear una `Promise`, y manejar su resultado con `.then` y `.catch`.
+
+**Prerrequisitos:** `01-javascript/10-modulos`
+
+## Concepto
+
+Todo el código que escribiste hasta ahora es síncrono: cada línea espera a que termine la anterior antes de ejecutarse. Pero algunas operaciones tardan un tiempo real en completarse, como pedir datos a un servidor o esperar a que el usuario responda. JavaScript no se queda "congelado" esperando: sigue con el resto del programa y avisa cuando la operación termina. Es como pedir comida a domicilio: no te quedas parado en la puerta sin hacer nada hasta que llega, sigues con tus tareas y el timbre te avisa cuando el pedido está listo.
+
+### Código asíncrono con callbacks
+
+Un callback es una función que se pasa como argumento para que se ejecute más adelante, cuando la operación asíncrona termina. `setTimeout` es el ejemplo más simple: ejecuta una función después de esperar una cantidad de milisegundos.
+
+```js
+console.log("1: empieza el programa");
+
+setTimeout(() => {
+  console.log("3: pasaron 1000 ms");
+}, 1000);
+
+console.log("2: esto se imprime antes, sin esperar");
+```
+
+El orden de impresión es `1`, `2`, `3`: aunque `setTimeout` aparece antes que la última línea en el código, JavaScript no espera esos 1000 ms ahí mismo. Sigue ejecutando el resto del programa y solo llama al callback cuando el tiempo pasó.
+
+### El problema de encadenar callbacks
+
+Cuando una operación asíncrona depende del resultado de otra, encadenar callbacks uno dentro de otro se vuelve difícil de leer.
+
+```js
+setTimeout(() => {
+  console.log("paso 1");
+  setTimeout(() => {
+    console.log("paso 2");
+    setTimeout(() => {
+      console.log("paso 3");
+    }, 500);
+  }, 500);
+}, 500);
+```
+
+Cada paso depende de anidar una función más dentro de la anterior. Esto se conoce como "callback hell" y es una de las razones por las que JavaScript incorporó las promesas.
+
+### Promise: representar un resultado futuro
+
+Una `Promise` es un objeto que representa un valor que todavía no existe, pero que existirá (o fallará) en algún momento. Se crea con `new Promise`, que recibe una función con dos parámetros: `resolve` (para avisar éxito) y `reject` (para avisar fallo).
+
+```js
+const fetchUser = new Promise((resolve, reject) => {
+  setTimeout(() => {
+    const success = true;
+    if (success) {
+      resolve({ id: 1, name: "Ana" });
+    } else {
+      reject(new Error("No se pudo obtener el usuario"));
+    }
+  }, 500);
+});
+```
+
+Nada dentro de la función se ejecuta al crear la `Promise`: la operación asíncrona (aquí, el `setTimeout`) empieza en cuanto se llama a `new Promise(...)`, pero el resultado llega después.
+
+### then y catch
+
+`.then` recibe una función que se ejecuta cuando la promesa se resuelve con éxito, con el valor pasado a `resolve` como argumento. `.catch` recibe una función que se ejecuta cuando la promesa falla, con el error pasado a `reject`.
+
+```js
+fetchUser
+  .then((user) => {
+    console.log("Usuario recibido:", user.name);
+  })
+  .catch((error) => {
+    console.log("Falló:", error.message);
+  });
+```
+
+`.then` y `.catch` se pueden encadenar: cada `.then` puede devolver un valor o una nueva promesa, y el siguiente `.then` de la cadena recibe ese resultado, en lugar de anidar callbacks dentro de callbacks.
+
+Puedes revisar la referencia completa de `Promise` en MDN: https://developer.mozilla.org/es/docs/Web/JavaScript/Reference/Global_Objects/Promise.
+
+<Callout kind="tip">
+  En la próxima lección vas a ver async/await, una sintaxis que se escribe sobre las promesas y hace que el código asíncrono se lea casi como código síncrono.
+</Callout>
+
+## Práctica
+
+Ejecuta el código y observa el orden en que aparecen los mensajes: fíjate que el resultado de la promesa llega después del código síncrono, aunque esté escrito antes en algunas líneas.
+
+<Playground
+  lang="js"
+  code={`console.log("1: empieza el programa");
+
+const fetchUser = new Promise((resolve, reject) => {
+  setTimeout(() => {
+    const success = true;
+    if (success) {
+      resolve({ id: 1, name: "Ana" });
+    } else {
+      reject(new Error("No se pudo obtener el usuario"));
+    }
+  }, 500);
+});
+
+fetchUser
+  .then((user) => {
+    console.log("3: usuario recibido:", user.name);
+  })
+  .catch((error) => {
+    console.log("3: falló:", error.message);
+  });
+
+console.log("2: esto se imprime antes de que la promesa termine");`}
+  expected={`1: empieza el programa
+2: esto se imprime antes de que la promesa termine
+3: usuario recibido: Ana`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Promesa de validación"
+  solution={
+    <Playground
+      lang="js"
+      code={`function checkAge(age) {
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      if (age >= 18) {
+        resolve("Acceso permitido");
+      } else {
+        reject(new Error("Edad insuficiente"));
+      }
+    }, 300);
+  });
+}
+
+checkAge(20)
+  .then((message) => console.log(message))
+  .catch((error) => console.log(error.message));
+
+checkAge(15)
+  .then((message) => console.log(message))
+  .catch((error) => console.log(error.message));`}
+    />
+  }
+>
+  Escribe una función `checkAge(age)` que devuelva una `Promise`. Dentro, usa `setTimeout` para simular una espera de 300 ms: si `age` es 18 o más, resuelve con el texto `"Acceso permitido"`; si no, rechaza con un `new Error("Edad insuficiente")`. Llama a la función con `20` y con `15`, manejando ambos casos con `.then` y `.catch`.
+</Challenge>
+
+## Errores comunes
+
+**Esperar que el código después de setTimeout se ejecute después del callback.** `setTimeout` no pausa el programa: la línea siguiente al `setTimeout` se ejecuta de inmediato, antes de que pase el tiempo indicado. Se detecta comparando el orden real de los mensajes impresos contra el orden en que las líneas aparecen escritas en el código.
+
+**Olvidar llamar a resolve o reject dentro de la Promise.** Si la función que recibe `new Promise` nunca llama a `resolve` ni a `reject`, ni `.then` ni `.catch` se ejecutan jamás: la promesa queda "pendiente" para siempre. Se detecta porque el programa no imprime nada relacionado con esa promesa, sin ningún error visible.
+
+**Olvidar el .catch y dejar un error sin manejar.** Si una promesa se rechaza y no hay ningún `.catch` en la cadena, el error no se maneja y puede aparecer como "Unhandled promise rejection" en la consola. Se detecta por ese mensaje; la solución es agregar siempre un `.catch` a cada cadena de promesas que pueda fallar.
+
+<Flashcards
+  cards={[
+    { front: "¿setTimeout pausa el resto del programa mientras espera?", back: "No: el resto del código sigue ejecutándose; el callback se ejecuta más adelante." },
+    { front: "¿Qué dos funciones recibe el ejecutor de new Promise?", back: "resolve, para avisar éxito, y reject, para avisar fallo." },
+    { front: "¿Qué método maneja el resultado exitoso de una promesa?", back: ".then" },
+    { front: "¿Qué método maneja el rechazo de una promesa?", back: ".catch" },
+    { front: "¿Cómo se llama el problema de anidar muchos callbacks uno dentro de otro?", back: "Callback hell." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "console.log(\"a\"); setTimeout(() => console.log(\"b\"), 100); console.log(\"c\"); ¿en qué orden se imprime?",
+      options: [
+        { text: "a, b, c", correct: false, feedback: "setTimeout no bloquea: \"c\" se imprime antes que \"b\"." },
+        { text: "a, c, b", correct: true, feedback: "Correcto: el callback de setTimeout se ejecuta después del código síncrono restante." },
+        { text: "b, a, c", correct: false, feedback: "El código síncrono siempre se ejecuta en orden antes que el callback." },
+      ],
+    },
+    {
+      prompt: "Dentro de new Promise((resolve, reject) => { ... }), ¿qué hace llamar a reject(new Error(\"falló\"))?",
+      options: [
+        { text: "Ejecuta el .then correspondiente con ese error como valor", correct: false, feedback: "reject dispara el .catch, no el .then." },
+        { text: "Marca la promesa como fallida y ejecuta el .catch correspondiente", correct: true, feedback: "Correcto: reject rechaza la promesa." },
+        { text: "No tiene ningún efecto si hay un .then en la cadena", correct: false, feedback: "reject siempre dirige el flujo hacia el .catch, con o sin .then." },
+      ],
+    },
+    {
+      prompt: "¿Qué le pasa a una Promise si su ejecutor nunca llama a resolve ni a reject?",
+      options: [
+        { text: "Se resuelve automáticamente con undefined después de un tiempo", correct: false, feedback: "Una promesa no se resuelve sola: necesita una llamada explícita a resolve o reject." },
+        { text: "Queda pendiente para siempre; ni .then ni .catch se ejecutan", correct: true, feedback: "Correcto: sin resolve ni reject, la promesa nunca cambia de estado." },
+        { text: "Lanza un error de inmediato", correct: false, feedback: "No lanza ningún error; simplemente nunca se resuelve." },
+      ],
+    },
+  ]}
+/>

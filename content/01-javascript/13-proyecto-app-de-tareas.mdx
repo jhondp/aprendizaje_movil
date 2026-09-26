@@ -1,0 +1,250 @@
+---
+id: "01-javascript/13-proyecto-app-de-tareas"
+title: "Proyecto: app de tareas en consola"
+stage: 1
+module: "Asincronía"
+order: 13
+minutes: 25
+prereqs: ["01-javascript/12-async-await-y-fetch"]
+summary: "Construye una app de tareas en consola que combina variables, funciones, arrays, objetos y closures."
+---
+
+## Objetivo
+
+Al terminar esta lección habrás construido, en un solo archivo `todo.js`, una app de tareas en consola que agrega, completa, lista y filtra tareas, combinando todo lo aprendido en esta etapa.
+
+**Prerrequisitos:** `01-javascript/12-async-await-y-fetch`
+
+## Concepto
+
+En [el proyecto de la etapa anterior](/etapa/00-aprender-a-programar/07-proyecto-tu-primer-repo) creaste tu primer repositorio con un README que explicaba un programa simple. Esta vez el repositorio va a contener código real: un programa que guarda datos, los transforma y responde a distintas operaciones, todo con las herramientas de esta etapa.
+
+### Qué vas a construir
+
+Una app de tareas en consola, en un único archivo `todo.js`, que se ejecuta con `node todo.js`. El estado de la app es un array de objetos con esta forma:
+
+```js
+{ id: 1, title: "Buy milk", done: false }
+```
+
+La app expone cuatro operaciones, como funciones:
+
+- `addTask(title)`: crea una tarea nueva con un `id` único y `done: false`, la agrega al array, y la devuelve.
+- `completeTask(id)`: busca la tarea con ese `id` y marca `done` en `true`.
+- `listTasks()`: devuelve todas las tareas.
+- `pendingTasks()`: devuelve solo las tareas con `done: false`, usando `filter`.
+
+### Por qué un closure y no variables sueltas
+
+Si `tasks` y el contador de ids fueran variables sueltas en el archivo, cualquier parte del código podría modificarlas directamente, sin pasar por `addTask` o `completeTask`, y sería fácil olvidar incrementar el contador o dejar el array en un estado inconsistente. La solución de esta lección es la misma idea que viste en scope y closures: una función `createTaskStore` que declara `tasks` y `nextId` como variables privadas, y devuelve un objeto con las únicas funciones autorizadas para tocarlas.
+
+```js
+function createTaskStore() {
+  let tasks = [];
+  let nextId = 1;
+
+  function addTask(title) {
+    const task = { id: nextId, title, done: false };
+    tasks.push(task);
+    nextId += 1;
+    return task;
+  }
+
+  function completeTask(id) {
+    const task = tasks.find((t) => t.id === id);
+    if (!task) {
+      throw new Error(`Task ${id} not found`);
+    }
+    task.done = true;
+    return task;
+  }
+
+  function listTasks() {
+    return tasks;
+  }
+
+  function pendingTasks() {
+    return tasks.filter((t) => !t.done);
+  }
+
+  return { addTask, completeTask, listTasks, pendingTasks };
+}
+```
+
+`tasks` y `nextId` no aparecen en el objeto que `createTaskStore` devuelve: son privados, igual que la variable `count` del closure contador. La única forma de leerlos o modificarlos es a través de `addTask`, `completeTask`, `listTasks` y `pendingTasks`.
+
+### Qué significa terminado
+
+El proyecto está terminado cuando, ejecutando `node todo.js`, la consola muestra: la lista completa de tareas después de agregar al menos tres, el resultado de completar una de ellas, y la lista de tareas pendientes filtrada correctamente. El `Challenge` de esta lección agrega una quinta operación, `removeTask`, para seguir practicando.
+
+## Práctica
+
+Ejecuta el código: crea un almacén de tareas, agrega tres tareas, completa una, y observa cómo cambian `listTasks()` y `pendingTasks()`. Después agrega una tarea propia con `store.addTask(...)` y vuelve a ejecutar.
+
+<Playground
+  lang="js"
+  code={`function createTaskStore() {
+  let tasks = [];
+  let nextId = 1;
+
+  function addTask(title) {
+    const task = { id: nextId, title, done: false };
+    tasks.push(task);
+    nextId += 1;
+    return task;
+  }
+
+  function completeTask(id) {
+    const task = tasks.find((t) => t.id === id);
+    if (!task) {
+      throw new Error(\`Task \${id} not found\`);
+    }
+    task.done = true;
+    return task;
+  }
+
+  function listTasks() {
+    return tasks;
+  }
+
+  function pendingTasks() {
+    return tasks.filter((t) => !t.done);
+  }
+
+  return { addTask, completeTask, listTasks, pendingTasks };
+}
+
+const store = createTaskStore();
+
+store.addTask("Buy milk");
+store.addTask("Clean house");
+store.addTask("Write report");
+
+store.completeTask(2);
+
+console.log("All tasks:");
+console.log(store.listTasks());
+
+console.log("Pending tasks:");
+console.log(store.pendingTasks());`}
+  expected={`All tasks:
+[{"id":1,"title":"Buy milk","done":false},{"id":2,"title":"Clean house","done":true},{"id":3,"title":"Write report","done":false}]
+Pending tasks:
+[{"id":1,"title":"Buy milk","done":false},{"id":3,"title":"Write report","done":false}]`}
+/>
+
+Antes de dar por terminado el proyecto, revisa esta lista:
+
+<Checklist
+  id="01-javascript/13-proyecto-app-de-tareas/features"
+  items={[
+    "addTask crea una tarea con id único, title y done: false",
+    "completeTask marca done: true en la tarea correcta según su id",
+    "listTasks devuelve todas las tareas agregadas",
+    "pendingTasks devuelve solo las tareas con done: false, usando filter",
+    "tasks y el contador de ids son privados: nada fuera de createTaskStore los toca directamente",
+    "node todo.js corre sin errores y muestra la lista completa y la lista de pendientes",
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Eliminar una tarea"
+  solution={
+    <Playground
+      lang="js"
+      code={`function createTaskStore() {
+  let tasks = [];
+  let nextId = 1;
+
+  function addTask(title) {
+    const task = { id: nextId, title, done: false };
+    tasks.push(task);
+    nextId += 1;
+    return task;
+  }
+
+  function completeTask(id) {
+    const task = tasks.find((t) => t.id === id);
+    if (!task) {
+      throw new Error(\`Task \${id} not found\`);
+    }
+    task.done = true;
+    return task;
+  }
+
+  function removeTask(id) {
+    tasks = tasks.filter((t) => t.id !== id);
+  }
+
+  function listTasks() {
+    return tasks;
+  }
+
+  function pendingTasks() {
+    return tasks.filter((t) => !t.done);
+  }
+
+  return { addTask, completeTask, removeTask, listTasks, pendingTasks };
+}
+
+const store = createTaskStore();
+
+store.addTask("Buy milk");
+store.addTask("Clean house");
+
+store.removeTask(1);
+
+console.log(store.listTasks());`}
+    />
+  }
+>
+  Agrega una función `removeTask(id)` dentro de `createTaskStore`, que reemplace `tasks` por un array nuevo sin la tarea de ese `id`, usando `filter`. Súmala al objeto que devuelve `createTaskStore`. Comprueba agregando dos tareas, eliminando una, e imprimiendo `listTasks()`.
+</Challenge>
+
+## Errores comunes
+
+**Reutilizar el mismo id al agregar varias tareas.** Si `nextId` no se incrementa después de crear una tarea, dos tareas terminan con el mismo `id`, y `completeTask` o `removeTask` afectan a la primera que `find` o `filter` encuentren, no necesariamente a la esperada. Se detecta comparando los `id` de `listTasks()`: si hay dos iguales, falta el `nextId += 1`.
+
+**Exponer `tasks` directamente en el objeto devuelto.** Si `createTaskStore` devuelve `{ tasks, addTask, ... }`, cualquier código externo puede hacer `store.tasks.push(...)` sin pasar por `addTask`, saltándose la asignación del `id`. Se detecta revisando qué propiedades tiene el objeto devuelto: solo deberían estar las funciones, nunca el array `tasks` en sí.
+
+**Llamar a completeTask con un id de tipo distinto al guardado.** Si las tareas se crean con `id` numérico pero `completeTask("2")` se llama con un string, `t.id === id` es `false` para todas las tareas porque `===` no convierte tipos, y la función lanza `Task 2 not found` aunque la tarea exista. Se detecta comparando el tipo del argumento contra el tipo real de `id` en los objetos de `tasks`.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué forma tiene cada tarea en el array de estado de la app?", back: "{ id, title, done }, con id numérico, title como texto y done como boolean." },
+    { front: "¿Por qué tasks y nextId se declaran dentro de createTaskStore en lugar de como variables sueltas?", back: "Para que sean privados: solo las funciones devueltas por createTaskStore pueden leerlos o modificarlos, gracias al closure." },
+    { front: "¿Qué método de array usa pendingTasks para obtener las tareas no completadas?", back: "filter." },
+    { front: "¿Qué método de array usa completeTask para encontrar la tarea a marcar?", back: "find." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Por qué createTaskStore declara tasks y nextId con let dentro de la función, en vez de devolverlas junto con las demás funciones?",
+      options: [
+        { text: "Por una limitación del lenguaje: no se pueden devolver arrays y funciones juntos", correct: false, feedback: "JavaScript sí permite devolver cualquier combinación de valores en un objeto." },
+        { text: "Para mantenerlas privadas y forzar que solo se modifiquen a través de las funciones expuestas", correct: true, feedback: "Correcto: es la misma idea de encapsulamiento del closure contador." },
+        { text: "Para que ocupen menos memoria", correct: false, feedback: "La razón es de diseño (encapsulamiento), no de memoria." },
+      ],
+    },
+    {
+      prompt: "Si completeTask(id) no encuentra ninguna tarea con ese id, ¿qué hace la implementación de esta lección?",
+      options: [
+        { text: "Lanza un error con throw new Error", correct: true, feedback: "Correcto: si find no encuentra la tarea, se lanza un error explícito." },
+        { text: "Devuelve undefined silenciosamente", correct: false, feedback: "La implementación revisa el resultado de find y lanza un error si es undefined." },
+        { text: "Crea una tarea nueva con ese id", correct: false, feedback: "completeTask nunca crea tareas, solo las marca como completadas." },
+      ],
+    },
+    {
+      prompt: "¿Qué método de array usa pendingTasks para devolver solo las tareas no completadas?",
+      options: [
+        { text: "map", correct: false, feedback: "map transformaría cada tarea, no descartaría algunas." },
+        { text: "filter", correct: true, feedback: "Correcto: filter devuelve solo los elementos que cumplen la condición done === false." },
+        { text: "reduce", correct: false, feedback: "reduce produciría un solo valor acumulado, no un array filtrado." },
+      ],
+    },
+  ]}
+/>
