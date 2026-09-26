@@ -44,6 +44,22 @@ describe('Playground', () => {
     expect(screen.getByText('Salida correcta')).toBeInTheDocument();
   });
 
+  it('accepts late output after done (e.g. a scheduled callback) and recomputes the verdict', async () => {
+    render(<Playground code={'console.log("hola")'} expected="hola" />);
+    await userEvent.click(screen.getByRole('button', { name: 'Ejecutar' }));
+    const iframe = currentIframe();
+    const id = currentRunId();
+    post(iframe.contentWindow, id, 'log', ['hola']);
+    post(iframe.contentWindow, id, 'done', []);
+    expect(screen.getByText('Salida correcta')).toBeInTheDocument();
+
+    post(iframe.contentWindow, id, 'log', ['tarde']);
+
+    expect(screen.getByText('tarde')).toBeInTheDocument();
+    expect(screen.queryByText('Salida correcta')).not.toBeInTheDocument();
+    expect(screen.getByText('La salida no coincide con lo esperado')).toBeInTheDocument();
+  });
+
   it('shows errors and mismatches', async () => {
     render(<Playground code={'throw new Error("boom")'} expected="hola" />);
     await userEvent.click(screen.getByRole('button', { name: 'Ejecutar' }));

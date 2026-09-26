@@ -38,7 +38,11 @@ export function Playground({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const runCounter = useRef(0);
   const activeRunId = useRef<string | null>(null);
-  const settled = useRef(true);
+  // 'running': accepting output, no done yet. 'done': done arrived, still
+  // accepting late log/error/warn output (recomputing the verdict as it
+  // arrives), but a further 'done' is a duplicate and ignored. 'closed': the
+  // run is torn down (timeout, or no run started yet) — everything ignored.
+  const runPhase = useRef<'running' | 'done' | 'closed'>('closed');
   const expectedRef = useRef(expected);
   expectedRef.current = expected;
 
@@ -57,30 +61,38 @@ export function Playground({
   };
 
   useEffect(() => {
+    function recomputeVerdict() {
+      const output = linesRef.current
+        .filter((l) => l.level !== 'error')
+        .map((l) => l.text)
+        .join('\n');
+      const expectedValue = expectedRef.current;
+      setVerdict(
+        expectedValue === undefined
+          ? 'idle'
+          : output.trim() === expectedValue.trim()
+            ? 'ok'
+            : 'mismatch',
+      );
+    }
     function onMessage(event: MessageEvent) {
       if (event.source !== iframeRef.current?.contentWindow) return;
       if (!isPlaygroundMessage(event.data)) return;
-      if (settled.current || event.data.id !== activeRunId.current) return;
+      if (event.data.id !== activeRunId.current || runPhase.current === 'closed') return;
       const { level, args } = event.data;
       if (level === 'done') {
-        settled.current = true;
+        if (runPhase.current !== 'running') return; // duplicate done, ignore
+        runPhase.current = 'done';
         clearTimer();
-        const output = linesRef.current
-          .filter((l) => l.level !== 'error')
-          .map((l) => l.text)
-          .join('\n');
-        const expectedValue = expectedRef.current;
-        setVerdict(
-          expectedValue === undefined
-            ? 'idle'
-            : output.trim() === expectedValue.trim()
-              ? 'ok'
-              : 'mismatch',
-        );
+        recomputeVerdict();
         return;
       }
+      // log/info/warn/error: keep accepting for the life of the run, even
+      // after done — a scheduled callback (setTimeout, a promise) can still
+      // log — and recompute the verdict against the fuller output.
       linesRef.current = [...linesRef.current, { level, text: args.join(' ') }];
       setLines(linesRef.current);
+      if (runPhase.current === 'done') recomputeVerdict();
     }
     window.addEventListener('message', onMessage);
     return () => {
@@ -92,7 +104,7 @@ export function Playground({
   const execute = () => {
     const result = transpile(source, lang);
     if ('error' in result) {
-      settled.current = true;
+      runPhase.current = 'closed';
       activeRunId.current = null;
       setSyntaxError(result.error);
       setSrcdoc(null);
@@ -105,12 +117,12 @@ export function Playground({
     runCounter.current += 1;
     const runId = `${instanceId}:${runCounter.current}`;
     activeRunId.current = runId;
-    settled.current = false;
+    runPhase.current = 'running';
     setSrcdoc(buildSrcdoc(result.code, runId));
     setRenderRun(runCounter.current);
     clearTimer();
     timer.current = setTimeout(() => {
-      settled.current = true;
+      runPhase.current = 'closed';
       setVerdict('timeout');
       setSrcdoc(null);
     }, TIMEOUT_MS);
