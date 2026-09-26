@@ -28,6 +28,7 @@ Expo lee la configuración desde `app.json` (estático) o desde `app.config.js` 
 ```ts
 // app.config.ts
 import type { ConfigContext, ExpoConfig } from "expo/config";
+import { version } from "./package.json";
 
 const variant = process.env.APP_VARIANT ?? "development";
 
@@ -50,7 +51,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: getName(),
   slug: "notes",
-  version: "1.0.0",
+  version, // single source of truth: package.json
   ios: {
     ...config.ios,
     bundleIdentifier: getIdentifier(),
@@ -70,7 +71,8 @@ Tres cosas que conviene notar:
 
 - `process.env.APP_VARIANT` se lee **cuando se evalúa la configuración**, es decir, en tu máquina al ejecutar `npx expo start` o en el servidor de EAS al construir. No es una variable que la app lea en tiempo de ejecución.
 - El identificador sigue la notación de dominio invertido (`com.example.notes`). Reemplaza `com.example` por tu propio dominio o nombre; una vez publicada la app, ese valor no se puede cambiar.
-- `extra` es un espacio libre para valores que sí quieres leer en tiempo de ejecución. Se consulta con `Constants.expoConfig?.extra` desde `expo-constants`.
+- `version` se lee de `package.json`, así hay un solo lugar donde cambia: `npm version 1.1.0` actualiza a la vez la versión del paquete y la de la app (y, en la lección de EAS Update, la runtime version que depende de ella).
+- `extra` es un espacio libre para valores que sí quieres leer en tiempo de ejecución. Se consulta con `Constants.expoConfig?.extra` desde `expo-constants`. `extra` es **público**: viaja dentro de la app y cualquiera lo ve con `npx expo config --type public`, así que nunca pongas ahí un secreto.
 
 <Callout kind="warning">
   Una vez que tienes `app.config.ts`, las herramientas de Expo dejan de modificar tu configuración automáticamente (por ejemplo, `eas update:configure` te pedirá que agregues campos a mano). Es el precio de la flexibilidad.
@@ -120,7 +122,7 @@ Sigue la sesión de terminal paso a paso. Fíjate en cómo cambia el nombre resu
 
 <Terminal
   steps={[
-    { cmd: "npx expo install expo-dev-client expo-constants", out: "› Installing 2 SDK 52.0.0 compatible native modules using npm\n> npm install expo-dev-client@~5.0.0 expo-constants@~17.0.0" },
+    { cmd: "npx expo install expo-dev-client expo-constants", out: "› Installing 2 SDK 57.0.0 compatible native modules using npm\n> npm install expo-dev-client@~57.0.19 expo-constants@~57.0.19" },
     { cmd: "npx expo config --type public | head -n 6", out: "{\n  \"name\": \"Notes (Dev)\",\n  \"slug\": \"notes\",\n  \"version\": \"1.0.0\",\n  \"ios\": {\n    \"bundleIdentifier\": \"com.example.notes.dev\"," },
     { cmd: "APP_VARIANT=preview npx expo config --type public | head -n 6", out: "{\n  \"name\": \"Notes (Preview)\",\n  \"slug\": \"notes\",\n  \"version\": \"1.0.0\",\n  \"ios\": {\n    \"bundleIdentifier\": \"com.example.notes.preview\"," },
     { cmd: "APP_VARIANT=preview npx expo start", out: "Starting project at /home/dev/notes\nStarting Metro Bundler\n› Metro waiting on exp+notes://expo-development-client/?url=http%3A%2F%2F192.168.1.10%3A8081\n› Scan the QR code above with Expo Go (Android) or the Camera app (iOS)\n› Using development build" },

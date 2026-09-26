@@ -69,14 +69,25 @@ Como agregaste una dependencia nativa (`expo-updates`) y campos nativos en la co
 ### Publicar
 
 ```sh
-eas update --channel production --message "Fix note title truncation"
+eas update --channel production --environment production --message "Fix note title truncation"
 ```
+
+`--environment` indica de qué entorno de EAS (`development`, `preview` o `production`, los de la lección de variables) se leen las variables `EXPO_PUBLIC_` que se incrustan en el bundle. Desde Expo SDK 55 es obligatorio: sin él, `eas update` se niega a publicar, porque un bundle compilado con las variables equivocadas (por ejemplo, la URL de la API de preview en producción) es un error silencioso. Usa siempre el mismo nombre en `--channel` y en `--environment`.
 
 La CLI exporta el bundle, sube los assets y crea una actualización en la rama enlazada al canal. Las apps de producción con esa runtime la descargan la próxima vez que arrancan: por defecto, `expo-updates` comprueba al inicio, descarga en segundo plano y aplica la actualización **en el siguiente arranque**, para no interrumpir al usuario. Puedes verificar el estado del canal con `eas channel:view production` y listar actualizaciones con `eas update:list --branch production`.
 
 <Callout kind="tip">
   Publica siempre primero en el canal `preview` y abre la app de preview en un teléfono real. Solo cuando la actualización se aplica y la app arranca bien, publica en `production` con el mismo commit.
 </Callout>
+
+### Seguridad de las OTA
+
+Una actualización OTA es código que se ejecuta en todos los teléfonos con esa runtime, sin revisión de ninguna tienda. Quien pueda ejecutar `eas update` en el canal `production` (una cuenta de Expo comprometida, un `EXPO_TOKEN` filtrado de CI) tiene ejecución de código en toda tu base de usuarios. Trátalo como un despliegue a producción:
+
+- **Cuentas.** Activa la verificación en dos pasos (2FA) en todas las cuentas de Expo de la organización y da a cada persona el rol mínimo que necesita.
+- **Tokens de robot.** CI publica con un token de un usuario robot, guardado como secret del repositorio (nunca en el código ni en `eas.json`), con permisos mínimos y rotado cuando alguien deja el equipo o hay sospecha de fuga.
+- **Origen.** Publica solo desde un commit revisado, idealmente desde CI; nunca desde un portátil con cambios sin confirmar.
+- **Firma de actualizaciones.** EAS Update admite code signing: generas un par de claves (`npx expo-updates codesigning:generate`), configuras el certificado en la app (`npx expo-updates codesigning:configure`) y publicas firmando con `eas update --private-key-path`. La app verifica la firma y rechaza actualizaciones que no firmaste tú. Requiere un plan Production o Enterprise de EAS (https://docs.expo.dev/eas-update/code-signing/); sin ella, tu garantía es la seguridad de tu cuenta y el TLS hacia los servidores de EAS.
 
 ### Rollback
 
@@ -116,9 +127,9 @@ Sigue la sesión completa: configurar, publicar en preview, publicar en producci
 
 <Terminal
   steps={[
-    { cmd: "npx expo install expo-updates && eas update:configure", out: "› Installing 1 SDK 52.0.0 compatible native module using npm\n✔ Configured updates.url and runtimeVersion? No, app.config.ts is dynamic.\n\nAdd the following to your app.config.ts:\n  updates: { url: \"https://u.expo.dev/4f8c1c2e-xxxx-xxxx-xxxx-xxxxxxxxxxxx\" },\n  runtimeVersion: { policy: \"appVersion\" },\n\n✔ Configured eas.json: each build profile already has a channel.\n\nReminder: you need to build a new binary before updates can be received." },
-    { cmd: "eas update --channel preview --message \"Fix note title truncation\"", out: "✔ Exported bundle(s)\n✔ Uploaded 2 app bundles\n✔ Uploading assets skipped - no new assets\n✔ Channel: preview pointed at branch: preview\n✔ Published!\n\nBranch             preview\nRuntime version    1.0.0\nPlatform           android, ios\nUpdate group ID    a1b2c3d4-xxxx-xxxx-xxxx-xxxxxxxxxxxx\nMessage            Fix note title truncation" },
-    { cmd: "eas update --channel production --message \"Fix note title truncation\"", out: "✔ Exported bundle(s)\n✔ Uploaded 2 app bundles\n✔ Published!\n\nBranch             production\nRuntime version    1.0.0\nUpdate group ID    b2c3d4e5-xxxx-xxxx-xxxx-xxxxxxxxxxxx\nMessage            Fix note title truncation" },
+    { cmd: "npx expo install expo-updates && eas update:configure", out: "› Installing 1 SDK 57.0.0 compatible native module using npm\n> npm install expo-updates@~57.0.23\n✔ Configured updates.url and runtimeVersion? No, app.config.ts is dynamic.\n\nAdd the following to your app.config.ts:\n  updates: { url: \"https://u.expo.dev/4f8c1c2e-xxxx-xxxx-xxxx-xxxxxxxxxxxx\" },\n  runtimeVersion: { policy: \"appVersion\" },\n\n✔ Configured eas.json: each build profile already has a channel.\n\nReminder: you need to build a new binary before updates can be received." },
+    { cmd: "eas update --channel preview --environment preview --message \"Fix note title truncation\"", out: "Environment variables with visibility \"Plain text\" and \"Sensitive\" loaded from the \"preview\" environment on EAS: EXPO_PUBLIC_API_URL, EXPO_PUBLIC_SENTRY_DSN.\n✔ Exported bundle(s)\n✔ Uploaded 2 app bundles\n✔ Uploading assets skipped - no new assets\n✔ Channel: preview pointed at branch: preview\n✔ Published!\n\nBranch             preview\nRuntime version    1.0.0\nPlatform           android, ios\nUpdate group ID    a1b2c3d4-xxxx-xxxx-xxxx-xxxxxxxxxxxx\nMessage            Fix note title truncation" },
+    { cmd: "eas update --channel production --environment production --message \"Fix note title truncation\"", out: "Environment variables with visibility \"Plain text\" and \"Sensitive\" loaded from the \"production\" environment on EAS: EXPO_PUBLIC_API_URL, EXPO_PUBLIC_SENTRY_DSN.\n✔ Exported bundle(s)\n✔ Uploaded 2 app bundles\n✔ Published!\n\nBranch             production\nRuntime version    1.0.0\nUpdate group ID    b2c3d4e5-xxxx-xxxx-xxxx-xxxxxxxxxxxx\nMessage            Fix note title truncation" },
     { cmd: "eas update:rollback", out: "? Which channel would you like to roll back? › production\n? Which type of rollback would you like to perform?\n  › Rollback to a previous update\n    Rollback to the embedded update\n\n? Select an update group to roll back to › 9f8e7d6c… (Initial production release, 1.0.0)\n✔ Published!\n\nBranch             production\nRuntime version    1.0.0\nUpdate group ID    c3d4e5f6-xxxx-xxxx-xxxx-xxxxxxxxxxxx\nMessage            Rollback to update 9f8e7d6c" },
     { cmd: "eas update:list --branch production --limit 3", out: "Branch: production\n\nc3d4e5f6…  1.0.0  android, ios  Rollback to update 9f8e7d6c   2 minutes ago\nb2c3d4e5…  1.0.0  android, ios  Fix note title truncation      11 minutes ago\n9f8e7d6c…  1.0.0  android, ios  Initial production release     3 days ago" },
   ]}
@@ -135,6 +146,9 @@ Antes de publicar por OTA, responde cada punto con honestidad:
     "El build instalado en los usuarios fue compilado después de agregar expo-updates",
     "Publicaste primero en preview y comprobaste en un dispositivo que la actualización se aplica al segundo arranque",
     "Sabes ejecutar eas update:rollback y a qué grupo de actualización volverías",
+    "El comando incluye --environment con el mismo nombre que --channel",
+    "La cuenta de Expo tiene 2FA y el EXPO_TOKEN de CI es un secret de un usuario robot",
+    "Decidí si activo code signing de EAS Update y anoté por qué",
   ]}
 />
 
@@ -159,7 +173,7 @@ function needsNewBuild(change: Change): boolean {
 }
 
 const changes: Change[] = [
-  { file: "app/(tabs)/notes.tsx" },
+  { file: "src/app/(tabs)/notes.tsx" },
   { file: "package.json", addsNativeDependency: true },
   { file: "app.config.ts" },
   { file: "assets/logo.png" },
@@ -180,7 +194,7 @@ for (const c of changes) {
 
 **Esperar que la actualización se vea al instante.** Publicas, abres la app y sigue igual. Ocurre porque `expo-updates` descarga en segundo plano y aplica en el siguiente arranque. Se detecta porque al cerrar y volver a abrir la app aparece el cambio. No es un error; si necesitas inmediatez, usa la API de `expo-updates` con un aviso al usuario.
 
-**Publicar en el canal equivocado.** Los testers de preview ven el cambio y los usuarios no, o al revés. Ocurre porque `--channel` es un parámetro libre. Se detecta con `eas channel:view <canal>`, que muestra la última actualización publicada. Escribe el canal como parte de un script (`"update:prod": "eas update --channel production"`) para no teclearlo a mano.
+**Publicar en el canal equivocado.** Los testers de preview ven el cambio y los usuarios no, o al revés. Ocurre porque `--channel` es un parámetro libre. Se detecta con `eas channel:view <canal>`, que muestra la última actualización publicada. Escribe el canal y el entorno como parte de un script (`"update:prod": "eas update --channel production --environment production"`) para no teclearlos a mano.
 
 <Flashcards
   cards={[

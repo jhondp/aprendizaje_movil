@@ -6,7 +6,7 @@ module: "Proyecto"
 order: 11
 minutes: 45
 prereqs: ["10-build-release-operaciones/10-salir-de-managed"]
-summary: "Lleva la app de notas a TestFlight y a Google Play internal testing con perfiles, secretos, credenciales respaldadas, Sentry, una OTA revertida, changelog y un runbook de release escrito."
+summary: "Publica la app de notas en TestFlight y Google Play internal testing con EAS, OTA con rollback, Sentry y un runbook de release que otra persona pueda seguir."
 ---
 
 ## Objetivo
@@ -55,8 +55,8 @@ Las dependencias entre pasos son reales: no puedes enviar sin cuentas, ni public
 
 - **Antes de empezar**: qué accesos hacen falta (cuenta de Expo con rol en el proyecto, App Store Connect, Play Console, Sentry) y dónde está el respaldo de credenciales.
 - **Decidir el tipo de release**: cambio solo JS (OTA) o cambio nativo (build + tienda). Incluye la lista de la lección de EAS Update para clasificar.
-- **Release OTA**: comandos exactos para publicar en `preview`, verificar, publicar en `production`, y el comando de rollback. Qué anotar en el changelog.
-- **Release de tienda**: subir `version`, actualizar `CHANGELOG.md`, `eas build --profile production --platform all`, probar en TestFlight e internal testing, `eas submit`, completar notas de la versión en las fichas, enviar a revisión (o promover), y qué vigilar en Sentry durante las primeras 24 horas.
+- **Release OTA**: comandos exactos para publicar en `preview`, verificar, publicar en `production` (siempre con `--environment` igual al canal), subir los source maps de la OTA a Sentry con `npx @sentry/expo-upload-sourcemaps dist`, y el comando de rollback. Qué anotar en el changelog.
+- **Release de tienda**: subir `version` con `npm version` (que `app.config.ts` lee de `package.json`), actualizar `CHANGELOG.md`, `eas build --profile production --platform all`, probar en TestFlight e internal testing, `eas submit`, completar notas de la versión en las fichas, enviar a revisión (o promover), y qué vigilar en Sentry durante las primeras 24 horas.
 - **Si algo falla**: rollback OTA, detener un despliegue gradual en Play, qué hacer si la tienda rechaza, y a quién avisar.
 - **Después**: verificar crash-free rate contra el objetivo, cerrar la sección `Unreleased` del changelog.
 
@@ -87,6 +87,7 @@ Este es el runbook en forma de lista. Marca cada punto solo cuando esté hecho e
     "expo-updates configurado con updates.url y runtimeVersion appVersion; el build de producción incluye la dependencia",
     "Una OTA publicada en preview, verificada en un dispositivo, publicada en production y revertida con eas update:rollback",
     "Sentry recibe un error de prueba desde el build de producción con archivo y línea reales; hay un objetivo de crash-free sessions escrito",
+    "Después de cada eas update, npx @sentry/expo-upload-sourcemaps dist sube los source maps de la OTA",
     "CHANGELOG.md tiene 1.0.0 con fecha, la OTA y el rollback anotados, y una sección Unreleased",
     "docs/RELEASE.md existe con las secciones: antes de empezar, decidir tipo de release, release OTA, release de tienda, si algo falla, después",
     "Otra persona siguió el runbook para publicar una OTA trivial sin preguntarte nada",
@@ -98,9 +99,11 @@ La secuencia de comandos del runbook, tal como la ejecutarías para una release 
 <Terminal
   steps={[
     { cmd: "git switch -c release/1.1.0 && npm version 1.1.0 --no-git-tag-version", out: "Switched to a new branch 'release/1.1.0'\nv1.1.0" },
+    { cmd: "npx expo config --type public | grep '\"version\"'", out: "  \"version\": \"1.1.0\"," },
     { cmd: "eas build --profile production --platform all --auto-submit", out: "✔ Using remote iOS credentials (Expo server)\n✔ Using remote Android credentials (Expo server)\n✔ Incremented buildNumber to 8 and versionCode to 8\n✔ iOS build finished\n✔ Android build finished\n✔ Submitted your app to Apple App Store Connect!\n✔ Submitted your app to the Google Play Store! Release uploaded to track: internal" },
-    { cmd: "eas update --channel preview --message \"1.1.0: fix empty state copy\"", out: "✔ Published!\nBranch             preview\nRuntime version    1.1.0\nMessage            1.1.0: fix empty state copy" },
-    { cmd: "eas update --channel production --message \"1.1.0: fix empty state copy\"", out: "✔ Published!\nBranch             production\nRuntime version    1.1.0\nMessage            1.1.0: fix empty state copy" },
+    { cmd: "eas update --channel preview --environment preview --message \"1.1.0: fix empty state copy\"", out: "✔ Published!\nBranch             preview\nRuntime version    1.1.0\nMessage            1.1.0: fix empty state copy" },
+    { cmd: "eas update --channel production --environment production --message \"1.1.0: fix empty state copy\"", out: "✔ Published!\nBranch             production\nRuntime version    1.1.0\nMessage            1.1.0: fix empty state copy" },
+    { cmd: "SENTRY_AUTH_TOKEN=<token> npx @sentry/expo-upload-sourcemaps dist", out: "✔ Uploaded source maps for android and ios update bundles" },
     { cmd: "eas channel:view production", out: "Channel: production\nBranch: production\nLatest update: 1.1.0 · 1.1.0: fix empty state copy · android, ios · 1 minute ago" },
   ]}
 />
