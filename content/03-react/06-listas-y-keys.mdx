@@ -1,0 +1,261 @@
+---
+id: "03-react/06-listas-y-keys"
+title: "Listas y keys"
+stage: 3
+module: "Hooks"
+order: 6
+minutes: 12
+prereqs: ["03-react/05-useref-usememo-usecallback"]
+summary: "Aprende a renderizar listas con map, por qué cada elemento necesita una key estable, y qué falla cuando usas el índice del array como key."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a poder renderizar una lista con `.map()`, asignar una `key` estable a cada elemento, y explicar por qué usar el índice del array como key puede provocar bugs cuando la lista cambia.
+
+**Prerrequisitos:** `03-react/05-useref-usememo-usecallback`
+
+## Concepto
+
+Piensa en el guardarropa de un teatro: cuando entregas tu abrigo te dan un ticket numerado, y ese mismo ticket (no la percha donde quedó colgado) es lo que usan para devolverte exactamente tu abrigo al salir, sin importar cuántos abrigos entraron o salieron mientras tanto. La `key` en una lista de React es ese ticket: identifica a cada elemento de forma estable, independiente de en qué posición quede colgado.
+
+### Renderizar una lista con map
+
+```tsx
+interface Task {
+  id: string;
+  title: string;
+}
+
+function TaskList({ tasks }: { tasks: Task[] }) {
+  return (
+    <ul>
+      {tasks.map((task) => (
+        <li key={task.id}>{task.title}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+`.map()` transforma cada elemento del array `tasks` en un elemento JSX `<li>`, produciendo un nuevo array de elementos que React puede renderizar directamente. La prop `key` no es un atributo visual ni llega al DOM como tal: es información privada que React usa para saber, entre un render y el siguiente, cuál elemento de la lista nueva corresponde a cuál elemento de la lista anterior.
+
+Si omites `key` por completo, React renderiza la lista igual, pero muestra una advertencia en la consola: "Warning: Each child in a list should have a unique key prop." Sin esa pista, React solo puede comparar la lista anterior con la nueva por posición, lo cual funciona mientras la lista no cambie de orden ni de tamaño, pero falla apenas insertas, eliminas o reordenas algo.
+
+### Por qué el índice como key es tentador y por qué falla
+
+Cuando no tienes un identificador natural a mano, es tentador escribir `key={index}`, usando la posición que te da `.map((task, index) => ...)`. Mientras la lista solo se agregue al final y nunca se reordene ni se elimine nada del medio, el índice coincide siempre con la misma posición y no causa problemas visibles. El problema aparece cuando eliminas o insertas un elemento que no está al final: la posición 0 sigue siendo la posición 0, pero ahora corresponde a un dato distinto. Si algún componente de esa lista guarda estado propio (con `useState` o `useRef`) en lugar de derivar todo de sus props, React reutiliza esa instancia y su estado interno para la posición, no para el dato original, y el estado termina "pegado" al elemento equivocado.
+
+```tsx
+function TaskRow({ title }: { title: string }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <li>
+      <button onClick={() => setExpanded(!expanded)}>
+        {title} {expanded ? "▲" : "▼"}
+      </button>
+      {expanded && <p>Detalles de "{title}"</p>}
+    </li>
+  );
+}
+```
+
+Si esta fila se renderiza con `key={index}` dentro de una lista donde puedes eliminar el primer elemento, y tenías expandida la fila en la posición 0, después de eliminar ese elemento la posición 0 pasa a mostrar el siguiente título, pero React reutiliza la misma instancia de `TaskRow` (porque para React, "posición 0" no cambió), así que sigue expandida, ahora mostrando los detalles del elemento equivocado. Con `key={task.id}`, React sabe que ese `id` concreto desapareció, destruye esa instancia junto con su estado, y las demás instancias conservan su propio estado porque sus keys no cambiaron.
+
+### Qué hace una buena key
+
+Una key debe ser:
+
+- **Estable**: el mismo dato produce la misma key en cada render, no algo generado al azar en cada llamada a `.map()` (`key={Math.random()}` rompe la identidad en cada render, que es peor que usar el índice).
+- **Única** entre los elementos hermanos de esa lista concreta (no hace falta que sea única en toda la aplicación).
+- **Derivada del dato**, típicamente un `id` que ya viene de la base de datos o que generas una sola vez al crear el elemento, nunca de su posición.
+
+Documentación oficial: [react.dev/learn/rendering-lists](https://react.dev/learn/rendering-lists).
+
+## Práctica
+
+El siguiente Sandpack muestra dos listas con los mismos datos: una usa `key={index}` y la otra usa `key={task.id}`. Expande un par de filas en ambas listas y luego presiona "Eliminar la primera tarea". Observa cómo la lista con índice como key "arrastra" el estado expandido a la fila equivocada, mientras que la lista con `id` como key elimina exactamente la fila correcta y conserva el estado del resto.
+
+```tsx
+interface Task {
+  id: string;
+  title: string;
+}
+
+function TaskRow({ title }: { title: string }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <li>
+      <button onClick={() => setExpanded(!expanded)}>
+        {title} {expanded ? "▲" : "▼"}
+      </button>
+      {expanded && <p>Detalles de "{title}"</p>}
+    </li>
+  );
+}
+```
+
+<Sandpack
+  files={{
+    '/App.tsx': `import { useState } from "react";
+
+interface Task {
+  id: string;
+  title: string;
+}
+
+function TaskRow({ title }: { title: string }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <li>
+      <button onClick={() => setExpanded(!expanded)}>
+        {title} {expanded ? "▲" : "▼"}
+      </button>
+      {expanded && <p>Detalles de "{title}"</p>}
+    </li>
+  );
+}
+
+function BuggyList({ tasks }: { tasks: Task[] }) {
+  return (
+    <ul>
+      {tasks.map((task, index) => (
+        <TaskRow key={index} title={task.title} />
+      ))}
+    </ul>
+  );
+}
+
+function GoodList({ tasks }: { tasks: Task[] }) {
+  return (
+    <ul>
+      {tasks.map((task) => (
+        <TaskRow key={task.id} title={task.title} />
+      ))}
+    </ul>
+  );
+}
+
+const initialTasks: Task[] = [
+  { id: "t1", title: "Escribir informe" },
+  { id: "t2", title: "Revisar PR" },
+  { id: "t3", title: "Responder correos" },
+];
+
+export default function App() {
+  const [tasks, setTasks] = useState(initialTasks);
+
+  function removeFirst() {
+    setTasks((previous) => previous.slice(1));
+  }
+
+  return (
+    <div style={{ display: "flex", gap: 32 }}>
+      <div>
+        <h3>key={"{index}"} (con bug)</h3>
+        <BuggyList tasks={tasks} />
+      </div>
+      <div>
+        <h3>key={"{task.id}"} (correcto)</h3>
+        <GoodList tasks={tasks} />
+      </div>
+      <div>
+        <button onClick={removeFirst}>Eliminar la primera tarea</button>
+      </div>
+    </div>
+  );
+}`,
+  }}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Lista de invitados con eliminación"
+  solution={
+    <Sandpack
+      files={{
+        '/App.tsx': `import { useState } from "react";
+
+interface Guest {
+  id: string;
+  name: string;
+}
+
+function GuestList({ guests, onRemove }: { guests: Guest[]; onRemove: (id: string) => void }) {
+  return (
+    <ul>
+      {guests.map((guest) => (
+        <li key={guest.id}>
+          {guest.name} <button onClick={() => onRemove(guest.id)}>Quitar</button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export default function App() {
+  const [guests, setGuests] = useState<Guest[]>([
+    { id: "g1", name: "Ana" },
+    { id: "g2", name: "Luis" },
+    { id: "g3", name: "Marta" },
+  ]);
+
+  function handleRemove(id: string) {
+    setGuests((previous) => previous.filter((guest) => guest.id !== id));
+  }
+
+  return <GuestList guests={guests} onRemove={handleRemove} />;
+}`,
+      }}
+    />
+  }
+>
+  Escribe un componente `GuestList` que reciba un array de invitados (`{ id: string; name: string }`) y una función `onRemove(id)`, y muestre cada invitado en un `<li>` con `key={guest.id}` junto a un botón "Quitar" que llame a `onRemove` con el `id` correspondiente. En `App`, guarda la lista en estado y elimina al invitado filtrando por `id` cuando se llama a `onRemove`.
+</Challenge>
+
+## Errores comunes
+
+**No poner ninguna key.** React muestra la advertencia "Each child in a list should have a unique key prop" en la consola. La lista igual se renderiza, pero React pierde la capacidad de identificar elementos de forma confiable entre renders. Se detecta leyendo la consola del navegador.
+
+**Usar el índice como key en una lista que se reordena o elimina elementos del medio.** Como viste en el Concepto, esto puede dejar estado local (como un toggle `expanded`) pegado a la posición equivocada después de eliminar o insertar un elemento. Se detecta interactuando con la lista: expande una fila, elimina un elemento anterior, y observa si el estado expandido "salta" a un contenido distinto del que tenías expandido.
+
+**Generar la key con `Math.random()` o `Date.now()` dentro del `.map()`.** Esto produce una key distinta en cada render, incluso si el dato no cambió, lo que le hace creer a React que todos los elementos son nuevos en cada render: destruye y vuelve a crear cada instancia, perdiendo cualquier estado local y perjudicando el rendimiento. Se detecta porque el estado local de cualquier fila se resetea con cada render del padre, no solo cuando el dato cambia de verdad.
+
+<Flashcards
+  cards={[
+    { front: "¿Para qué usa React la prop key en una lista?", back: "Para identificar cada elemento de forma estable entre un render y el siguiente, sin depender de su posición." },
+    { front: "¿Qué problema puede causar usar el índice del array como key?", back: "Si la lista inserta o elimina elementos en el medio, el estado local de un componente puede quedar asociado a la posición equivocada." },
+    { front: "¿Qué características debe tener una buena key?", back: "Debe ser estable entre renders, única entre los elementos hermanos, y derivada del dato, no de la posición ni de un valor aleatorio." },
+    { front: "¿Qué ocurre si no pones ninguna key en una lista?", back: "React la renderiza igual, pero muestra una advertencia en consola porque no puede identificar los elementos de forma confiable." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué identifica principalmente la prop key de un elemento en una lista?",
+      options: [
+        { text: "Su posición actual en el array", correct: false, feedback: "Justamente lo contrario: una buena key es independiente de la posición." },
+        { text: "Su identidad estable entre un render y el siguiente", correct: true, feedback: "Correcto: React usa la key para saber qué instancia corresponde a qué dato." },
+        { text: "El estilo visual que debe aplicarse al elemento", correct: false, feedback: "key no tiene ningún efecto visual; es información interna para React." },
+      ],
+    },
+    {
+      prompt: "Eliminas el primer elemento de una lista renderizada con key={index}. ¿Qué puede ocurrir si cada fila tiene estado local propio?",
+      options: [
+        { text: "Nada, el índice siempre identifica correctamente al dato", correct: false, feedback: "Después de eliminar un elemento del medio o del inicio, la misma posición pasa a corresponder a otro dato." },
+        { text: "El estado local puede quedar asociado a la fila equivocada", correct: true, feedback: "Correcto: React reutiliza la instancia de esa posición para el nuevo dato que cayó ahí." },
+        { text: "React lanza un error y detiene el render", correct: false, feedback: "No es un error; es un bug silencioso que solo se nota interactuando con la lista." },
+      ],
+    },
+    {
+      prompt: "¿Por qué generar la key con Math.random() dentro del map es peor que usar el índice?",
+      options: [
+        { text: "Porque produce una key distinta en cada render, forzando a React a recrear cada elemento siempre", correct: true, feedback: "Correcto: eso destruye el estado local de todas las filas en cada render, no solo cuando cambia el dato." },
+        { text: "Porque Math.random() no está disponible en TypeScript", correct: false, feedback: "Math.random() es una función estándar de JavaScript disponible en TypeScript sin problema." },
+        { text: "No es peor, es equivalente al índice", correct: false, feedback: "Es peor: al menos el índice es estable mientras la lista no cambie de tamaño ni de orden." },
+      ],
+    },
+  ]}
+/>

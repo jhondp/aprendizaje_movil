@@ -1,0 +1,261 @@
+---
+id: "03-react/05-useref-usememo-usecallback"
+title: "useRef, useMemo y useCallback"
+stage: 3
+module: "Hooks"
+order: 5
+minutes: 15
+prereqs: ["03-react/04-useeffect"]
+summary: "Aprende a guardar un valor mutable sin causar renders con useRef, y a evitar cálculos y funciones repetidas con useMemo y useCallback."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a poder usar `useRef` para acceder a un nodo del DOM o guardar un valor entre renders sin disparar uno nuevo, y usar `useMemo` y `useCallback` para evitar recalcular un valor o recrear una función sin necesidad.
+
+**Prerrequisitos:** `03-react/04-useeffect`
+
+## Concepto
+
+### useRef: una nota adhesiva que sobrevive a la fotocopia
+
+Cada render de un componente es como sacar una fotocopia nueva de una hoja: las variables comunes se "reinician" en cada copia. Una **ref** es como una nota adhesiva pegada al costado del escritorio, no a la hoja: sobrevive de una fotocopia a la siguiente sin que nadie tenga que volver a escribirla, y cambiarla no hace que se saque una fotocopia nueva.
+
+```tsx
+function RenderCount() {
+  const renders = useRef(0);
+  renders.current += 1;
+  return <p>Este componente se renderizó {renders.current} veces.</p>;
+}
+```
+
+`useRef(0)` devuelve un objeto `{ current: 0 }` que persiste mientras el componente esté montado. A diferencia de `useState`, cambiar `renders.current` no programa un nuevo render: el valor se actualiza, pero la pantalla no se entera hasta que algo más (un evento, un estado) provoque otro render.
+
+Un uso muy común de `useRef` es obtener una referencia directa a un nodo del DOM, para llamar a métodos que React no expone como props, como `focus()`:
+
+```tsx
+function FocusInput() {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <div>
+      <input ref={inputRef} />
+      <button onClick={() => inputRef.current?.focus()}>Enfocar</button>
+    </div>
+  );
+}
+```
+
+Cuando pasas `inputRef` al atributo `ref` de un elemento del DOM, React guarda el nodo real en `inputRef.current` después de montarlo. El `?.` es necesario porque, antes del montaje, `inputRef.current` vale `null`.
+
+### useMemo: recordar el resultado de un cálculo costoso
+
+Piensa en una receta con un paso lento, como reducir una salsa durante media hora. Si ningún ingrediente cambió, no tiene sentido repetir ese paso: usas la salsa que ya preparaste. `useMemo` hace eso con cálculos: guarda el resultado y solo lo vuelve a calcular cuando cambian las dependencias que le indiques.
+
+```tsx
+function FilteredList({ items, query }: { items: string[]; query: string }) {
+  const filtered = useMemo(() => {
+    console.log("filtrando...");
+    return items.filter((item) => item.toLowerCase().includes(query.toLowerCase()));
+  }, [items, query]);
+
+  return (
+    <ul>
+      {filtered.map((item) => (
+        <li>{item}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+Mientras `items` y `query` no cambien, `useMemo` devuelve el array filtrado guardado, sin volver a recorrer `items` en cada render (por ejemplo, si el componente se re-renderiza porque cambió otra parte del estado que no tiene nada que ver con el filtro). El array que usas como clave en una lista lo vas a estudiar en la próxima lección, "Listas y keys".
+
+### useCallback: recordar una función
+
+Cada render crea funciones nuevas: aunque el cuerpo sea idéntico, `() => console.log("clic")` en el render 1 y en el render 2 son dos funciones distintas en memoria. Normalmente eso no importa, pero cuando pasas una función como dependencia de otro hook o a un componente hijo optimizado, esa "nueva identidad" en cada render puede forzar trabajo innecesario. `useCallback` memoriza la función en sí, igual que `useMemo` memoriza un valor:
+
+```tsx
+function Parent() {
+  const [count, setCount] = useState(0);
+
+  const handleReset = useCallback(() => {
+    setCount(0);
+  }, []);
+
+  return (
+    <div>
+      <p>{count}</p>
+      <button onClick={() => setCount(count + 1)}>Sumar</button>
+      <button onClick={handleReset}>Reiniciar</button>
+    </div>
+  );
+}
+```
+
+Con el arreglo de dependencias vacío, `handleReset` es la misma función en cada render de `Parent`.
+
+<Callout kind="warning">
+  `useMemo` y `useCallback` no son gratis: React igual tiene que guardar el valor anterior y comparar las dependencias. Úsalos cuando midas un problema real de rendimiento o cuando una dependencia de otro hook necesita una identidad estable, no por costumbre en cada cálculo o función.
+</Callout>
+
+Documentación oficial: [react.dev/reference/react/useRef](https://react.dev/reference/react/useRef), [react.dev/reference/react/useMemo](https://react.dev/reference/react/useMemo) y [react.dev/reference/react/useCallback](https://react.dev/reference/react/useCallback).
+
+## Práctica
+
+El siguiente Sandpack combina un input que se enfoca con `useRef` y una lista filtrada con `useMemo` que registra en consola cada vez que realmente vuelve a filtrar.
+
+```tsx
+function FocusInput() {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <div>
+      <input ref={inputRef} placeholder="Escribe aquí" />
+      <button onClick={() => inputRef.current?.focus()}>Enfocar</button>
+    </div>
+  );
+}
+
+function FilteredList({ items, query }: { items: string[]; query: string }) {
+  const filtered = useMemo(() => {
+    console.log("filtrando con query:", query);
+    return items.filter((item) => item.toLowerCase().includes(query.toLowerCase()));
+  }, [items, query]);
+
+  return (
+    <ul>
+      {filtered.map((item) => (
+        <li>{item}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+<Sandpack
+  files={{
+    '/App.tsx': `import { useMemo, useRef, useState } from "react";
+
+function FocusInput() {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <div>
+      <input ref={inputRef} placeholder="Escribe aquí" />
+      <button onClick={() => inputRef.current?.focus()}>Enfocar</button>
+    </div>
+  );
+}
+
+function FilteredList({ items, query }: { items: string[]; query: string }) {
+  const filtered = useMemo(() => {
+    console.log("filtrando con query:", query);
+    return items.filter((item) => item.toLowerCase().includes(query.toLowerCase()));
+  }, [items, query]);
+
+  return (
+    <ul>
+      {filtered.map((item) => (
+        <li>{item}</li>
+      ))}
+    </ul>
+  );
+}
+
+export default function App() {
+  const [query, setQuery] = useState("");
+  const [tick, setTick] = useState(0);
+  const items = ["manzana", "banana", "cereza", "durazno"];
+
+  return (
+    <div>
+      <FocusInput />
+      <hr />
+      <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filtrar frutas" />
+      <button onClick={() => setTick(tick + 1)}>Re-renderizar sin cambiar el filtro ({tick})</button>
+      <FilteredList items={items} query={query} />
+    </div>
+  );
+}`,
+  }}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Valor anterior de un input"
+  solution={
+    <Sandpack
+      files={{
+        '/App.tsx': `import { useEffect, useRef, useState } from "react";
+
+function PreviousValue() {
+  const [value, setValue] = useState("");
+  const previousRef = useRef("");
+
+  useEffect(() => {
+    previousRef.current = value;
+  });
+
+  return (
+    <div>
+      <input value={value} onChange={(e) => setValue(e.target.value)} />
+      <p>Actual: {value}</p>
+      <p>Anterior: {previousRef.current}</p>
+    </div>
+  );
+}
+
+export default function App() {
+  return <PreviousValue />;
+}`,
+      }}
+    />
+  }
+>
+  Escribe un componente `PreviousValue` con un input controlado. Debe mostrar el valor actual y también el valor que tenía el input antes del último cambio, usando un `useRef` que se actualiza dentro de un `useEffect` sin arreglo de dependencias (así corre después de cada render, guardando lo que acaba de mostrarse antes de que llegue el próximo cambio).
+</Challenge>
+
+## Errores comunes
+
+**Esperar que cambiar `ref.current` actualice la pantalla.** A diferencia de `setState`, escribir `miRef.current = nuevoValor` no programa un render. Se detecta porque el valor cambia si lo revisas en las herramientas de desarrollo o en un `console.log`, pero la interfaz sigue mostrando el valor anterior hasta que ocurra otro render por otra razón.
+
+**Usar `useMemo` o `useCallback` para todo, "por si acaso".** Envolver cada cálculo o cada función en estos hooks agrega una comparación de dependencias en cada render sin beneficio real cuando el cálculo es barato. Se detecta revisando el código: si el cálculo tarda microsegundos y no se pasa como dependencia de otro hook, memorizarlo no mejora nada y solo agrega una capa más para leer.
+
+**Olvidar una dependencia real en el arreglo de `useMemo` o `useCallback`.** Si `FilteredList` usara `useMemo(() => items.filter(...), [items])` sin incluir `query`, el filtro quedaría "congelado" con el valor de `query` de cuando se calculó por primera vez. Se detecta porque escribir en el input de búsqueda no cambia los resultados mostrados, aunque el estado sí se actualizó.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué diferencia a useRef de useState?", back: "Cambiar ref.current no dispara un nuevo render; cambiar el estado con su setter sí." },
+    { front: "¿Para qué se usa el atributo ref en un elemento del DOM?", back: "Para obtener acceso directo al nodo real y llamar métodos que React no expone como props, como focus()." },
+    { front: "¿Qué guarda useMemo entre renders?", back: "El resultado de un cálculo, recalculándolo solo cuando cambian las dependencias indicadas." },
+    { front: "¿Qué guarda useCallback entre renders?", back: "La identidad de una función, para no recrearla en cada render cuando eso importa (por ejemplo, como dependencia de otro hook)." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué ocurre cuando cambias miRef.current dentro de un componente?",
+      options: [
+        { text: "React programa un nuevo render automáticamente", correct: false, feedback: "Eso es lo que hace el setter de useState, no una ref." },
+        { text: "El valor cambia, pero no se dispara ningún render por sí solo", correct: true, feedback: "Correcto: las refs son mutables sin efecto directo sobre el render." },
+        { text: "TypeScript lanza un error porque las refs son de solo lectura", correct: false, feedback: "current es mutable; las refs existen justamente para tener un valor que se pueda cambiar libremente." },
+      ],
+    },
+    {
+      prompt: "¿Cuándo tiene sentido usar useMemo?",
+      options: [
+        { text: "Siempre que se calcule cualquier valor derivado, sin excepción", correct: false, feedback: "Para cálculos baratos, memorizarlos agrega costo de comparación sin beneficio real." },
+        { text: "Cuando el cálculo es costoso y se repite innecesariamente entre renders donde las dependencias no cambiaron", correct: true, feedback: "Correcto: ese es el caso donde useMemo evita trabajo real." },
+        { text: "Solo dentro de un useEffect", correct: false, feedback: "useMemo se usa directamente durante el render, no dentro de un efecto." },
+      ],
+    },
+    {
+      prompt: "¿Qué problema resuelve useCallback?",
+      options: [
+        { text: "Evita que una función reciba argumentos incorrectos", correct: false, feedback: "Eso lo verifica el sistema de tipos, no useCallback." },
+        { text: "Evita que se cree una nueva función en cada render cuando su identidad estable importa", correct: true, feedback: "Correcto: por ejemplo, cuando la función es dependencia de otro hook." },
+        { text: "Convierte una función normal en un componente", correct: false, feedback: "useCallback memoriza una función; no cambia qué es ni la convierte en un componente." },
+      ],
+    },
+  ]}
+/>

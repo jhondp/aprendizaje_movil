@@ -1,0 +1,200 @@
+---
+id: "03-react/00-ui-declarativa"
+title: "UI declarativa"
+stage: 3
+module: "Pensar en componentes"
+order: 0
+minutes: 10
+prereqs: ["02-typescript/08-proyecto-migrar-a-ts"]
+summary: "Entiende la diferencia entre manipular el DOM paso a paso y describir la interfaz que quieres ver, y qué es un componente de React."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a poder explicar la diferencia entre programar una interfaz de forma imperativa y de forma declarativa, y vas a poder describir qué es un componente de React.
+
+**Prerrequisitos:** `02-typescript/08-proyecto-migrar-a-ts`
+
+## Concepto
+
+Piensa en cómo le das indicaciones a alguien para llegar a un lugar. Puedes decirle paso a paso: "gira a la izquierda, avanza dos cuadras, gira a la derecha en la farmacia, sigue derecho hasta el semáforo". Esa persona ejecuta cada instrucción en orden; si te equivocas en un paso, llega a un lugar equivocado. O puedes simplemente decirle la dirección de destino: "Av. Libertador 1200" y dejar que ella (o su GPS) decida la ruta. Tú describes el resultado que quieres, no los pasos para lograrlo.
+
+Programar una interfaz con JavaScript puro y el DOM del navegador es como la primera opción: **imperativo**. Describes cada paso para transformar la pantalla: crea un botón, ponle un texto, agrégalo a la página, escucha el clic, cuando ocurra actualiza el texto a mano.
+
+```js
+const button = document.createElement("button");
+button.textContent = "Clicks: 0";
+let count = 0;
+button.addEventListener("click", () => {
+  count = count + 1;
+  button.textContent = "Clicks: " + count;
+});
+document.body.appendChild(button);
+```
+
+Cada línea es una orden concreta sobre el DOM: crear, asignar, escuchar, actualizar. Si mañana quieres agregar un segundo botón que también dependa de `count`, tienes que acordarte de actualizar los dos manualmente en el mismo lugar del código. Cuantos más elementos dependen del mismo dato, más lugares tienes que recordar sincronizar a mano.
+
+React propone la segunda opción: **declarativo**. En lugar de describir los pasos para cambiar la pantalla, describes cómo se ve la interfaz para un estado dado, y dejas que React se encargue de calcular qué cambió y actualizar el DOM por ti.
+
+```tsx
+function Counter() {
+  const [count, setCount] = useState(0);
+  return <button onClick={() => setCount(count + 1)}>Clicks: {count}</button>;
+}
+```
+
+Aquí no hay `createElement` ni `addEventListener` explícitos. Hay una función que, dado el valor actual de `count`, devuelve la descripción de un botón. Cuando `count` cambia, React vuelve a llamar a la función, compara la nueva descripción con la anterior y actualiza solo lo que cambió en el DOM real.
+
+Dos ideas nuevas aparecen en el ejemplo y las vas a estudiar a fondo pronto: la sintaxis `<button>...</button>` dentro de JavaScript es JSX, y la lección siguiente la explica en detalle; y `useState` es un **hook**, una función especial de React para que un componente recuerde un valor entre renders, que la lección "State y eventos" cubre paso a paso. Por ahora basta con que reconozcas la forma: un componente es una función que devuelve una descripción de UI.
+
+### Qué es un componente
+
+Un **componente** de React es una función de JavaScript o TypeScript que:
+
+- Empieza con mayúscula (`Counter`, no `counter`), para que React lo distinga de una etiqueta HTML normal como `button`.
+- Devuelve una descripción de interfaz (JSX), no un elemento del DOM ya creado.
+- Puede reutilizarse: `<Counter />` en tres lugares distintos crea tres contadores independientes.
+
+React llama a esa función una y otra vez, cada vez que algo de lo que depende su descripción cambia, y se encarga de la parte tediosa: decidir qué nodo real del DOM crear, actualizar o eliminar. Ese proceso de comparar la descripción anterior con la nueva se conoce como reconciliación, y es exactamente lo que en el ejemplo imperativo tenías que hacer a mano.
+
+Esto no significa que React sea mágico o que el DOM desaparezca: React sigue usando `document.createElement` y compañía por debajo. La diferencia es que tú ya no escribes esas llamadas; describes el resultado deseado y React calcula los pasos.
+
+Documentación oficial: [react.dev/learn](https://react.dev/learn).
+
+## Práctica
+
+El siguiente Sandpack muestra dos contadores lado a lado: uno construido de forma imperativa, manipulando el DOM directamente con una referencia al nodo (el atributo `ref`, que estudiarás en detalle en la lección de `useRef`), y otro construido de forma declarativa con `useState`. Ambos hacen lo mismo. Haz clic en los dos y observa que el código de la derecha es mucho más corto porque no describe pasos, describe el resultado.
+
+```tsx
+function mountImperativeCounter(container: HTMLDivElement | null) {
+  if (!container || container.dataset.mounted === "true") return;
+  container.dataset.mounted = "true";
+  let count = 0;
+  const button = document.createElement("button");
+  button.textContent = "Clicks: 0";
+  button.addEventListener("click", () => {
+    count = count + 1;
+    button.textContent = "Clicks: " + count;
+  });
+  container.appendChild(button);
+}
+
+function DeclarativeCounter() {
+  const [count, setCount] = useState(0);
+  return <button onClick={() => setCount(count + 1)}>Clicks: {count}</button>;
+}
+```
+
+<Sandpack
+  files={{
+    '/App.tsx': `import { useState } from "react";
+
+function mountImperativeCounter(container: HTMLDivElement | null) {
+  if (!container || container.dataset.mounted === "true") return;
+  container.dataset.mounted = "true";
+  let count = 0;
+  const button = document.createElement("button");
+  button.textContent = "Clicks: 0";
+  button.addEventListener("click", () => {
+    count = count + 1;
+    button.textContent = "Clicks: " + count;
+  });
+  container.appendChild(button);
+}
+
+function DeclarativeCounter() {
+  const [count, setCount] = useState(0);
+  return <button onClick={() => setCount(count + 1)}>Clicks: {count}</button>;
+}
+
+export default function App() {
+  return (
+    <div style={{ display: "flex", gap: 32 }}>
+      <div>
+        <h3>Imperativo (DOM)</h3>
+        <div ref={mountImperativeCounter} />
+      </div>
+      <div>
+        <h3>Declarativo (React)</h3>
+        <DeclarativeCounter />
+      </div>
+    </div>
+  );
+}`,
+  }}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Agregar un botón de reinicio"
+  solution={
+    <Sandpack
+      files={{
+        '/App.tsx': `import { useState } from "react";
+
+function DeclarativeCounter() {
+  const [count, setCount] = useState(0);
+  return (
+    <div>
+      <button onClick={() => setCount(count + 1)}>Clicks: {count}</button>
+      <button onClick={() => setCount(0)}>Reset</button>
+    </div>
+  );
+}
+
+export default function App() {
+  return <DeclarativeCounter />;
+}`,
+      }}
+    />
+  }
+>
+  Parte del componente `DeclarativeCounter` del ejemplo anterior. Agrega un segundo botón de texto "Reset" que, al hacer clic, vuelva `count` a `0`. No manipules el DOM a mano: usa `setCount` como en el primer botón.
+</Challenge>
+
+## Errores comunes
+
+**Mezclar manipulación directa del DOM dentro de un componente React.** Si dentro de un componente escribes `document.getElementById(...).textContent = ...` para "adelantarte" a un render, React no se entera de ese cambio y lo puede sobrescribir en el próximo render, dejando la pantalla inconsistente. Se detecta porque el texto cambia un instante y luego "vuelve atrás" solo. La solución es describir ese texto como parte del JSX y dejar que dependa del estado.
+
+**Pensar que `setCount(count + 1)` cambia `count` de inmediato.** `setCount` programa una actualización; React vuelve a ejecutar la función del componente con el nuevo valor en el próximo render, no en la misma línea. Si escribes `console.log(count)` justo después de llamar a `setCount`, todavía vas a ver el valor anterior. Se detecta comparando el valor esperado con lo que realmente imprime la consola en ese punto exacto del código.
+
+**Olvidar el `return` en un componente.** Un componente es una función; si no devuelve JSX (por ejemplo, porque el `return` quedó dentro de un `if` que no siempre se cumple), React renderiza nada (`undefined`) y la pantalla queda en blanco sin ningún error visible. Se detecta revisando que todos los caminos de la función terminen en un `return` con JSX.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué significa que una interfaz sea imperativa?", back: "Que el código describe paso a paso cómo transformar la pantalla (crear, escuchar, actualizar a mano)." },
+    { front: "¿Qué significa que una interfaz sea declarativa?", back: "Que el código describe cómo se ve la UI para un estado dado, y otra capa decide cómo actualizar la pantalla." },
+    { front: "¿Qué es un componente de React?", back: "Una función que devuelve una descripción de interfaz (JSX) y que React puede volver a llamar cuando algo cambia." },
+    { front: "¿Quién decide qué parte del DOM real actualizar cuando cambia el estado?", back: "React, comparando la descripción anterior con la nueva (reconciliación)." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Cuál de estas frases describe mejor el enfoque imperativo?",
+      options: [
+        { text: "Describes el resultado final y otra capa decide los pasos", correct: false, feedback: "Esa es la definición de declarativo, no de imperativo." },
+        { text: "Describes cada paso concreto para transformar la pantalla", correct: true, feedback: "Correcto: crear, escuchar, actualizar, todo a mano y en orden." },
+        { text: "No se puede usar con el DOM del navegador", correct: false, feedback: "El DOM se puede manipular perfectamente de forma imperativa; de hecho es lo más común sin un framework." },
+      ],
+    },
+    {
+      prompt: "En el ejemplo declarativo con useState, ¿qué ocurre cuando cambia count?",
+      options: [
+        { text: "React modifica directamente el texto del botón sin volver a ejecutar la función", correct: false, feedback: "React vuelve a ejecutar la función del componente para obtener la nueva descripción." },
+        { text: "React vuelve a llamar a la función del componente y actualiza solo lo que cambió en el DOM", correct: true, feedback: "Correcto: ese proceso de comparar y actualizar se llama reconciliación." },
+        { text: "Hay que llamar manualmente a document.createElement de nuevo", correct: false, feedback: "Ese es justamente el paso que React hace por ti en el enfoque declarativo." },
+      ],
+    },
+    {
+      prompt: "¿Qué caracteriza a una función de componente en React?",
+      options: [
+        { text: "Empieza con minúscula y devuelve un string", correct: false, feedback: "Los componentes empiezan con mayúscula; una etiqueta HTML normal empieza con minúscula." },
+        { text: "Empieza con mayúscula y devuelve una descripción de UI (JSX)", correct: true, feedback: "Correcto: la mayúscula es lo que le indica a React que es un componente, no una etiqueta HTML." },
+        { text: "Debe llamar a document.createElement al menos una vez", correct: false, feedback: "Un componente describe la UI; no necesita llamadas manuales al DOM." },
+      ],
+    },
+  ]}
+/>

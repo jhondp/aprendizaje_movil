@@ -1,0 +1,237 @@
+---
+id: "03-react/02-props"
+title: "Props"
+stage: 3
+module: "Pensar en componentes"
+order: 2
+minutes: 12
+prereqs: ["03-react/01-jsx"]
+summary: "Aprende a pasar datos tipados a un componente con props y a usar children para anidar contenido."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a poder declarar props tipadas para un componente, pasarlas como atributos JSX y usar `children` para anidar contenido dentro de otro componente.
+
+**Prerrequisitos:** `03-react/01-jsx`
+
+## Concepto
+
+Piensa en un formulario de pedido de una pastelería. La receta y el proceso de horneado son siempre los mismos, pero cada pedido llena un formulario distinto: tamaño, sabor, mensaje en la torta. La pastelería no cambia; lo que cambia es la configuración de cada pedido. Las **props** (de "properties") son ese formulario: los datos de entrada que le pasas a un componente para que produzca un resultado distinto sin cambiar el componente en sí.
+
+```tsx
+interface TaskCardProps {
+  title: string;
+  done: boolean;
+}
+
+function TaskCard({ title, done }: TaskCardProps) {
+  return (
+    <div className="task-card">
+      <p>{title}</p>
+      <p>{done ? "Hecha" : "Pendiente"}</p>
+    </div>
+  );
+}
+```
+
+`TaskCardProps` es una interfaz de TypeScript que describe qué props acepta el componente y de qué tipo es cada una. `{ title, done }` en la firma de la función es desestructuración: en vez de recibir un objeto `props` y escribir `props.title` en todo el cuerpo, extraes directamente las propiedades que te interesan.
+
+Para usar el componente, pasas cada prop como si fuera un atributo HTML, pero el valor entre llaves puede ser cualquier expresión de JavaScript:
+
+```tsx
+<TaskCard title="Escribir informe" done={false} />
+<TaskCard title="Revisar PR" done={true} />
+```
+
+Cada `<TaskCard ... />` es independiente: mismo componente, distinta configuración, igual que dos pedidos distintos a la misma pastelería.
+
+### Las props son de solo lectura
+
+Un componente nunca debería modificar las props que recibe. Si `TaskCard` hiciera `done = true` dentro de su cuerpo, ese cambio no se reflejaría en ningún lado permanente: en el próximo render, el padre volvería a pasar el valor original y lo pisaría. Si necesitas que un valor cambie con el tiempo dentro del propio componente, la herramienta correcta es el estado, que ves en la próxima lección, "State y eventos". Por ahora, piensa las props como una fotografía: representan el valor en el momento del render, no algo que el componente pueda editar.
+
+### La prop especial `children`
+
+Cuando anidas contenido entre la etiqueta de apertura y cierre de un componente, ese contenido llega como una prop especial llamada `children`.
+
+```tsx
+interface CardProps {
+  title: string;
+  children: React.ReactNode;
+}
+
+function Card({ title, children }: CardProps) {
+  return (
+    <div className="card">
+      <h3>{title}</h3>
+      {children}
+    </div>
+  );
+}
+```
+
+```tsx
+<Card title="Perfil">
+  <p>Nombre: Ana</p>
+  <p>Rol: administradora</p>
+</Card>
+```
+
+`React.ReactNode` es el tipo que cubre "cualquier cosa que React sepa renderizar": texto, números, elementos JSX, `null`, o una lista de ellos. `children` funciona igual que cualquier otra prop, pero React se lo pasa automáticamente a partir de lo que escribiste entre las etiquetas, en lugar de que lo escribas como un atributo explícito.
+
+Esta técnica es la base de la composición: un componente como `Card` no necesita saber qué va a mostrar adentro, solo necesita reservar el espacio y dejar que quien lo usa decida el contenido.
+
+Documentación oficial: [react.dev/learn/passing-props-to-a-component](https://react.dev/learn/passing-props-to-a-component).
+
+## Práctica
+
+El siguiente Sandpack define `TaskCard` con props tipadas y `Card` con `children`, y los combina.
+
+```tsx
+interface TaskCardProps {
+  title: string;
+  done: boolean;
+  priority: "low" | "high";
+}
+
+function TaskCard({ title, done, priority }: TaskCardProps) {
+  return (
+    <p>
+      {title} — {done ? "Hecha" : "Pendiente"} — prioridad {priority}
+    </p>
+  );
+}
+
+interface CardProps {
+  title: string;
+  children: React.ReactNode;
+}
+
+function Card({ title, children }: CardProps) {
+  return (
+    <div style={{ border: "1px solid #ccc", padding: 12 }}>
+      <h3>{title}</h3>
+      {children}
+    </div>
+  );
+}
+```
+
+<Sandpack
+  files={{
+    '/App.tsx': `interface TaskCardProps {
+  title: string;
+  done: boolean;
+  priority: "low" | "high";
+}
+
+function TaskCard({ title, done, priority }: TaskCardProps) {
+  return (
+    <p>
+      {title} — {done ? "Hecha" : "Pendiente"} — prioridad {priority}
+    </p>
+  );
+}
+
+interface CardProps {
+  title: string;
+  children: React.ReactNode;
+}
+
+function Card({ title, children }: CardProps) {
+  return (
+    <div style={{ border: "1px solid #ccc", padding: 12 }}>
+      <h3>{title}</h3>
+      {children}
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <Card title="Mis tareas">
+      <TaskCard title="Escribir informe" done={false} priority="high" />
+      <TaskCard title="Revisar PR" done={true} priority="low" />
+    </Card>
+  );
+}`,
+  }}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Componente Badge"
+  solution={
+    <Sandpack
+      files={{
+        '/App.tsx': `interface BadgeProps {
+  kind: "success" | "danger";
+  children: React.ReactNode;
+}
+
+function Badge({ kind, children }: BadgeProps) {
+  const color = kind === "success" ? "green" : "red";
+  return <span style={{ color, border: "1px solid " + color, padding: "2px 6px" }}>{children}</span>;
+}
+
+export default function App() {
+  return (
+    <div>
+      <Badge kind="success">Aprobado</Badge>
+      <Badge kind="danger">Rechazado</Badge>
+    </div>
+  );
+}`,
+      }}
+    />
+  }
+>
+  Escribe un componente `Badge` con una prop `kind` de tipo `"success" | "danger"` y una prop `children`. El color del texto y del borde debe ser verde cuando `kind` es `"success"` y rojo cuando es `"danger"`. Úsalo dos veces con distinto contenido de texto.
+</Challenge>
+
+## Errores comunes
+
+**Modificar una prop dentro del componente.** Escribir `done = true;` dentro del cuerpo de `TaskCard` no falla de inmediato, pero el cambio se pierde en el siguiente render, porque el padre vuelve a pasar el valor original. Se detecta porque el cambio "no se pega": aparece un instante y desaparece, o ESLint marca una advertencia de `react/no-...-mutation` si el proyecto tiene esa regla activada.
+
+**Usar el nombre de la prop sin desestructurar.** Si declaras `function TaskCard(props: TaskCardProps)` pero luego escribes `{title}` en el JSX en lugar de `{props.title}`, TypeScript marca "Cannot find name 'title'". Se detecta por ese mensaje de error; la solución es desestructurar en la firma (`{ title, done }: TaskCardProps`) o usar `props.title` en todo el cuerpo.
+
+**Pasar un valor del tipo equivocado.** Si `TaskCardProps` define `priority: "low" | "high"` y en el JSX escribes `priority="medium"`, TypeScript marca un error porque `"medium"` no es un valor válido para ese tipo. Se detecta en tiempo de compilación, antes de ejecutar nada, que es justamente la ventaja de tipar las props.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué son las props de un componente?", back: "Los datos de entrada, de solo lectura, que configuran cómo se ve o se comporta un componente." },
+    { front: "¿Qué hace React.ReactNode como tipo?", back: "Representa cualquier cosa que React pueda renderizar: texto, números, JSX, null o una lista de ellos." },
+    { front: "¿Qué es children en un componente de React?", back: "Una prop especial que recibe el contenido anidado entre la etiqueta de apertura y cierre del componente." },
+    { front: "¿Puede un componente modificar sus propias props?", back: "No debería; las props son de solo lectura y cualquier cambio interno se pierde en el próximo render." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué representa la interfaz TaskCardProps en el ejemplo?",
+      options: [
+        { text: "El estado interno del componente", correct: false, feedback: "El estado interno se ve en la próxima lección; una interfaz de props describe los datos de entrada." },
+        { text: "La forma y el tipo de los datos de entrada del componente", correct: true, feedback: "Correcto: describe qué props acepta el componente y de qué tipo es cada una." },
+        { text: "Los estilos CSS del componente", correct: false, feedback: "Los estilos se pasan con la prop style o con className, no con esta interfaz." },
+      ],
+    },
+    {
+      prompt: "¿Qué contiene la prop children de un componente?",
+      options: [
+        { text: "Siempre está vacía si no se declara explícitamente en el JSX", correct: false, feedback: "children se llena automáticamente con lo que se anide entre las etiquetas del componente." },
+        { text: "El contenido anidado entre la etiqueta de apertura y cierre del componente", correct: true, feedback: "Correcto: React la asigna automáticamente a partir de lo anidado en el JSX." },
+        { text: "Una lista de los componentes hijos definidos en el archivo", correct: false, feedback: "No tiene relación con qué componentes existen en el archivo, sino con el JSX anidado en un uso concreto." },
+      ],
+    },
+    {
+      prompt: "¿Qué ocurre si un componente modifica una prop que recibió?",
+      options: [
+        { text: "El cambio persiste en todos los próximos renders", correct: false, feedback: "El padre vuelve a pasar el valor original en el próximo render, así que el cambio se pierde." },
+        { text: "TypeScript lo impide siempre en tiempo de compilación", correct: false, feedback: "TypeScript no bloquea la reasignación de una variable desestructurada; es una convención, no una restricción del lenguaje." },
+        { text: "El cambio se pierde en el próximo render porque el padre vuelve a pasar el valor original", correct: true, feedback: "Correcto: por eso las props se tratan como de solo lectura." },
+      ],
+    },
+  ]}
+/>

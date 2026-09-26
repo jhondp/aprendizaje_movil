@@ -1,0 +1,235 @@
+---
+id: "03-react/07-custom-hooks"
+title: "Custom hooks"
+stage: 3
+module: "Hooks"
+order: 7
+minutes: 12
+prereqs: ["03-react/06-listas-y-keys"]
+summary: "Aprende a extraer lógica de estado repetida en tus propios hooks, como useToggle y useLocalStorage, siguiendo las reglas de los hooks."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a poder extraer lógica de estado repetida en un hook propio, seguir las reglas de los hooks al escribirlo, y usar dos ejemplos comunes: `useToggle` y `useLocalStorage`.
+
+**Prerrequisitos:** `03-react/06-listas-y-keys`
+
+## Concepto
+
+Piensa en una receta de cocina que anotas en una ficha propia porque la preparas seguido con variaciones menores: "salsa base", y luego la reutilizas para pasta, para pizza o para una sopa, cambiando solo un par de ingredientes. No vuelves a escribir los pasos de la salsa cada vez; los tienes en una ficha aparte y la consultas. Un **custom hook** es esa ficha para lógica de estado de React: cuando notas que el mismo patrón de `useState`, `useEffect` o `useRef` se repite en varios componentes con variaciones menores, lo extraes a una función propia que puedes reutilizar.
+
+### Un custom hook es solo una función que usa otros hooks
+
+No hay ninguna sintaxis especial: un custom hook es una función de JavaScript o TypeScript normal cuyo nombre empieza con `use` (por convención, y porque las herramientas de lint de React confían en ese prefijo para aplicar las reglas de los hooks) y que llama a uno o más hooks internamente.
+
+```tsx
+function useToggle(initialValue = false) {
+  const [value, setValue] = useState(initialValue);
+  const toggle = () => setValue((previous) => !previous);
+  return [value, toggle] as const;
+}
+```
+
+`useToggle` encapsula el patrón "un booleano y una función para invertirlo" que ya escribiste a mano en la lección de "State y eventos" para el componente `Toggle`. Cualquier componente que necesite ese patrón ahora puede escribir una sola línea:
+
+```tsx
+function Panel() {
+  const [isOpen, toggleOpen] = useToggle(false);
+  return (
+    <div>
+      <button onClick={toggleOpen}>{isOpen ? "Ocultar" : "Mostrar"}</button>
+      {isOpen && <p>Contenido del panel.</p>}
+    </div>
+  );
+}
+```
+
+El valor `as const` en el `return` le dice a TypeScript que el array devuelto tiene exactamente esas dos posiciones con esos tipos exactos (`boolean` y una función), en lugar de inferir un array genérico donde ambas posiciones podrían ser cualquiera de los dos tipos.
+
+### Las reglas de los hooks también aplican a los custom hooks
+
+Un custom hook sigue las mismas reglas que `useState` o `useEffect`: solo se puede llamar en el nivel superior de un componente o de otro hook, nunca dentro de un `if`, un bucle o una función anidada, y siempre en el mismo orden en cada render. React usa ese orden fijo, no los nombres de variable, para saber a qué "espacio de memoria" corresponde cada llamada a un hook; si el orden cambia entre renders, React puede devolver el estado equivocado o directamente lanzar un error.
+
+### useLocalStorage: sincronizar estado con el almacenamiento del navegador
+
+Este segundo hook combina `useState` para el valor en memoria y `useEffect` para sincronizarlo con `localStorage`, el sistema externo:
+
+```tsx
+function useLocalStorage<T>(key: string, initialValue: T) {
+  const [value, setValue] = useState<T>(() => {
+    const stored = window.localStorage.getItem(key);
+    return stored !== null ? JSON.parse(stored) : initialValue;
+  });
+
+  useEffect(() => {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  }, [key, value]);
+
+  return [value, setValue] as const;
+}
+```
+
+El valor inicial de `useState` es una función (`() => { ... }`) en lugar de un valor directo: así React solo lee `localStorage` una vez, en el primer render, y no en cada render posterior. El `useEffect` escribe en `localStorage` cada vez que `value` cambia, exactamente el mismo patrón de sincronización con un sistema externo que viste en la lección de `useEffect`, solo que empaquetado dentro de una función reutilizable con un tipo genérico `T` para que sirva con cualquier tipo de dato serializable.
+
+### Cuándo conviene extraer un custom hook
+
+Extraer demasiado pronto puede complicar código simple sin necesidad. Vale la pena crear un custom hook cuando el mismo patrón de estado y efectos se repite en dos o más componentes, o cuando quieres darle un nombre claro a una pieza de lógica para que el componente que la usa quede más fácil de leer, aunque solo se use una vez.
+
+Documentación oficial: [react.dev/learn/reusing-logic-with-custom-hooks](https://react.dev/learn/reusing-logic-with-custom-hooks).
+
+## Práctica
+
+El siguiente Sandpack usa `useToggle` para mostrar u ocultar un panel, y `useLocalStorage` para guardar un nombre que sobrevive a que el componente se desmonte y se vuelva a montar (simulado con un checkbox "Mostrar formulario").
+
+```tsx
+function useToggle(initialValue = false) {
+  const [value, setValue] = useState(initialValue);
+  const toggle = () => setValue((previous) => !previous);
+  return [value, toggle] as const;
+}
+
+function useLocalStorage<T>(key: string, initialValue: T) {
+  const [value, setValue] = useState<T>(() => {
+    const stored = window.localStorage.getItem(key);
+    return stored !== null ? JSON.parse(stored) : initialValue;
+  });
+
+  useEffect(() => {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  }, [key, value]);
+
+  return [value, setValue] as const;
+}
+```
+
+<Sandpack
+  files={{
+    '/App.tsx': `import { useEffect, useState } from "react";
+
+function useToggle(initialValue = false) {
+  const [value, setValue] = useState(initialValue);
+  const toggle = () => setValue((previous) => !previous);
+  return [value, toggle] as const;
+}
+
+function useLocalStorage<T>(key: string, initialValue: T) {
+  const [value, setValue] = useState<T>(() => {
+    const stored = window.localStorage.getItem(key);
+    return stored !== null ? JSON.parse(stored) : initialValue;
+  });
+
+  useEffect(() => {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  }, [key, value]);
+
+  return [value, setValue] as const;
+}
+
+function NameForm() {
+  const [name, setName] = useLocalStorage("guest-name", "");
+  return (
+    <div>
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Tu nombre" />
+      <p>Guardado en localStorage: {name || "(vacío)"}</p>
+    </div>
+  );
+}
+
+export default function App() {
+  const [isOpen, toggleOpen] = useToggle(false);
+  const [showForm, toggleShowForm] = useToggle(true);
+
+  return (
+    <div>
+      <button onClick={toggleOpen}>{isOpen ? "Ocultar" : "Mostrar"} panel</button>
+      {isOpen && <p>Este panel usa useToggle.</p>}
+      <hr />
+      <button onClick={toggleShowForm}>{showForm ? "Desmontar" : "Montar"} formulario</button>
+      {showForm && <NameForm />}
+    </div>
+  );
+}`,
+  }}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="useCounter"
+  solution={
+    <Sandpack
+      files={{
+        '/App.tsx': `import { useState } from "react";
+
+function useCounter(initialValue = 0) {
+  const [count, setCount] = useState(initialValue);
+  const increment = () => setCount((previous) => previous + 1);
+  const decrement = () => setCount((previous) => previous - 1);
+  const reset = () => setCount(initialValue);
+  return { count, increment, decrement, reset };
+}
+
+export default function App() {
+  const { count, increment, decrement, reset } = useCounter(0);
+  return (
+    <div>
+      <p>Contador: {count}</p>
+      <button onClick={increment}>+1</button>
+      <button onClick={decrement}>-1</button>
+      <button onClick={reset}>Reiniciar</button>
+    </div>
+  );
+}`,
+      }}
+    />
+  }
+>
+  Escribe un custom hook `useCounter(initialValue)` que devuelva un objeto `{ count, increment, decrement, reset }`, donde `increment` suma 1, `decrement` resta 1, y `reset` vuelve `count` al valor inicial. Úsalo en un componente con tres botones.
+</Challenge>
+
+## Errores comunes
+
+**Nombrar la función sin el prefijo `use`.** Si escribes `function toggle()` en lugar de `function useToggle()` pero llamas a `useState` dentro, las herramientas de lint de React (el plugin `eslint-plugin-react-hooks`) no reconocen la función como un hook y no pueden verificar que respetes las reglas de los hooks dentro de ella. Se detecta porque el linter deja pasar violaciones que normalmente marcaría, como llamar a un hook dentro de un `if`.
+
+**Llamar a un hook dentro de una condición o un bucle, incluso dentro de un custom hook.** Escribir `if (condicion) { useState(...) }` rompe el orden fijo de llamadas que React necesita para asociar cada hook con su espacio de memoria correcto. Se detecta porque React lanza un error en tiempo de ejecución del tipo "Rendered more hooks than during the previous render" en cuanto la condición cambia entre renders.
+
+**Duplicar lógica en varios componentes en lugar de extraer un custom hook.** Copiar y pegar el mismo `useState` más `useEffect` en tres componentes distintos significa que, si encuentras un bug en esa lógica, tienes que corregirlo en los tres lugares por separado. Se detecta revisando si dos o más componentes repiten exactamente el mismo patrón de hooks con la misma intención.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué es un custom hook?", back: "Una función de JavaScript cuyo nombre empieza con use y que llama a uno o más hooks internamente, para reutilizar lógica de estado." },
+    { front: "¿Por qué debe empezar con use el nombre de un custom hook?", back: "Por convención, y porque las herramientas de lint de React usan ese prefijo para verificar que se respeten las reglas de los hooks dentro de esa función." },
+    { front: "¿Dónde se puede llamar a un hook (incluido un custom hook)?", back: "Solo en el nivel superior de un componente o de otro hook, nunca dentro de un if, un bucle o una función anidada." },
+    { front: "¿Cuándo conviene extraer un custom hook?", back: "Cuando el mismo patrón de estado y efectos se repite en varios componentes, o cuando darle un nombre propio mejora la claridad del código." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué hace que una función sea reconocida como un custom hook por las herramientas de React?",
+      options: [
+        { text: "Que su nombre empiece con use y que use otros hooks internamente", correct: true, feedback: "Correcto: es una convención de nombres, no una sintaxis especial del lenguaje." },
+        { text: "Que esté definida en un archivo llamado hooks.ts", correct: false, feedback: "El nombre del archivo no importa; lo que importa es el nombre de la función y su contenido." },
+        { text: "Que reciba props como un componente", correct: false, feedback: "Un custom hook recibe argumentos normales de función, no props; no es un componente." },
+      ],
+    },
+    {
+      prompt: "¿Qué ocurre si llamas a useState dentro de un if, incluso dentro de un custom hook?",
+      options: [
+        { text: "Funciona igual, siempre que el if esté bien escrito", correct: false, feedback: "React necesita que el orden de llamadas a hooks sea el mismo en cada render, y un if puede romper ese orden." },
+        { text: "React puede lanzar un error o devolver el estado equivocado si el orden de llamadas cambia entre renders", correct: true, feedback: "Correcto: React usa el orden fijo de las llamadas, no los nombres, para identificar cada hook." },
+        { text: "TypeScript lo bloquea en tiempo de compilación", correct: false, feedback: "Es una regla de React, no del lenguaje; TypeScript no la detecta por sí solo." },
+      ],
+    },
+    {
+      prompt: "¿Qué combina el hook useLocalStorage del ejemplo?",
+      options: [
+        { text: "useState para el valor en memoria y useEffect para sincronizarlo con localStorage", correct: true, feedback: "Correcto: useState guarda el valor actual y useEffect lo escribe en localStorage cuando cambia." },
+        { text: "Solo useEffect, sin ningún estado", correct: false, feedback: "Sin useState no habría un valor en memoria que el componente pueda leer y actualizar directamente." },
+        { text: "useContext para compartir el valor entre componentes", correct: false, feedback: "El ejemplo no usa Context; ese hook se cubre en la siguiente lección." },
+      ],
+    },
+  ]}
+/>

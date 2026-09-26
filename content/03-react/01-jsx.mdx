@@ -1,0 +1,218 @@
+---
+id: "03-react/01-jsx"
+title: "JSX"
+stage: 3
+module: "Pensar en componentes"
+order: 1
+minutes: 10
+prereqs: ["03-react/00-ui-declarativa"]
+summary: "Aprende a escribir JSX con expresiones, condicionales, atributos y fragments, y entiende en qué se convierte por debajo."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a poder escribir JSX con expresiones dinámicas, renderizado condicional, atributos y fragments, y vas a poder explicar en qué se convierte el JSX cuando se compila.
+
+**Prerrequisitos:** `03-react/00-ui-declarativa`
+
+## Concepto
+
+Piensa en una plantilla de carta que usas para combinar correspondencia: "Estimado/a {nombre}: tu pedido {numeroDePedido} llega el {fecha}." El texto fijo se mantiene igual para todas las cartas, pero las palabras entre llaves se reemplazan con datos reales antes de imprimir. JSX funciona igual: es una plantilla de HTML con espacios en blanco, escritos entre llaves `{}`, que se rellenan con valores calculados en JavaScript.
+
+```tsx
+function Greeting({ name, orderId }: { name: string; orderId: number }) {
+  return (
+    <p>
+      Estimado/a {name}: tu pedido {orderId} está en camino.
+    </p>
+  );
+}
+```
+
+JSX no es HTML de verdad ni un string: es azúcar sintáctica que un compilador (Babel o el compilador de TypeScript) transforma en llamadas a funciones normales de JavaScript. El fragmento anterior se convierte, aproximadamente, en algo como esto:
+
+```js
+function Greeting({ name, orderId }) {
+  return jsx("p", {
+    children: ["Estimado/a ", name, ": tu pedido ", orderId, " está en camino."],
+  });
+}
+```
+
+Por eso un componente "solo" devuelve una llamada a función como cualquier otra: `jsx` (o `React.createElement` en versiones anteriores) recibe el tipo de elemento, sus props y sus hijos, y arma un objeto plano que React sabe interpretar. Saber esto ayuda a entender los límites de JSX: dentro de las llaves solo puedes poner **expresiones**, es decir, algo que produce un valor, nunca **sentencias** como `if` o `for`, porque por debajo eso tiene que encajar como un argumento de función.
+
+### Expresiones dentro de llaves
+
+```tsx
+const total = 3 * 4;
+const element = <p>El total es {total} y el doble es {total * 2}.</p>;
+```
+
+Cualquier expresión válida de JavaScript funciona: variables, operaciones aritméticas, llamadas a funciones, acceso a propiedades. Un bloque `if` o una declaración `const` dentro de las llaves no compilan, porque no producen un valor.
+
+### Renderizado condicional
+
+Como no puedes usar `if` dentro de las llaves, se usan expresiones que sí producen un valor: el operador ternario y el operador `&&`.
+
+```tsx
+function Status({ isOnline }: { isOnline: boolean }) {
+  return (
+    <p>
+      Estado: {isOnline ? "conectado" : "desconectado"}
+      {isOnline && <span> ✓</span>}
+    </p>
+  );
+}
+```
+
+El ternario `condicion ? siComo : sino` elige entre dos valores. El operador `&&` muestra el elemento de la derecha solo si la izquierda es verdadera; si es falsa, JSX no renderiza nada (`false` no produce salida visible).
+
+### Atributos
+
+Los atributos de JSX se escriben en camelCase porque son propiedades de un objeto JavaScript, no atributos de HTML: `className` en vez de `class`, `onClick` en vez de `onclick`, `style` recibe un objeto (`{ color: "red" }`), no un string CSS.
+
+```tsx
+<button className="primary" style={{ color: "white", backgroundColor: "blue" }}>
+  Enviar
+</button>
+```
+
+### Fragments
+
+Un componente debe devolver un único elemento raíz. Si necesitas devolver dos elementos hermanos sin agregar un `<div>` extra al DOM (que podría romper un layout con flexbox o grid), usa un fragment: `<>...</>` o su forma explícita `<React.Fragment>...</React.Fragment>`.
+
+```tsx
+function Header() {
+  return (
+    <>
+      <h1>Tablero</h1>
+      <p>Organiza tus tareas</p>
+    </>
+  );
+}
+```
+
+Documentación oficial: [react.dev/learn/writing-markup-with-jsx](https://react.dev/learn/writing-markup-with-jsx) y [react.dev/learn/javascript-in-jsx-with-curly-braces](https://react.dev/learn/javascript-in-jsx-with-curly-braces).
+
+## Práctica
+
+El siguiente Sandpack combina expresiones, un condicional con ternario y con `&&`, atributos (`className`, `style`) y un fragment para devolver dos elementos hermanos.
+
+```tsx
+function UserCard({ name, isOnline }: { name: string; isOnline: boolean }) {
+  return (
+    <>
+      <p className="name">{name}</p>
+      <p style={{ color: isOnline ? "green" : "gray" }}>
+        {isOnline ? "En línea" : "Desconectado"}
+        {isOnline && " ●"}
+      </p>
+    </>
+  );
+}
+```
+
+<Sandpack
+  files={{
+    '/App.tsx': `function UserCard({ name, isOnline }) {
+  return (
+    <>
+      <p className="name">{name}</p>
+      <p style={{ color: isOnline ? "green" : "gray" }}>
+        {isOnline ? "En línea" : "Desconectado"}
+        {isOnline && " ●"}
+      </p>
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <div>
+      <div style={{ marginBottom: 8 }}>
+        <UserCard name="Ana" isOnline={true} />
+      </div>
+      <div style={{ marginBottom: 8 }}>
+        <UserCard name="Luis" isOnline={false} />
+      </div>
+    </div>
+  );
+}`,
+  }}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Insignia de rol"
+  solution={
+    <Sandpack
+      files={{
+        '/App.tsx': `function RoleBadge({ role }) {
+  return (
+    <span className={role === "admin" ? "badge-admin" : "badge-user"}>
+      {role === "admin" ? "Administrador" : "Usuario"}
+    </span>
+  );
+}
+
+export default function App() {
+  return (
+    <div>
+      <RoleBadge role="admin" />
+      <RoleBadge role="user" />
+    </div>
+  );
+}`,
+      }}
+    />
+  }
+>
+  Escribe un componente `RoleBadge` que reciba una prop `role` (`"admin"` o `"user"`) y muestre el texto "Administrador" o "Usuario" según corresponda, usando un operador ternario. Además, asigna una clase distinta con `className` según el rol: `"badge-admin"` o `"badge-user"`.
+</Challenge>
+
+## Errores comunes
+
+**Escribir `class` en lugar de `className`.** JSX se compila a propiedades de un objeto JavaScript, y `class` es una palabra reservada del lenguaje, así que React usa `className`. Se detecta porque React muestra una advertencia en la consola: "Warning: Invalid DOM property `class`. Did you mean `className`?" y el estilo asociado a esa clase no se aplica.
+
+**Poner una sentencia dentro de las llaves.** Escribir `{if (isOnline) { ... }}` dentro de JSX falla en tiempo de compilación, porque `if` es una sentencia, no una expresión, y no produce un valor que JSX pueda insertar. Se detecta porque el compilador marca un error de sintaxis en esa línea; la solución es reemplazarlo por un ternario o por `&&`.
+
+**Devolver elementos hermanos sin envolverlos.** Escribir `return <h1>Título</h1><p>Texto</p>;` sin un elemento padre ni un fragment produce el error "Adjacent JSX elements must be wrapped in an enclosing tag". Se detecta por ese mensaje exacto del compilador; la solución es envolver ambos elementos en `<>...</>` o en un `<div>`.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué se puede escribir dentro de las llaves {} en JSX?", back: "Solo expresiones de JavaScript que producen un valor, nunca sentencias como if o for." },
+    { front: "¿Cómo se escribe el atributo class de HTML en JSX?", back: "className, porque class es una palabra reservada de JavaScript." },
+    { front: "¿Para qué sirve un fragment (<>...</>)?", back: "Para devolver varios elementos hermanos sin agregar un nodo extra al DOM." },
+    { front: "¿Qué operador se usa para mostrar un elemento solo si una condición es verdadera?", back: "El operador && (o un ternario si hay dos alternativas)." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué ocurre si escribes {if (x) { ... }} dentro de JSX?",
+      options: [
+        { text: "Funciona igual que en JavaScript normal", correct: false, feedback: "if es una sentencia y no produce un valor; JSX solo acepta expresiones dentro de las llaves." },
+        { text: "Es un error de compilación porque if no es una expresión", correct: true, feedback: "Correcto: dentro de las llaves solo van expresiones que producen un valor." },
+        { text: "Se ignora silenciosamente", correct: false, feedback: "El compilador marca un error, no lo ignora." },
+      ],
+    },
+    {
+      prompt: "¿Cuál es la forma correcta de aplicar un estilo en línea en JSX?",
+      options: [
+        { text: 'style="color: red"', correct: false, feedback: "Ese es el formato de HTML plano; JSX espera un objeto." },
+        { text: "style={{ color: 'red' }}", correct: true, feedback: "Correcto: las llaves externas son JSX y las internas forman un objeto JavaScript." },
+        { text: "css={{ color: 'red' }}", correct: false, feedback: "El atributo se llama style, no css." },
+      ],
+    },
+    {
+      prompt: "¿Qué problema resuelve un fragment (<>...</>)?",
+      options: [
+        { text: "Permite devolver varios elementos hermanos sin un div extra", correct: true, feedback: "Correcto: evita agregar un nodo innecesario al DOM." },
+        { text: "Permite usar sentencias if dentro de JSX", correct: false, feedback: "Un fragment no cambia qué se puede escribir dentro de las llaves." },
+        { text: "Convierte JSX en HTML válido para el navegador", correct: false, feedback: "El navegador nunca recibe JSX; siempre recibe el resultado ya compilado." },
+      ],
+    },
+  ]}
+/>
