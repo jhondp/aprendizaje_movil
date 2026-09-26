@@ -1,0 +1,248 @@
+---
+id: "04-react-native-expo/04-scrollview-y-flatlist"
+title: "ScrollView y FlatList"
+stage: 4
+module: "Componentes core"
+order: 4
+minutes: 15
+prereqs: ["04-react-native-expo/03-view-text-image"]
+summary: "Muestra contenido desplazable con ScrollView y listas largas con FlatList, usando keyExtractor y renderItem."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás elegir entre `ScrollView` y `FlatList` y renderizar una lista larga con `data`, `renderItem` y `keyExtractor`.
+
+**Prerrequisitos:** `04-react-native-expo/03-view-text-image`
+
+## Concepto
+
+En la web, si el contenido no cabe, el navegador agrega una barra de desplazamiento. En React Native **nada se desplaza por defecto**: un `View` con más contenido que pantalla simplemente lo corta. Para desplazar necesitas un componente específico. Hay dos principales, y elegir bien entre ellos es una de las decisiones de rendimiento más importantes de una app.
+
+Documentación oficial: https://reactnative.dev/docs/using-a-listview y https://reactnative.dev/docs/flatlist
+
+### Una analogía: el rollo de papel y la cinta de equipaje
+
+`ScrollView` es un rollo de papel largo: todo está impreso desde el principio y solo mueves el rollo para ver otra parte. Si el rollo tiene mil metros, igual tienes que imprimirlos todos antes de empezar.
+
+`FlatList` es la cinta de equipaje de un aeropuerto: en cada momento solo hay unas pocas maletas visibles sobre la cinta. Las que ya pasaron se retiran y las que vienen se colocan justo antes de aparecer. La cinta puede transportar miles de maletas sin llenarse.
+
+### ScrollView: pocos elementos
+
+`ScrollView` renderiza **todos** sus hijos de una vez y los hace desplazables.
+
+```tsx
+import { ScrollView, Text } from "react-native";
+
+export default function Terms() {
+  return (
+    <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+      <Text>Primer párrafo de los términos...</Text>
+      <Text>Segundo párrafo...</Text>
+    </ScrollView>
+  );
+}
+```
+
+- `contentContainerStyle` aplica estilos al contenido interno (padding, gap). El `style` normal aplica al marco exterior.
+- `horizontal` cambia la dirección del desplazamiento.
+
+Es ideal para formularios, pantallas de ajustes o artículos: contenido limitado y conocido de antemano.
+
+### FlatList: listas largas o de tamaño desconocido
+
+`FlatList` **virtualiza** la lista: solo renderiza los elementos visibles y algunos más arriba y abajo. Al desplazarte, desmonta los que salen de la zona y monta los que entran. Con 20 elementos la diferencia no se nota; con 2000, `ScrollView` tarda en abrir la pantalla y consume mucha memoria, mientras que `FlatList` se mantiene fluida.
+
+```tsx
+import { FlatList, Text } from "react-native";
+
+type Note = { id: string; title: string };
+
+const notes: Note[] = [
+  { id: "a1", title: "Comprar pan" },
+  { id: "b2", title: "Llamar al dentista" },
+];
+
+export default function NoteList() {
+  return (
+    <FlatList
+      data={notes}
+      keyExtractor={(item) => item.id}
+      renderItem={({ item }) => <Text>{item.title}</Text>}
+    />
+  );
+}
+```
+
+Las tres props esenciales:
+
+- `data`: el arreglo de elementos.
+- `renderItem`: una función que recibe un objeto con `item` (el elemento) e `index` (su posición) y devuelve el componente a mostrar. Fíjate en la desestructuración `({ item })`: la función no recibe el elemento directamente.
+- `keyExtractor`: una función que devuelve una clave única en forma de texto para cada elemento. Cumple el mismo papel que la prop `key` que usaste con `map` en la etapa de React. Si tus objetos tienen una propiedad `key` o `id` de tipo texto, FlatList la usa sin configuración, pero declarar `keyExtractor` deja la intención clara.
+
+### Props que usarás a menudo
+
+- `ItemSeparatorComponent`: componente que se dibuja entre elementos, por ejemplo una línea fina.
+- `ListHeaderComponent` y `ListFooterComponent`: contenido antes y después de la lista, que se desplaza con ella.
+- `ListEmptyComponent`: lo que se muestra cuando `data` está vacío.
+- `contentContainerStyle`: igual que en `ScrollView`.
+
+### Una regla que no puedes romper
+
+No pongas una `FlatList` vertical dentro de un `ScrollView` vertical. El `ScrollView` exterior le da a la lista todo el espacio que pida, así que la lista renderiza todos sus elementos y pierde la virtualización. React Native muestra una advertencia: "VirtualizedLists should never be nested inside plain ScrollViews". Si necesitas contenido antes de la lista, usa `ListHeaderComponent`.
+
+### Componentes de fila
+
+Cuando cada fila tiene varios elementos, extráela a su propio componente. Así `renderItem` queda corto y la fila se puede probar por separado:
+
+```tsx
+function NoteRow({ title }: { title: string }) {
+  return <Text style={{ padding: 16 }}>{title}</Text>;
+}
+
+// renderItem={({ item }) => <NoteRow title={item.title} />}
+```
+
+La comunidad también usa `FlashList` de Shopify, que recicla vistas en lugar de desmontarlas y rinde mejor en listas muy grandes. La API es casi igual a la de FlatList, así que lo que aprendes aquí se aplica directamente.
+
+## Práctica
+
+El Snack genera 50 notas y las muestra en una `FlatList` con separadores y un encabezado. Desplázate y luego cambia `50` por `5000`: la lista sigue fluida porque solo renderiza lo visible.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  code={`import { FlatList, View, Text, StyleSheet } from "react-native";
+
+type Note = { id: string; title: string; body: string };
+
+const notes: Note[] = Array.from({ length: 50 }, (_, i) => ({
+  id: String(i + 1),
+  title: "Nota " + (i + 1),
+  body: "Contenido de la nota número " + (i + 1),
+}));
+
+function NoteRow({ note }: { note: Note }) {
+  return (
+    <View style={styles.row}>
+      <Text style={styles.title}>{note.title}</Text>
+      <Text style={styles.body}>{note.body}</Text>
+    </View>
+  );
+}
+
+export default function App() {
+  return (
+    <FlatList
+      style={styles.list}
+      data={notes}
+      keyExtractor={(item) => item.id}
+      renderItem={({ item }) => <NoteRow note={item} />}
+      ItemSeparatorComponent={() => <View style={styles.separator} />}
+      ListHeaderComponent={<Text style={styles.header}>{notes.length} notas</Text>}
+    />
+  );
+}
+
+const styles = StyleSheet.create({
+  list: { flex: 1, backgroundColor: "#fff", paddingTop: 48 },
+  header: { fontSize: 28, fontWeight: "700", padding: 16 },
+  row: { paddingHorizontal: 16, paddingVertical: 12 },
+  title: { fontSize: 17, fontWeight: "600" },
+  body: { fontSize: 14, color: "#666" },
+  separator: { height: 1, backgroundColor: "#e5e5ea", marginLeft: 16 },
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Lista vacía y notas destacadas"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="55.0.0"
+      code={`import { FlatList, View, Text, StyleSheet } from "react-native";
+
+type Note = { id: string; title: string; pinned: boolean };
+
+const notes: Note[] = Array.from({ length: 20 }, (_, i) => ({
+  id: String(i + 1),
+  title: "Nota " + (i + 1),
+  pinned: (i + 1) % 5 === 0,
+}));
+
+export default function App() {
+  return (
+    <FlatList
+      style={styles.list}
+      data={notes}
+      keyExtractor={(item) => item.id}
+      renderItem={({ item }) => (
+        <View style={[styles.row, item.pinned && styles.pinned]}>
+          <Text style={styles.title}>{item.title}</Text>
+        </View>
+      )}
+      ListEmptyComponent={<Text style={styles.empty}>Todavía no hay notas</Text>}
+    />
+  );
+}
+
+const styles = StyleSheet.create({
+  list: { flex: 1, backgroundColor: "#fff", paddingTop: 48 },
+  row: { padding: 16 },
+  pinned: { backgroundColor: "#fff4cc" },
+  title: { fontSize: 17 },
+  empty: { padding: 32, textAlign: "center", color: "#888" },
+});`}
+    />
+  }
+>
+  Modifica la lista para que las notas cuyo número sea múltiplo de 5 tengan fondo amarillo claro, y agrega un `ListEmptyComponent` con el texto "Todavía no hay notas". Comprueba el mensaje vacío cambiando temporalmente la longitud a `0`. Pista: un `style` puede recibir un arreglo, y un valor `false` dentro del arreglo se ignora.
+</Challenge>
+
+## Errores comunes
+
+**Usar ScrollView con map para listas largas.** La pantalla tarda en abrir y el desplazamiento se traba cuando hay cientos de elementos. Ocurre porque `ScrollView` renderiza todos los hijos de golpe. Se detecta midiendo el tiempo de apertura con muchos elementos o viendo el consumo de memoria. Solución: `FlatList` para cualquier lista de tamaño variable.
+
+**Claves duplicadas o índices como clave.** Aparece la advertencia "Encountered two children with the same key", o las filas muestran datos cruzados tras borrar un elemento. Ocurre cuando `keyExtractor` devuelve valores repetidos o el índice. Se detecta por la advertencia en la consola de Metro. Solución: usa un `id` estable de cada elemento.
+
+**Olvidar desestructurar item en renderItem.** Escribes `renderItem={(note) => <Text>{note.title}</Text>}` y el texto sale vacío. Ocurre porque `renderItem` recibe un objeto `{ item, index }`, no el elemento. Se detecta porque TypeScript marca que `title` no existe en el tipo recibido. Solución: `({ item }) => ...`.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué significa que FlatList virtualiza la lista?", back: "Solo renderiza los elementos visibles y algunos cercanos, y desmonta los que salen de la zona." },
+    { front: "¿Qué recibe la función renderItem de FlatList?", back: "Un objeto con item (el elemento) e index (su posición)." },
+    { front: "¿Para qué sirve keyExtractor en FlatList?", back: "Devuelve una clave única en texto para cada elemento, como la prop key en React." },
+    { front: "¿Cuándo conviene ScrollView en lugar de FlatList?", back: "Con contenido corto y conocido, como formularios o pantallas de ajustes." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Tienes una lista de contactos que puede crecer a miles. ¿Qué componente usas?",
+      options: [
+        { text: "ScrollView con map", correct: false, feedback: "Renderizaría todos los contactos de golpe." },
+        { text: "FlatList", correct: true, feedback: "Correcto: virtualiza y solo renderiza lo visible." },
+        { text: "Un View con overflow: scroll", correct: false, feedback: "En React Native un View no se desplaza." }
+      ]
+    },
+    {
+      prompt: "¿Qué debe devolver keyExtractor?",
+      options: [
+        { text: "Un texto único y estable para cada elemento", correct: true, feedback: "Correcto: por ejemplo item.id." },
+        { text: "El componente de la fila", correct: false, feedback: "Eso lo devuelve renderItem." },
+        { text: "El índice del elemento como número", correct: false, feedback: "Debe ser texto y, además, el índice no es estable." }
+      ]
+    },
+    {
+      prompt: "Necesitas un título encima de una FlatList que se desplace junto con ella. ¿Qué haces?",
+      options: [
+        { text: "Envolver la FlatList en un ScrollView", correct: false, feedback: "Anidar listas virtualizadas en ScrollView rompe la virtualización." },
+        { text: "Usar ListHeaderComponent", correct: true, feedback: "Correcto: el encabezado forma parte de la lista." },
+        { text: "Poner el título dentro de renderItem", correct: false, feedback: "Se repetiría en cada fila." }
+      ]
+    }
+  ]}
+/>

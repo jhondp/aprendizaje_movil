@@ -1,0 +1,242 @@
+---
+id: "04-react-native-expo/03-view-text-image"
+title: "View, Text e Image"
+stage: 4
+module: "Componentes core"
+order: 3
+minutes: 12
+prereqs: ["04-react-native-expo/02-expo-go-y-dev-client"]
+summary: "Construye interfaces con los tres componentes core básicos: View para contenedores, Text para texto e Image para imágenes locales."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás construir una pantalla combinando `View`, `Text` e `Image`, y explicar en qué se diferencian de `div`, `span` e `img`.
+
+**Prerrequisitos:** `04-react-native-expo/02-expo-go-y-dev-client`
+
+## Concepto
+
+En la web tienes cientos de etiquetas HTML. En React Native tienes un conjunto pequeño de **componentes core** que se importan desde `react-native` y se traducen a vistas nativas. Con tres de ellos ya puedes construir la mayoría de pantallas.
+
+Documentación oficial: https://reactnative.dev/docs/components-and-apis
+
+### Una analogía: cajas, etiquetas y fotos
+
+Piensa en ordenar un armario. Usas **cajas** para agrupar cosas, **etiquetas** escritas para decir qué hay en cada caja y **fotos** pegadas para reconocerlas de un vistazo. Las cajas pueden contener otras cajas, etiquetas y fotos; una etiqueta solo contiene texto. En React Native, `View` es la caja, `Text` es la etiqueta e `Image` es la foto.
+
+### View: el contenedor
+
+`View` es el equivalente de `div`. Agrupa otros componentes y recibe estilos de layout, bordes y fondo.
+
+```tsx
+import { View } from "react-native";
+
+export default function Box() {
+  return <View style={{ padding: 16, backgroundColor: "#eef" }} />;
+}
+```
+
+Dos diferencias con `div`:
+
+- Por defecto sus hijos se apilan en **columna**, no en fila. Todo `View` es un contenedor Flexbox con `flexDirection: "column"`.
+- No acepta texto suelto. Si escribes texto directamente dentro de un `View`, la app falla.
+
+### Text: todo texto va aquí
+
+En React Native **cualquier texto** debe estar dentro de un `Text`. No existe `p`, `h1` ni `span`: el tamaño y el peso se dan con estilos.
+
+```tsx
+import { Text } from "react-native";
+
+export default function Title() {
+  return (
+    <Text style={{ fontSize: 22, fontWeight: "700" }}>
+      Hola, <Text style={{ color: "tomato" }}>Ana</Text>
+    </Text>
+  );
+}
+```
+
+Un `Text` puede anidar otros `Text`, y los hijos heredan el estilo del padre (por eso "Ana" mantiene el tamaño 22 y además es rojo). Esa herencia **solo ocurre entre `Text`**: un `View` no transmite `color` ni `fontSize` a sus hijos. No hay cascada de CSS.
+
+`Text` tiene props útiles propias:
+
+- `numberOfLines={2}` recorta el texto en dos líneas y agrega puntos suspensivos.
+- `selectable` permite al usuario seleccionar y copiar el texto.
+
+### Image: imágenes locales
+
+`Image` muestra imágenes. Para una imagen que viene dentro del proyecto usas `require` con la ruta del archivo:
+
+```tsx
+import { Image } from "react-native";
+
+export default function Avatar() {
+  return (
+    <Image
+      source={require("../assets/avatar.png")}
+      style={{ width: 96, height: 96, borderRadius: 48 }}
+      accessibilityLabel="Foto de perfil"
+    />
+  );
+}
+```
+
+- `require` se resuelve en tiempo de build: Metro empaqueta el archivo y conoce su tamaño.
+- `style` define el tamaño en pantalla. Con `borderRadius` igual a la mitad del ancho obtienes un círculo.
+- `resizeMode` controla cómo se ajusta la imagen a su caja: `"cover"` recorta para llenar, `"contain"` muestra la imagen completa.
+- `accessibilityLabel` es el texto que lee el lector de pantalla, como el `alt` de la web.
+
+Para imágenes remotas (una URL) Expo recomienda `expo-image`, que agrega caché en disco y mejor rendimiento. Lo verás en la lección de imágenes, fuentes e íconos; por ahora trabaja con imágenes locales.
+
+### Unidades sin px
+
+Los números de estilo no llevan unidad. `width: 96` significa 96 **puntos independientes de la densidad** (dp). Un teléfono con pantalla de alta densidad usa más píxeles físicos para esos 96 puntos, así que el tamaño visual es similar en todos los dispositivos.
+
+### Juntar las piezas
+
+Una tarjeta de perfil combina los tres componentes: un `View` como tarjeta, una `Image` para la foto y varios `Text` para nombre y descripción. Los estilos se agrupan con `StyleSheet.create`, que estudiarás en detalle en el módulo de estilos; por ahora tómalo como un objeto con nombres para cada estilo.
+
+## Práctica
+
+La tarjeta usa una imagen incluida en Snack. En un proyecto real, el `require` apuntaría a un archivo de tu carpeta `assets`. Cambia el nombre, el color de fondo o el valor de `numberOfLines` y observa el resultado.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  code={`import { View, Text, Image, StyleSheet } from "react-native";
+
+// In a real project: require("./assets/avatar.png")
+const avatar = require("@expo/snack-static/react-native-logo.png");
+
+export default function App() {
+  return (
+    <View style={styles.screen}>
+      <View style={styles.card}>
+        <Image
+          source={avatar}
+          style={styles.avatar}
+          accessibilityLabel="Foto de perfil"
+        />
+        <Text style={styles.name}>Ana Torres</Text>
+        <Text style={styles.role}>Desarrolladora móvil</Text>
+        <Text style={styles.bio} numberOfLines={2}>
+          Aprendo React Native con Expo. Me gusta construir apps pequeñas que
+          resuelven problemas reales y compartir lo que aprendo.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, justifyContent: "center", padding: 24, backgroundColor: "#f2f2f7" },
+  card: { alignItems: "center", padding: 24, borderRadius: 16, backgroundColor: "#fff", gap: 6 },
+  avatar: { width: 96, height: 96, borderRadius: 48, marginBottom: 8 },
+  name: { fontSize: 22, fontWeight: "700" },
+  role: { fontSize: 16, color: "#007aff" },
+  bio: { fontSize: 14, color: "#555", textAlign: "center" },
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Tarjeta con estadísticas"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="55.0.0"
+      code={`import { View, Text, Image, StyleSheet } from "react-native";
+
+const stats = [
+  { label: "Notas", value: 42 },
+  { label: "Etiquetas", value: 7 },
+  { label: "Días", value: 15 },
+];
+
+export default function App() {
+  return (
+    <View style={styles.screen}>
+      <View style={styles.card}>
+        <Image
+          source={require("@expo/snack-static/react-native-logo.png")}
+          style={styles.avatar}
+          accessibilityLabel="Foto de perfil"
+        />
+        <Text style={styles.name}>Ana Torres</Text>
+        <View style={styles.statsRow}>
+          {stats.map((stat) => (
+            <View key={stat.label} style={styles.stat}>
+              <Text style={styles.value}>{stat.value}</Text>
+              <Text style={styles.label}>{stat.label}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, justifyContent: "center", padding: 24, backgroundColor: "#f2f2f7" },
+  card: { alignItems: "center", padding: 24, borderRadius: 16, backgroundColor: "#fff", gap: 8 },
+  avatar: { width: 96, height: 96, borderRadius: 48 },
+  name: { fontSize: 22, fontWeight: "700" },
+  statsRow: { flexDirection: "row", gap: 24, marginTop: 8 },
+  stat: { alignItems: "center" },
+  value: { fontSize: 18, fontWeight: "700" },
+  label: { fontSize: 12, color: "#777" },
+});`}
+    />
+  }
+>
+  Agrega a la tarjeta de perfil una fila con tres estadísticas: notas, etiquetas y días. Cada estadística muestra el número arriba en negrita y la etiqueta debajo. Pista: la fila es un `View` con `flexDirection: "row"`, y los datos vienen de un arreglo que recorres con `map`.
+</Challenge>
+
+## Errores comunes
+
+**Texto suelto dentro de un View.** La app muestra el error "Text strings must be rendered within a Text component". Ocurre porque en React Native solo `Text` sabe dibujar texto; en la web cualquier elemento lo acepta. Se detecta por ese mensaje exacto, que además indica el componente. También aparece con condicionales como `count && ...` cuando `count` vale `0`: el `0` se intenta renderizar como texto. Usa `count > 0 && ...`.
+
+**Esperar que un View herede estilos de texto.** Pones `color: "red"` en un `View` y el texto de adentro sigue negro. Ocurre porque no hay cascada: los estilos de texto solo se heredan de un `Text` a sus `Text` hijos. Se detecta porque el estilo no tiene efecto. Solución: aplica el estilo al `Text` o anida los `Text`.
+
+**Imagen que no aparece.** La `Image` no muestra nada y no hay error. Ocurre con imágenes remotas sin `width` y `height`: React Native no conoce su tamaño y las dibuja con tamaño cero. Se detecta poniendo un `backgroundColor` temporal a la imagen para ver su caja. Solución: define siempre el tamaño en `style`.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué componente de React Native reemplaza a div?", back: "View" },
+    { front: "¿Dónde debe estar cualquier texto en React Native?", back: "Dentro de un componente Text." },
+    { front: "¿En qué dirección apila View a sus hijos por defecto?", back: "En columna (flexDirection: column)." },
+    { front: "¿Qué unidad usan los números de estilo en React Native?", back: "Puntos independientes de la densidad (dp), sin escribir unidad." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué ocurre si escribes texto directamente dentro de un View?",
+      options: [
+        { text: "Se muestra con el estilo por defecto", correct: false, feedback: "En la web sí, pero en React Native no." },
+        { text: "La app lanza un error que pide usar Text", correct: true, feedback: "Correcto: todo texto debe estar dentro de Text." },
+        { text: "Se ignora sin avisar", correct: false, feedback: "React Native avisa con un error explícito." }
+      ]
+    },
+    {
+      prompt: "Pones fontSize: 20 en un Text padre. ¿Qué pasa con un Text anidado dentro?",
+      options: [
+        { text: "Hereda el tamaño 20", correct: true, feedback: "Correcto: los Text anidados heredan estilos de texto del Text padre." },
+        { text: "Vuelve al tamaño por defecto", correct: false, feedback: "Entre Text sí hay herencia de estilos de texto." },
+        { text: "Produce un error", correct: false, feedback: "Anidar Text es válido y común." }
+      ]
+    },
+    {
+      prompt: "¿Cómo se carga una imagen que está dentro del proyecto?",
+      options: [
+        { text: "source={require(\"./assets/avatar.png\")}", correct: true, feedback: "Correcto: Metro empaqueta el archivo en el build." },
+        { text: "src=\"./assets/avatar.png\"", correct: false, feedback: "Image no tiene prop src; usa source." },
+        { text: "source=\"avatar.png\"", correct: false, feedback: "Una cadena suelta no sirve; se usa require o un objeto con uri." }
+      ]
+    }
+  ]}
+/>

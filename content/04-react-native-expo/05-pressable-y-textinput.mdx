@@ -1,0 +1,287 @@
+---
+id: "04-react-native-expo/05-pressable-y-textinput"
+title: "Pressable y TextInput"
+stage: 4
+module: "Componentes core"
+order: 5
+minutes: 12
+prereqs: ["04-react-native-expo/04-scrollview-y-flatlist"]
+summary: "Responde a toques con Pressable y captura texto con TextInput controlado para agregar notas a una lista."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás crear botones con `Pressable` que reaccionan al toque y un campo `TextInput` controlado que agrega elementos a una lista.
+
+**Prerrequisitos:** `04-react-native-expo/04-scrollview-y-flatlist`
+
+## Concepto
+
+En la web, casi cualquier elemento acepta `onClick` y tienes `input` para escribir. En React Native, `View` y `Text` no responden a toques por sí solos: necesitas componentes diseñados para la interacción. Los dos principales son `Pressable` y `TextInput`.
+
+Documentación oficial: https://reactnative.dev/docs/pressable y https://reactnative.dev/docs/textinput
+
+### Una analogía: el timbre y el formulario en papel
+
+Un timbre no hace nada hasta que alguien lo presiona, y cuando lo haces notas que se hunde: te confirma que lo tocaste. `Pressable` es ese timbre: una caja que detecta el toque y te deja cambiar su aspecto mientras está presionada.
+
+Un formulario en papel tiene una casilla donde escribes, pero quien decide qué queda anotado eres tú. Un `TextInput` controlado funciona igual: el teclado propone texto y tu state decide qué se muestra.
+
+### Pressable
+
+`Pressable` envuelve cualquier contenido y detecta toques.
+
+```tsx
+import { Pressable, Text } from "react-native";
+
+export default function SaveButton({ onSave }: { onSave: () => void }) {
+  return (
+    <Pressable
+      onPress={onSave}
+      accessibilityRole="button"
+      style={({ pressed }) => ({
+        padding: 12,
+        borderRadius: 8,
+        backgroundColor: pressed ? "#0056b3" : "#007aff",
+      })}
+    >
+      <Text style={{ color: "#fff", fontWeight: "600" }}>Guardar</Text>
+    </Pressable>
+  );
+}
+```
+
+Lo importante:
+
+- `onPress` se ejecuta cuando el usuario toca y suelta dentro del área. Es el equivalente a `onClick`.
+- `style` puede ser una **función** que recibe `{ pressed }`. Así das respuesta visual mientras el dedo está encima, algo esencial en móvil porque no existe el estado hover.
+- `onLongPress` se ejecuta con una pulsación prolongada.
+- `hitSlop={8}` amplía el área táctil 8 puntos hacia cada lado sin cambiar el tamaño visible. Útil para íconos pequeños.
+- `disabled` desactiva el toque.
+- `accessibilityRole="button"` le dice al lector de pantalla que es un botón.
+
+React Native también trae `Button`, un botón sencillo con el estilo del sistema que no se puede personalizar mucho. En guías antiguas verás `TouchableOpacity`; hoy la documentación recomienda `Pressable` porque es más flexible y es la base sobre la que se construyen los demás.
+
+### TextInput controlado
+
+`TextInput` es el campo de texto. Igual que en la etapa de React, lo controlas con state:
+
+```tsx
+import { useState } from "react";
+import { TextInput } from "react-native";
+
+export default function NameField() {
+  const [name, setName] = useState("");
+
+  return (
+    <TextInput
+      value={name}
+      onChangeText={setName}
+      placeholder="Tu nombre"
+      autoCapitalize="words"
+      style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 12 }}
+    />
+  );
+}
+```
+
+La diferencia clave con la web: `onChangeText` recibe **directamente el texto nuevo**, no un evento. Por eso puedes pasar `setName` sin envolverlo. Existe también `onChange`, que recibe un evento, pero `onChangeText` es lo habitual.
+
+Otras props que configuran el teclado del teléfono:
+
+- `keyboardType`: `"default"`, `"email-address"`, `"numeric"`, `"phone-pad"`. Cambia el teclado que aparece.
+- `autoCapitalize`: `"none"`, `"sentences"`, `"words"`. Para correos usa `"none"`.
+- `secureTextEntry`: oculta el texto, para contraseñas.
+- `returnKeyType`: la etiqueta de la tecla Enter, por ejemplo `"done"` o `"send"`.
+- `onSubmitEditing`: se ejecuta cuando el usuario pulsa esa tecla.
+- `multiline`: permite varias líneas, útil para el cuerpo de una nota.
+
+Por defecto el `TextInput` no tiene borde ni fondo: si no le das estilo, es casi invisible.
+
+### Juntar ambos
+
+El patrón para agregar elementos a una lista es el mismo que en la web: un state para el texto, otro para la lista, y una función que crea el elemento nuevo, lo agrega de forma inmutable y limpia el campo. Lo único nuevo son los componentes. Valida siempre que el texto no esté vacío antes de agregar: `text.trim()` elimina los espacios de los extremos.
+
+## Práctica
+
+Escribe una nota y pulsa "Agregar" o la tecla Enter del teclado. Observa cómo cambia el color del botón mientras lo mantienes presionado y cómo se desactiva cuando el campo está vacío.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  code={`import { useState } from "react";
+import { View, Text, TextInput, Pressable, FlatList, StyleSheet } from "react-native";
+
+type Note = { id: string; title: string };
+
+export default function App() {
+  const [text, setText] = useState("");
+  const [notes, setNotes] = useState<Note[]>([]);
+  const canAdd = text.trim().length > 0;
+
+  function addNote() {
+    if (!canAdd) return;
+    setNotes((prev) => [{ id: String(Date.now()), title: text.trim() }, ...prev]);
+    setText("");
+  }
+
+  return (
+    <View style={styles.screen}>
+      <View style={styles.form}>
+        <TextInput
+          style={styles.input}
+          value={text}
+          onChangeText={setText}
+          placeholder="Nueva nota"
+          returnKeyType="done"
+          onSubmitEditing={addNote}
+        />
+        <Pressable
+          onPress={addNote}
+          disabled={!canAdd}
+          accessibilityRole="button"
+          style={({ pressed }) => [
+            styles.button,
+            pressed && styles.buttonPressed,
+            !canAdd && styles.buttonDisabled,
+          ]}
+        >
+          <Text style={styles.buttonText}>Agregar</Text>
+        </Pressable>
+      </View>
+      <FlatList
+        data={notes}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => <Text style={styles.note}>{item.title}</Text>}
+        ListEmptyComponent={<Text style={styles.empty}>Sin notas todavía</Text>}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, paddingTop: 56, paddingHorizontal: 16, backgroundColor: "#fff" },
+  form: { flexDirection: "row", gap: 8, marginBottom: 16 },
+  input: { flex: 1, borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 12 },
+  button: { justifyContent: "center", paddingHorizontal: 16, borderRadius: 8, backgroundColor: "#007aff" },
+  buttonPressed: { backgroundColor: "#0056b3" },
+  buttonDisabled: { backgroundColor: "#a0c4ff" },
+  buttonText: { color: "#fff", fontWeight: "600" },
+  note: { fontSize: 16, paddingVertical: 12, borderBottomWidth: 1, borderColor: "#eee" },
+  empty: { textAlign: "center", color: "#888", marginTop: 32 },
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Borrar notas con pulsación larga"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="55.0.0"
+      code={`import { useState } from "react";
+import { View, Text, TextInput, Pressable, FlatList, StyleSheet } from "react-native";
+
+type Note = { id: string; title: string };
+
+export default function App() {
+  const [text, setText] = useState("");
+  const [notes, setNotes] = useState<Note[]>([]);
+
+  function addNote() {
+    const title = text.trim();
+    if (!title) return;
+    setNotes((prev) => [{ id: String(Date.now()), title }, ...prev]);
+    setText("");
+  }
+
+  function removeNote(id: string) {
+    setNotes((prev) => prev.filter((note) => note.id !== id));
+  }
+
+  return (
+    <View style={styles.screen}>
+      <TextInput
+        style={styles.input}
+        value={text}
+        onChangeText={setText}
+        placeholder="Nueva nota y Enter"
+        onSubmitEditing={addNote}
+      />
+      <Text style={styles.hint}>Mantén presionada una nota para borrarla</Text>
+      <FlatList
+        data={notes}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <Pressable
+            onLongPress={() => removeNote(item.id)}
+            style={({ pressed }) => [styles.note, pressed && styles.notePressed]}
+          >
+            <Text style={styles.noteText}>{item.title}</Text>
+          </Pressable>
+        )}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, paddingTop: 56, paddingHorizontal: 16, backgroundColor: "#fff" },
+  input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 12 },
+  hint: { color: "#888", marginVertical: 8 },
+  note: { paddingVertical: 12, borderBottomWidth: 1, borderColor: "#eee" },
+  notePressed: { backgroundColor: "#ffe5e5" },
+  noteText: { fontSize: 16 },
+});`}
+    />
+  }
+>
+  Partiendo del Snack de la práctica, haz que cada nota de la lista sea un `Pressable` que se borra con una pulsación larga (`onLongPress`). Mientras la nota está presionada, su fondo debe volverse rojo claro. Muestra un texto de ayuda que explique el gesto, porque las pulsaciones largas no son evidentes para el usuario.
+</Challenge>
+
+## Errores comunes
+
+**Usar onChange como en la web.** Escribes `onChange={(e) => setText(e.target.value)}` y obtienes `undefined` o un error. Ocurre porque en React Native el evento no tiene `target.value`. Se detecta porque el campo no se actualiza o TypeScript marca que `value` no existe. Solución: `onChangeText={setText}`.
+
+**Poner onPress en un View o un Text para todo.** `Text` acepta `onPress`, pero no da respuesta visual ni se comporta como botón para la accesibilidad, y `View` no acepta `onPress`. Ocurre por costumbre de la web, donde cualquier elemento recibe `onClick`. Se detecta porque el toque no produce ninguna reacción visual. Solución: envolver en `Pressable` con `accessibilityRole="button"`.
+
+**Campo de texto invisible.** Agregas un `TextInput` y no lo ves en pantalla. Ocurre porque por defecto no tiene borde, fondo ni altura mínima visible. Se detecta tocando la zona y viendo aparecer el teclado. Solución: dale `borderWidth`, `padding` y un color de borde.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué recibe onChangeText de TextInput?", back: "El texto nuevo como string, no un evento." },
+    { front: "¿Cómo se da respuesta visual a un toque con Pressable?", back: "Pasando a style una función que recibe { pressed } y devuelve estilos distintos." },
+    { front: "¿Para qué sirve hitSlop en Pressable?", back: "Amplía el área táctil sin cambiar el tamaño visible del componente." },
+    { front: "¿Qué prop de TextInput se ejecuta al pulsar la tecla Enter del teclado?", back: "onSubmitEditing" }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Cuál es la forma correcta de controlar un TextInput?",
+      options: [
+        { text: "value={text} onChangeText={setText}", correct: true, feedback: "Correcto: onChangeText entrega el texto directamente." },
+        { text: "value={text} onChange={(e) => setText(e.target.value)}", correct: false, feedback: "El evento de React Native no tiene target.value." },
+        { text: "defaultValue={text} onInput={setText}", correct: false, feedback: "onInput no existe en TextInput." }
+      ]
+    },
+    {
+      prompt: "¿Qué componente recomienda la documentación actual como base para elementos tocables?",
+      options: [
+        { text: "TouchableOpacity", correct: false, feedback: "Aparece en guías antiguas; hoy se recomienda Pressable." },
+        { text: "Pressable", correct: true, feedback: "Correcto: es flexible y permite estilos según el estado." },
+        { text: "View con onClick", correct: false, feedback: "View no tiene onClick ni onPress." }
+      ]
+    },
+    {
+      prompt: "Un campo pide un correo electrónico. ¿Qué combinación de props conviene?",
+      options: [
+        { text: "keyboardType=\"email-address\" y autoCapitalize=\"none\"", correct: true, feedback: "Correcto: muestra el teclado con @ y evita mayúsculas automáticas." },
+        { text: "secureTextEntry y multiline", correct: false, feedback: "secureTextEntry es para contraseñas." },
+        { text: "keyboardType=\"numeric\"", correct: false, feedback: "El teclado numérico no tiene letras." }
+      ]
+    }
+  ]}
+/>
