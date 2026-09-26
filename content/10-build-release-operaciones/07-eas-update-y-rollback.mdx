@@ -1,0 +1,222 @@
+---
+id: "10-build-release-operaciones/07-eas-update-y-rollback"
+title: "EAS Update (OTA) y rollback"
+stage: 10
+module: "Operar"
+order: 7
+minutes: 15
+prereqs: ["10-build-release-operaciones/06-store-listing-y-revision"]
+summary: "Publica cambios de JavaScript sin pasar por las tiendas con EAS Update, entiende sus límites y revierte una actualización con eas update:rollback."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás configurar `expo-updates`, publicar una actualización OTA en el canal de producción con `eas update`, explicar qué puede y qué no puede cambiar una actualización, y revertirla con `eas update:rollback`.
+
+**Prerrequisitos:** `10-build-release-operaciones/06-store-listing-y-revision`
+
+## Concepto
+
+Acabas de ver que llegar a la tienda implica build, envío y revisión: días, no minutos. Si mañana descubres un error de texto o un bug en una pantalla, repetir todo el ciclo por un cambio de tres líneas es desproporcionado. **EAS Update** permite enviar a las apps ya instaladas una nueva versión del JavaScript y los assets sin pasar por la tienda. Es lo que se conoce como actualización **over the air** (OTA).
+
+Piensa en una consola de videojuegos. El aparato físico se compra una vez en la tienda; los juegos y sus parches se descargan cuando se enciende. Nadie vuelve a la tienda por un parche. Pero un parche no convierte una consola vieja en una nueva: si el juego necesita un chip que la consola no tiene, hay que comprar otra consola. En tu app, el "aparato" es la parte nativa que compilaste con EAS Build; el "parche" es el bundle de JavaScript.
+
+### Qué puede cambiar una actualización y qué no
+
+Esta es la línea que separa un despliegue correcto de una app rota:
+
+| Puede cambiar por OTA                                   | Requiere un build nuevo y pasar por la tienda                    |
+| ------------------------------------------------------- | ---------------------------------------------------------------- |
+| Cualquier archivo `.ts` / `.tsx` de tu código           | Instalar o actualizar una dependencia con código nativo          |
+| Imágenes y fuentes que importas desde JavaScript        | Icono, splash, nombre, `bundleIdentifier`, `package`             |
+| Textos, estilos, lógica, pantallas, navegación          | Permisos, `infoPlist`, `plugins` y cualquier campo nativo de `app.config.ts` |
+| Valores `EXPO_PUBLIC_` incrustados en el bundle         | La versión del SDK de Expo o de React Native                     |
+
+La regla práctica: si el cambio tocó `package.json` con una librería nativa o cualquier campo de `app.config.ts` que no sea `extra`, no lo publiques por OTA.
+
+### runtimeVersion: el guardián
+
+¿Cómo sabe la app si una actualización es compatible con su parte nativa? Por la **runtime version**. Cada build lleva una etiqueta de runtime; cada actualización se publica para una runtime concreta; una app solo descarga actualizaciones cuya runtime coincida con la suya. Si publicas una actualización que usa una librería nativa nueva pero la runtime no cambió, la app la descarga y falla al arrancar. La lección de versionado explica las políticas para elegir esa etiqueta; por ahora usarás la más simple, que iguala la runtime a `version`.
+
+### Configurar el proyecto
+
+Instala `expo-updates` y ejecuta la configuración. Con `app.config.ts`, la CLI no puede editar el archivo por ti: te muestra los campos que debes agregar (https://docs.expo.dev/eas-update/getting-started/).
+
+```sh
+npx expo install expo-updates
+eas update:configure
+```
+
+Los campos en `app.config.ts`:
+
+```ts
+export default ({ config }: ConfigContext): ExpoConfig => ({
+  ...config,
+  // ...name, slug, ios, android as before
+  updates: {
+    url: "https://u.expo.dev/<projectId>",
+  },
+  runtimeVersion: {
+    policy: "appVersion",
+  },
+});
+```
+
+`<projectId>` es el identificador de tu proyecto en EAS (lo ves en `eas project:info`). Y recuerda el campo `channel` que cada perfil de `eas.json` ya declara: un build del perfil `production` escucha el canal `production`; uno de `preview`, el canal `preview`. Las actualizaciones se publican en **ramas** (branches) y cada canal apunta a una rama; por defecto, `eas update` crea una rama con el mismo nombre que el canal y las enlaza, así que en el uso diario puedes pensar "canal = rama".
+
+Como agregaste una dependencia nativa (`expo-updates`) y campos nativos en la configuración, necesitas un build nuevo antes de que nada de esto funcione. Ese build será el primero capaz de recibir actualizaciones.
+
+### Publicar
+
+```sh
+eas update --channel production --message "Fix note title truncation"
+```
+
+La CLI exporta el bundle, sube los assets y crea una actualización en la rama enlazada al canal. Las apps de producción con esa runtime la descargan la próxima vez que arrancan: por defecto, `expo-updates` comprueba al inicio, descarga en segundo plano y aplica la actualización **en el siguiente arranque**, para no interrumpir al usuario. Puedes verificar el estado del canal con `eas channel:view production` y listar actualizaciones con `eas update:list --branch production`.
+
+<Callout kind="tip">
+  Publica siempre primero en el canal `preview` y abre la app de preview en un teléfono real. Solo cuando la actualización se aplica y la app arranca bien, publica en `production` con el mismo commit.
+</Callout>
+
+### Rollback
+
+Algo salió mal en producción. Tienes dos maneras de volver atrás, y ambas se publican como una actualización más (la app no "desinstala" nada: descarga la versión anterior como si fuera nueva). Documentación: https://docs.expo.dev/eas-update/rollbacks/.
+
+```sh
+eas update:rollback
+```
+
+El comando pregunta a qué canal aplica y ofrece dos opciones:
+
+- **Rollback a la actualización anterior**: republica una actualización previa de la rama. Es lo habitual cuando la penúltima estaba bien.
+- **Rollback al embedded update**: indica a las apps que vuelvan al bundle que traían compilado desde el build. Útil cuando ninguna actualización publicada es de confianza.
+
+En ambos casos, los usuarios reciben el rollback con la misma mecánica: al siguiente arranque. Un rollback OTA tarda minutos en llegar; un rollback de tienda tarda días. Esa asimetría es la razón principal para separar cambios JS de cambios nativos.
+
+### Actualizar sin esperar al siguiente arranque
+
+Si necesitas que el usuario reciba un cambio de inmediato (por ejemplo, un arreglo de seguridad), la API de `expo-updates` permite comprobar, descargar y recargar desde el código:
+
+```ts
+import * as Updates from "expo-updates";
+
+export async function applyUpdateNow(): Promise<void> {
+  const check = await Updates.checkForUpdateAsync();
+  if (!check.isAvailable) return;
+  await Updates.fetchUpdateAsync();
+  await Updates.reloadAsync();
+}
+```
+
+Úsalo con criterio: recargar la app sin avisar en mitad de una tarea es una mala experiencia. Un patrón razonable es mostrar un aviso y dejar que el usuario pulse "Actualizar".
+
+## Práctica
+
+Sigue la sesión completa: configurar, publicar en preview, publicar en producción, revertir.
+
+<Terminal
+  steps={[
+    { cmd: "npx expo install expo-updates && eas update:configure", out: "› Installing 1 SDK 52.0.0 compatible native module using npm\n✔ Configured updates.url and runtimeVersion? No, app.config.ts is dynamic.\n\nAdd the following to your app.config.ts:\n  updates: { url: \"https://u.expo.dev/4f8c1c2e-xxxx-xxxx-xxxx-xxxxxxxxxxxx\" },\n  runtimeVersion: { policy: \"appVersion\" },\n\n✔ Configured eas.json: each build profile already has a channel.\n\nReminder: you need to build a new binary before updates can be received." },
+    { cmd: "eas update --channel preview --message \"Fix note title truncation\"", out: "✔ Exported bundle(s)\n✔ Uploaded 2 app bundles\n✔ Uploading assets skipped - no new assets\n✔ Channel: preview pointed at branch: preview\n✔ Published!\n\nBranch             preview\nRuntime version    1.0.0\nPlatform           android, ios\nUpdate group ID    a1b2c3d4-xxxx-xxxx-xxxx-xxxxxxxxxxxx\nMessage            Fix note title truncation" },
+    { cmd: "eas update --channel production --message \"Fix note title truncation\"", out: "✔ Exported bundle(s)\n✔ Uploaded 2 app bundles\n✔ Published!\n\nBranch             production\nRuntime version    1.0.0\nUpdate group ID    b2c3d4e5-xxxx-xxxx-xxxx-xxxxxxxxxxxx\nMessage            Fix note title truncation" },
+    { cmd: "eas update:rollback", out: "? Which channel would you like to roll back? › production\n? Which type of rollback would you like to perform?\n  › Rollback to a previous update\n    Rollback to the embedded update\n\n? Select an update group to roll back to › 9f8e7d6c… (Initial production release, 1.0.0)\n✔ Published!\n\nBranch             production\nRuntime version    1.0.0\nUpdate group ID    c3d4e5f6-xxxx-xxxx-xxxx-xxxxxxxxxxxx\nMessage            Rollback to update 9f8e7d6c" },
+    { cmd: "eas update:list --branch production --limit 3", out: "Branch: production\n\nc3d4e5f6…  1.0.0  android, ios  Rollback to update 9f8e7d6c   2 minutes ago\nb2c3d4e5…  1.0.0  android, ios  Fix note title truncation      11 minutes ago\n9f8e7d6c…  1.0.0  android, ios  Initial production release     3 days ago" },
+  ]}
+/>
+
+Antes de publicar por OTA, responde cada punto con honestidad:
+
+<Checklist
+  id="10-build-release-operaciones/07-eas-update-y-rollback/pre-ota"
+  items={[
+    "El cambio no agrega ni actualiza ninguna dependencia con código nativo",
+    "El cambio no toca icono, splash, permisos, plugins ni ningún campo nativo de app.config.ts",
+    "app.config.ts tiene updates.url con el projectId real y runtimeVersion con política appVersion",
+    "El build instalado en los usuarios fue compilado después de agregar expo-updates",
+    "Publicaste primero en preview y comprobaste en un dispositivo que la actualización se aplica al segundo arranque",
+    "Sabes ejecutar eas update:rollback y a qué grupo de actualización volverías",
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Clasificar cambios: OTA o build nuevo"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type Change = {
+  file: string;
+  addsNativeDependency?: boolean;
+};
+
+const NATIVE_CONFIG_FILES = ["app.config.ts", "app.json", "eas.json"];
+
+function needsNewBuild(change: Change): boolean {
+  if (change.addsNativeDependency) return true;
+  if (NATIVE_CONFIG_FILES.includes(change.file)) return true;
+  return false;
+}
+
+const changes: Change[] = [
+  { file: "app/(tabs)/notes.tsx" },
+  { file: "package.json", addsNativeDependency: true },
+  { file: "app.config.ts" },
+  { file: "assets/logo.png" },
+];
+
+for (const c of changes) {
+  console.log(c.file + " -> " + (needsNewBuild(c) ? "new build + store" : "OTA update"));
+}`}
+    />
+  }
+>
+  Escribe una función `needsNewBuild(change)` que reciba `{ file, addsNativeDependency }` y devuelva `true` cuando el cambio requiera un build nuevo: si agrega una dependencia nativa o si el archivo es `app.config.ts`, `app.json` o `eas.json`. Todo lo demás (pantallas, assets importados desde JS) va por OTA. Clasifica cuatro cambios de ejemplo e imprime el resultado de cada uno.
+</Challenge>
+
+## Errores comunes
+
+**Publicar por OTA un cambio que agregó una librería nativa.** La actualización se descarga, la app arranca con el JS nuevo, intenta llamar al módulo nativo que no existe y se cierra. Ocurre porque `eas update` no verifica tus dependencias nativas. Se detecta porque el crash aparece justo después de la actualización y solo en producción. Solución inmediata: `eas update:rollback`; después, subir la versión, construir y publicar en la tienda.
+
+**Esperar que la actualización se vea al instante.** Publicas, abres la app y sigue igual. Ocurre porque `expo-updates` descarga en segundo plano y aplica en el siguiente arranque. Se detecta porque al cerrar y volver a abrir la app aparece el cambio. No es un error; si necesitas inmediatez, usa la API de `expo-updates` con un aviso al usuario.
+
+**Publicar en el canal equivocado.** Los testers de preview ven el cambio y los usuarios no, o al revés. Ocurre porque `--channel` es un parámetro libre. Se detecta con `eas channel:view <canal>`, que muestra la última actualización publicada. Escribe el canal como parte de un script (`"update:prod": "eas update --channel production"`) para no teclearlo a mano.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué tipo de cambios puede enviar EAS Update sin pasar por la tienda?", back: "Código JavaScript/TypeScript, assets importados desde JS y valores EXPO_PUBLIC_. Nada nativo." },
+    { front: "¿Para qué sirve runtimeVersion en EAS Update?", back: "Para que una app solo descargue actualizaciones compatibles con su parte nativa: la runtime del build y la de la actualización deben coincidir." },
+    { front: "¿Cuándo aplica expo-updates una actualización descargada, por defecto?", back: "En el siguiente arranque de la app; la descarga ocurre en segundo plano." },
+    { front: "¿Qué dos opciones ofrece eas update:rollback?", back: "Volver a una actualización anterior de la rama o volver al bundle embebido en el build." },
+    { front: "¿Qué relación hay entre el channel de eas.json y una rama de EAS Update?", back: "El build escucha un canal; el canal apunta a una rama donde se publican las actualizaciones. Por defecto tienen el mismo nombre." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Cambiaste el icono de la app y corregiste un texto en una pantalla. ¿Cómo lo publicas?",
+      options: [
+        { text: "Todo por OTA con eas update", correct: false, feedback: "El icono es configuración nativa; la actualización no puede cambiarlo." },
+        { text: "Un build nuevo y envío a la tienda; el texto viaja en el mismo build", correct: true, feedback: "Correcto: cuando hay un cambio nativo, el build nuevo incluye también los cambios de JS." },
+        { text: "El icono por OTA y el texto en un build nuevo", correct: false, feedback: "Es exactamente al revés: lo nativo necesita build; el texto podría ir por OTA." },
+      ],
+    },
+    {
+      prompt: "Publicaste una actualización que rompe la pantalla de inicio en producción. ¿Cuál es la acción más rápida?",
+      options: [
+        { text: "Enviar un build nuevo a revisión de la tienda", correct: false, feedback: "Tardaría días; el problema está en el JS y se puede revertir por OTA." },
+        { text: "eas update:rollback en el canal production", correct: true, feedback: "Correcto: los usuarios reciben la versión anterior en minutos, al siguiente arranque." },
+        { text: "Borrar la rama production", correct: false, feedback: "No existe ese flujo y dejaría a las apps sin referencia; el rollback es la herramienta prevista." },
+      ],
+    },
+    {
+      prompt: "Un usuario con la versión 1.0.0 no recibe una actualización publicada para la runtime 1.1.0. ¿Por qué?",
+      options: [
+        { text: "Porque las actualizaciones solo llegan a builds con la misma runtime version", correct: true, feedback: "Correcto: con la política appVersion, la runtime 1.1.0 solo corresponde a builds con version 1.1.0." },
+        { text: "Porque el usuario tiene que actualizar manualmente desde la tienda cada vez", correct: false, feedback: "Las actualizaciones OTA llegan solas cuando la runtime coincide." },
+        { text: "Porque el canal production está vacío", correct: false, feedback: "La actualización existe; el filtro que la bloquea es la runtime." },
+      ],
+    },
+  ]}
+/>

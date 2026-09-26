@@ -1,0 +1,221 @@
+---
+id: "10-build-release-operaciones/08-versionado-y-changelog"
+title: "Versionado, runtimeVersion y changelog"
+stage: 10
+module: "Operar"
+order: 8
+minutes: 10
+prereqs: ["10-build-release-operaciones/07-eas-update-y-rollback"]
+summary: "Distingue version, buildNumber y versionCode, elige la política de runtimeVersion y mantén un CHANGELOG.md que cuente qué cambió en cada release."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás explicar qué significa cada número de versión de la app, gestionar `buildNumber` y `versionCode` desde EAS con `eas build:version:set`, justificar la política `appVersion` de runtime y escribir un `CHANGELOG.md` con formato consistente.
+
+**Prerrequisitos:** `10-build-release-operaciones/07-eas-update-y-rollback`
+
+## Concepto
+
+En las lecciones anteriores aparecieron varios números: `version: "1.0.0"` en la configuración, `1.0.0 (1)` en los envíos, la runtime `1.0.0` de las actualizaciones. Cada uno responde a una pregunta distinta y confundirlos produce rechazos en la tienda o actualizaciones que no llegan.
+
+Piensa en la edición de un libro. La portada dice "segunda edición" (lo que ve el lector), la imprenta lleva un número de tirada que sube en cada reimpresión aunque el texto sea el mismo (lo que ve la imprenta), y un cuadernillo de erratas solo sirve para la edición para la que se escribió (compatibilidad). La app tiene los tres: `version`, el número de build y la runtime.
+
+### Los tres números
+
+| Campo                                        | Quién lo ve            | Formato                  | Regla                                                  |
+| -------------------------------------------- | ---------------------- | ------------------------ | ------------------------------------------------------ |
+| `version`                                    | Usuarios, tiendas      | semver `MAJOR.MINOR.PATCH` | Lo decides tú; describe el cambio funcional            |
+| `ios.buildNumber`                            | App Store Connect      | cadena numérica          | Único por `version`; cada subida a Apple debe ser nueva |
+| `android.versionCode`                        | Google Play            | entero                   | Estrictamente creciente en toda la vida de la app      |
+
+**Semver** (versionado semántico) da significado a cada parte de `version`: sube `MAJOR` cuando rompes compatibilidad (en apps, un rediseño completo o un cambio de datos incompatible), `MINOR` cuando agregas funciones, `PATCH` cuando corriges errores. La especificación está en https://semver.org/lang/es/.
+
+### Deja que EAS lleve los contadores
+
+Mantener `buildNumber` y `versionCode` a mano es fuente de errores: dos personas construyen el mismo día y ambas suben con el mismo número. En la lección de `eas.json` dejaste `"appVersionSource": "remote"` y `"autoIncrement": true` en producción. Con eso, EAS guarda los contadores en sus servidores y los incrementa en cada build de producción. Tu `app.config.ts` solo declara `version`; los otros dos no aparecen en el archivo. Documentación: https://docs.expo.dev/build-reference/app-versions/.
+
+Los comandos para consultarlos o fijarlos:
+
+```sh
+eas build:version:get --platform all
+eas build:version:set --platform android
+eas build:version:sync
+```
+
+`build:version:set` pregunta el valor y lo guarda en EAS: útil cuando migras una app que ya tenía un `versionCode` alto en Play y necesitas que EAS empiece por encima. `build:version:sync` copia los valores remotos a la configuración local si en algún momento quieres volver a `appVersionSource: "local"`.
+
+### runtimeVersion: elegir política
+
+La runtime version es la etiqueta de compatibilidad entre un build y sus actualizaciones. Expo ofrece varias políticas (https://docs.expo.dev/eas-update/runtime-versions/); las dos que importan para este curso:
+
+- **`appVersion`**: la runtime es igual a `version`. Cada vez que subes `version`, creas una runtime nueva. Es la política que configuraste en la lección anterior y la recomendada para empezar por una razón: es predecible. Sabes que la runtime `1.2.0` corresponde al build con `version` `1.2.0` y a nada más. El **tradeoff** es doble: si haces un cambio nativo sin subir `version`, la runtime no cambia y una actualización OTA podría llegar a un build incompatible; y cada subida de `version` te obliga a un build nuevo, aunque el cambio fuera solo JS, porque las apps con la versión anterior dejan de recibir actualizaciones publicadas para la nueva runtime. En la práctica: sube `version` solo cuando hay un build nuevo, y haz un build nuevo cada vez que subes `version`.
+- **`fingerprint`**: Expo calcula un hash de todo lo que afecta a la parte nativa (dependencias, configuración, carpetas nativas) y lo usa como runtime. Detecta cambios nativos por ti, sin que tengas que recordar subir la versión, y permite varias versiones de `version` con la misma runtime si nada nativo cambió. A cambio, la runtime es una cadena opaca, más difícil de razonar y de comunicar, y un cambio que tú creías inofensivo puede alterar el hash y dejar a los usuarios sin actualizaciones hasta que construyas de nuevo.
+
+Empieza con `appVersion`. Cuando el equipo tenga el hábito de distinguir cambios nativos de cambios JS, evalúa `fingerprint`.
+
+<Callout kind="warning">
+  Con la política appVersion, subir `version` sin hacer un build nuevo deja a las actualizaciones publicadas sin destinatarios: ninguna app instalada tiene esa runtime. Cambia version únicamente en el commit que va a producir un build.
+</Callout>
+
+### El changelog
+
+Un `CHANGELOG.md` es la memoria del proyecto para personas: qué cambió en cada versión, en lenguaje que un tester o un usuario entiende. Sigue el formato de Keep a Changelog (https://keepachangelog.com/es-ES/1.1.0/): una sección por versión con fecha, y dentro las categorías `Added`, `Changed`, `Fixed`, `Removed`. Mantén también una sección `Unreleased` que se llena mientras desarrollas y se renombra al lanzar.
+
+```md
+# Changelog
+
+## [Unreleased]
+
+### Added
+
+- Search notes by title.
+
+## [1.1.0] - 2026-09-26
+
+### Added
+
+- Pin a note to the top of the list.
+
+### Fixed
+
+- Note titles no longer truncate on small screens.
+
+## [1.0.0] - 2026-09-20
+
+### Added
+
+- First public release: create, edit and delete notes.
+```
+
+Cada actualización OTA también merece una línea: los usuarios no ven un número nuevo en la tienda, pero el equipo necesita saber qué se publicó y cuándo, sobre todo si hay que hacer rollback.
+
+## Práctica
+
+La lógica de semver es pura. Ejecuta el bump y comprueba que cada parte se reinicia como corresponde.
+
+<Playground
+  lang="ts"
+  code={`type Bump = "major" | "minor" | "patch";
+
+function bump(version: string, kind: Bump): string {
+  const [major, minor, patch] = version.split(".").map(Number);
+  if (kind === "major") return (major + 1) + ".0.0";
+  if (kind === "minor") return major + "." + (minor + 1) + ".0";
+  return major + "." + minor + "." + (patch + 1);
+}
+
+console.log(bump("1.0.0", "patch"));
+console.log(bump("1.0.1", "minor"));
+console.log(bump("1.1.0", "major"));`}
+  expected={`1.0.1
+1.1.0
+2.0.0`}
+/>
+
+Consulta y fija los contadores remotos:
+
+<Terminal
+  steps={[
+    { cmd: "eas build:version:get --platform all", out: "Android versionCode - 3\niOS buildNumber - 3" },
+    { cmd: "eas build:version:set --platform android", out: "✔ Project @<account>/notes uses remote app version source.\n? What version would you like to initialize it with? › 42\n✔ Updated versionCode to 42 for com.example.notes" },
+    { cmd: "eas build:version:get --platform android", out: "Android versionCode - 42" },
+  ]}
+/>
+
+Antes de cada release de producción:
+
+<Checklist
+  id="10-build-release-operaciones/08-versionado-y-changelog/release"
+  items={[
+    "version en app.config.ts sigue semver y subió según el tipo de cambio (major, minor o patch)",
+    "version cambió en el mismo commit que va a producir un build nuevo, y no en commits que solo publican OTA",
+    "buildNumber y versionCode no aparecen en app.config.ts: los gestiona EAS con appVersionSource remote y autoIncrement",
+    "runtimeVersion usa la política appVersion y el equipo sabe su tradeoff",
+    "CHANGELOG.md tiene la sección de esta versión con fecha y las categorías Added, Changed, Fixed o Removed",
+    "Cada actualización OTA publicada tiene una línea en el changelog con su mensaje",
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Decidir versión y runtime"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type Release = {
+  version: string;
+  nativeChange: boolean;
+  kind: "major" | "minor" | "patch";
+};
+
+function bump(version: string, kind: "major" | "minor" | "patch"): string {
+  const [major, minor, patch] = version.split(".").map(Number);
+  if (kind === "major") return (major + 1) + ".0.0";
+  if (kind === "minor") return major + "." + (minor + 1) + ".0";
+  return major + "." + minor + "." + (patch + 1);
+}
+
+function plan(r: Release): string {
+  if (r.nativeChange) {
+    const next = bump(r.version, r.kind);
+    return "new build with version " + next + " (runtime " + next + "), then store submission";
+  }
+  return "OTA update on runtime " + r.version + ", version stays " + r.version;
+}
+
+console.log(plan({ version: "1.1.0", nativeChange: false, kind: "patch" }));
+console.log(plan({ version: "1.1.0", nativeChange: true, kind: "minor" }));`}
+    />
+  }
+>
+  Escribe una función `plan(release)` que reciba `{ version, nativeChange, kind }` y, con la política `appVersion`, devuelva qué hacer: si hay cambio nativo, calcula la nueva versión con `bump`, indica que se necesita un build nuevo con esa runtime y envío a la tienda; si no lo hay, indica una actualización OTA sobre la runtime actual sin cambiar `version`. Prueba con un parche solo de JS y con un cambio nativo menor.
+</Challenge>
+
+## Errores comunes
+
+**Subir `version` para una corrección que va por OTA.** Publicas la actualización y nadie la recibe. Ocurre porque con `appVersion` la runtime cambió con `version` y no existe ningún build con esa runtime. Se detecta con `eas update:list`: la actualización existe, pero `eas channel:view` muestra que ninguna build instalada la pide. Revierte `version`, vuelve a publicar y reserva los cambios de versión para builds.
+
+**Escribir `versionCode` a mano en `app.config.ts` con `appVersionSource: "remote"`.** EAS ignora el valor local y el archivo miente. Ocurre por copiar una configuración antigua. Se detecta porque `eas build:version:get` no coincide con el archivo. Elimina el campo del archivo o cambia a `local` de forma consciente.
+
+**Changelog escrito después del lanzamiento, de memoria.** Faltan cambios y las fechas no cuadran con los builds. Ocurre porque se ve como documentación y no como parte del trabajo. Se detecta cuando alguien pregunta "¿en qué versión se arregló X?" y nadie lo sabe. Agrega la línea al `CHANGELOG.md` en el mismo commit que el cambio, bajo `Unreleased`.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué diferencia hay entre version, ios.buildNumber y android.versionCode?", back: "version es la semver que ven usuarios y tiendas; buildNumber y versionCode son contadores técnicos que cada tienda exige únicos y crecientes por subida." },
+    { front: "¿Qué hacen appVersionSource remote y autoIncrement en eas.json?", back: "EAS guarda buildNumber y versionCode en sus servidores y los incrementa automáticamente en cada build de producción." },
+    { front: "¿Cuál es el tradeoff de la política runtimeVersion appVersion?", back: "Es predecible (runtime = version), pero exige subir version solo con builds nuevos y hacer un build cada vez que se sube; un cambio nativo sin subir version deja la runtime igual y puede romper OTA." },
+    { front: "¿Qué comando fija el versionCode remoto en EAS?", back: "eas build:version:set --platform android" },
+    { front: "¿Qué categorías usa Keep a Changelog dentro de cada versión?", back: "Added, Changed, Deprecated, Removed, Fixed y Security; además una sección Unreleased para lo pendiente." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Corriges un error de texto y lo publicas por OTA. ¿Qué haces con version?",
+      options: [
+        { text: "Subir el patch a 1.0.1 para reflejar la corrección", correct: false, feedback: "Con la política appVersion, subir version cambia la runtime y ninguna app instalada recibiría la actualización." },
+        { text: "Dejarla igual y anotar la actualización en el changelog", correct: true, feedback: "Correcto: version cambia solo con builds nuevos; el changelog registra la OTA." },
+        { text: "Subir el minor porque es un cambio visible", correct: false, feedback: "Ni el tipo de cambio ni la visibilidad importan aquí: el problema es la runtime." },
+      ],
+    },
+    {
+      prompt: "Google Play rechaza el .aab porque el versionCode ya existe. ¿Qué configuración lo evita?",
+      options: [
+        { text: "runtimeVersion con política fingerprint", correct: false, feedback: "La runtime no interviene en el versionCode." },
+        { text: "appVersionSource remote con autoIncrement en el perfil production", correct: true, feedback: "Correcto: EAS incrementa el contador en cada build de producción." },
+        { text: "Escribir versionCode en app.config.ts y subirlo a mano", correct: false, feedback: "Funciona hasta que dos personas construyen con el mismo valor; es la fuente de errores que remote elimina." },
+      ],
+    },
+    {
+      prompt: "¿Qué ventaja tiene la política fingerprint sobre appVersion?",
+      options: [
+        { text: "Detecta cambios nativos automáticamente y permite varias version con la misma runtime", correct: true, feedback: "Correcto: a cambio, la runtime es un hash opaco más difícil de comunicar." },
+        { text: "Hace que las actualizaciones lleguen más rápido", correct: false, feedback: "La velocidad de entrega no depende de la política." },
+        { text: "Elimina la necesidad de builds nuevos", correct: false, feedback: "Ningún cambio nativo puede evitar un build nuevo, con cualquier política." },
+      ],
+    },
+  ]}
+/>
