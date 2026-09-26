@@ -19,11 +19,20 @@ export function buildSnackUrl({
   platform: SnackPlatform;
   sdkVersion?: string;
 }): string {
-  const params = new URLSearchParams({ platform, preview: 'true', theme: 'light', code });
+  // The `code` param always creates App.js, so TypeScript syntax would fail to parse; the
+  // `files` param (URL-encoded JSON) lets Snack treat the learner code as App.tsx.
+  const files = { 'App.tsx': { type: 'CODE', contents: code } };
+  const params = new URLSearchParams({
+    platform,
+    preview: 'true',
+    theme: 'light',
+    files: JSON.stringify(files),
+  });
   if (dependencies && Object.keys(dependencies).length > 0) {
     params.set('dependencies', serializeDependencies(dependencies));
   }
-  if (sdkVersion) params.set('sdkversion', sdkVersion);
+  // Snack reads the query param case-sensitively as `sdkVersion`.
+  if (sdkVersion) params.set('sdkVersion', sdkVersion);
   return `https://snack.expo.dev/embedded?${params.toString()}`;
 }
 
@@ -36,7 +45,7 @@ export function Snack({
   code: string;
   dependencies?: Record<string, string>;
   platform?: SnackPlatform;
-  /** Expo SDK version, e.g. "52.0.0"; Snack picks its default when omitted. */
+  /** Expo SDK version, e.g. "55.0.0"; Snack picks its default when omitted. */
   sdkVersion?: string;
 }) {
   return (

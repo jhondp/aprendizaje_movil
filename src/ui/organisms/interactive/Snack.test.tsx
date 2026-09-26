@@ -12,7 +12,10 @@ describe('buildSnackUrl', () => {
     );
     expect(url.origin + url.pathname).toBe('https://snack.expo.dev/embedded');
     expect(url.searchParams.get('platform')).toBe('android');
-    expect(url.searchParams.get('code')).toBe('const a = 1;');
+    expect(url.searchParams.has('code')).toBe(false);
+    expect(JSON.parse(url.searchParams.get('files') ?? '')).toEqual({
+      'App.tsx': { type: 'CODE', contents: 'const a = 1;' },
+    });
     expect(url.searchParams.get('dependencies')).toBe('expo-camera@~15.0.0,expo-image@*');
     expect(url.searchParams.get('preview')).toBe('true');
     expect(url.searchParams.get('theme')).toBe('light');
@@ -20,9 +23,9 @@ describe('buildSnackUrl', () => {
 
   it('passes the SDK version when given', () => {
     const url = new URL(buildSnackUrl({ code: 'x', platform: 'ios', sdkVersion: '52.0.0' }));
-    expect(url.searchParams.get('sdkversion')).toBe('52.0.0');
+    expect(url.searchParams.get('sdkVersion')).toBe('52.0.0');
     expect(
-      new URL(buildSnackUrl({ code: 'x', platform: 'ios' })).searchParams.has('sdkversion'),
+      new URL(buildSnackUrl({ code: 'x', platform: 'ios' })).searchParams.has('sdkVersion'),
     ).toBe(false);
   });
 
@@ -31,10 +34,14 @@ describe('buildSnackUrl', () => {
     expect(url.searchParams.has('dependencies')).toBe(false);
   });
 
-  it('round-trips code containing special characters exactly', () => {
-    const code = 'const a = "x&y=z#w";\nconsole.log(a);';
+  it('round-trips TypeScript code containing special characters exactly', () => {
+    const code = 'const a = "x&y=z#w" as const;\nconst n: number = 1;\nconsole.log(`${a}`, n);';
     const url = new URL(buildSnackUrl({ code, platform: 'web' }));
-    expect(url.searchParams.get('code')).toBe(code);
+    const files = JSON.parse(url.searchParams.get('files') ?? '') as Record<
+      string,
+      { contents: string }
+    >;
+    expect(files['App.tsx']?.contents).toBe(code);
   });
 });
 
@@ -49,7 +56,7 @@ describe('Snack', () => {
 
   it('forwards the SDK version to the embed URL', () => {
     render(<Snack code="x" sdkVersion="52.0.0" />);
-    expect(screen.getByTitle('Expo Snack').getAttribute('src')).toContain('sdkversion=52.0.0');
+    expect(screen.getByTitle('Expo Snack').getAttribute('src')).toContain('sdkVersion=52.0.0');
   });
 
   it('sandboxes the iframe without top-navigation privileges', () => {
