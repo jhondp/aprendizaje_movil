@@ -1323,7 +1323,7 @@ git commit -m "content: apply review findings"
   - `LessonProvider({ lessonId, children })` from `@/ui/organisms/interactive/LessonContext`.
   - `MdxProvider({ children })` from `@/ui/organisms/interactive/MdxProvider`.
   - `validateContent(rootDir: string): { ok: boolean; errors: string[] }` re-exported by `scripts/validate-content.ts` from `scripts/lib/validateContent.ts`.
-  - `validateLesson(source, relPath, stages): { id: string | null; stage: number | null; prereqs: string[]; links: string[]; errors: string[] }` and the helpers `extractProp(source: string, component: string, prop: string): string[]` (contents of every `` prop={`...`} `` template literal on that component) and `extractQuizQuestions(source: string): { prompt: string; options: { text: string; correct: boolean; feedback: string }[] }[]`, all exported from `scripts/lib/validateContent.ts`.
+  - `validateLesson(source, relPath, stages): { id: string | null; stage: number | null; hidden: boolean; prereqs: string[]; links: string[]; errors: string[] }` and the helpers `extractBlock(source: string, tag: string, from?: number): { start: number; end: number; text: string } | null` (source slice of one self-closing `<Tag ... />` block), `extractProp(source: string, component: string, prop: string): string | null` (contents of the first `` prop={`...`} `` template literal on that component, or `null`) and `extractQuizQuestions(source: string): QuizQuestionSource[]` where `QuizQuestionSource = { prompt: string; options: { text: string; correct: boolean; feedback: string }[] }`, all exported from `scripts/lib/validateContent.ts`. Plan A's validator already enforces the per-stage component limits (no `Sandpack`/`Snack` in stages 0-2, no `Snack` in stage 3); do not duplicate that rule.
   - `@vitest/coverage-v8` is already a devDependency (Plan A Task 1).
 - Produces: nothing consumed later.
 
@@ -1521,14 +1521,19 @@ Expected: the first and last tests PASS; `prereqs point backwards only`, `snack 
 
 - [ ] **Step 5: Add the four checks to `scripts/lib/validateContent.ts`**
 
-Inside `validateLesson`, after the existing section and component rules and before `return`, add (uses the exported helpers `extractProp` and `extractQuizQuestions` from the same file):
+Inside `validateLesson`, after the existing section and component rules and before `return`, add (uses the helpers `extractBlock`, `extractProp` and `extractQuizQuestions` already defined in the same file):
 
 ```ts
-  // Snack code must be a complete App.tsx with a default export.
-  for (const code of extractProp(source, 'Snack', 'code')) {
-    if (!/export\s+default\s+function\s+App\b/.test(code)) {
+  // Every Snack block's code must be a complete App.tsx with a default export.
+  let snackFrom = 0;
+  for (;;) {
+    const block = extractBlock(source, 'Snack', snackFrom);
+    if (!block) break;
+    const code = extractProp(block.text, 'Snack', 'code');
+    if (code !== null && !/export\s+default\s+function\s+App\b/.test(code)) {
       errors.push(`${relPath}: Snack code is missing "export default function App"`);
     }
+    snackFrom = block.end;
   }
 
   // Every quiz question has exactly one correct option.
@@ -1553,7 +1558,7 @@ Inside `validateLesson`, after the existing section and component rules and befo
   }
 ```
 
-Inside `validateContent`, replace the existing prereq loop so that it also checks stage order. `results` entries carry `relPath`, `id`, `stage`, `prereqs`, `links` and `errors` from `validateLesson`:
+Inside `validateContent`, replace the existing prereq loop so that it also checks stage order. `results` entries carry `relPath`, `id`, `stage`, `hidden`, `prereqs`, `links` and `errors` from `validateLesson`:
 
 ```ts
   const stageById = new Map<string, number | null>();
@@ -1694,6 +1699,6 @@ git commit -m "docs: expand README and add contributing guide"
 - Spec section 4 practice rule: preferences per stage plus the two hard limits; Terminal/Checklist-only lessons in stages 0, 6, 9 and 10 and the stage-8 `Playground` JWT lesson comply.
 - Spec section 5.2 frontmatter, including optional `hidden`, matches Global Constraints.
 - Spec section 6 props match Part 1.3, including `Snack` `dependencies` as an object and `Challenge` `solution` as `React.ReactNode`.
-- Plan A alignment (Task 18): `Course.lessons`, `Module.name`, `Lesson.load(): Promise<LessonComponent>`, `renderWithRepositories`, `LessonProvider`, `MdxProvider`, `validateContent` re-exported from `scripts/validate-content.ts`, `validateLesson` returning `{ id, stage, prereqs, links, errors }`, helpers `extractProp` and `extractQuizQuestions` from `scripts/lib/validateContent.ts`, `@vitest/coverage-v8` present, Vitest config inside `vite.config.ts`.
+- Plan A alignment (Task 18): `Course.lessons`, `Module.name`, `Lesson.load(): Promise<LessonComponent>`, `renderWithRepositories`, `LessonProvider`, `MdxProvider`, `validateContent` re-exported from `scripts/validate-content.ts`, `validateLesson` returning `{ id, stage, hidden, prereqs, links, errors }`, helpers `extractBlock`, `extractProp` (`string | null`) and `extractQuizQuestions` (`QuizQuestionSource[]`) from `scripts/lib/validateContent.ts`, per-stage component limits left to Plan A, `@vitest/coverage-v8` present, Vitest config inside `vite.config.ts`.
 - Stage 0 lesson 00 and the hidden demo lesson come from Plan A and are never rewritten by Task 1.
 - Every commit step runs `pnpm format` first so `prettier --check` in `pnpm lint` passes.
