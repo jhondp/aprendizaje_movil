@@ -1,0 +1,207 @@
+---
+id: "10-build-release-operaciones/10-salir-de-managed"
+title: "Salir del workflow managed: prebuild, config plugins y módulos nativos"
+stage: 10
+module: "Operar"
+order: 10
+minutes: 15
+prereqs: ["10-build-release-operaciones/09-monitoreo-sentry"]
+summary: "Entiende qué hace npx expo prebuild, cuándo un config plugin resuelve la necesidad de tocar código nativo y cómo agregar un módulo nativo sin abandonar el tooling de Expo."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás explicar qué genera `npx expo prebuild` y por qué EAS Build lo ejecuta por ti, escribir un config plugin mínimo que modifique la configuración nativa, y decidir con criterio cuándo necesitas un módulo nativo local en lugar de salir del workflow managed.
+
+**Prerrequisitos:** `10-build-release-operaciones/09-monitoreo-sentry`
+
+## Concepto
+
+Durante todo el curso trabajaste sin carpetas `ios/` ni `android/` en el repositorio. Eso es el **workflow managed**: Expo genera los proyectos nativos cuando hacen falta y tú solo mantienes `app.config.ts`, `package.json` y tu código. Tarde o temprano aparece un requisito que la configuración no cubre: una entrada en `AndroidManifest.xml` que ninguna librería expone, una clave en `Info.plist`, un SDK de terceros sin soporte para Expo. La reacción clásica era "eyectar" a React Native puro y perder el tooling. Hoy hay un camino intermedio que conviene entender bien.
+
+Piensa en una casa prefabricada. La fábrica produce la estructura a partir de tus planos (`app.config.ts`); si quieres un enchufe extra, no compras un terreno y construyes desde cero: cambias los planos y la fábrica vuelve a producirla. Y si la fábrica no ofrece ese enchufe, le entregas una instrucción de montaje (un config plugin) para que lo instale en cada producción. Solo si necesitas algo que ninguna fábrica hará, te planteas construir a mano.
+
+### Qué hace prebuild
+
+`npx expo prebuild` toma `app.config.ts` y las dependencias con código nativo y genera las carpetas `ios/` y `android/` completas: proyecto de Xcode, Gradle, manifest, plist, iconos y splash (https://docs.expo.dev/workflow/prebuild/). Es exactamente lo que EAS Build hace en el servidor al principio de cada build cuando esas carpetas no existen en el repositorio. Por eso nunca las viste: el proceso se llama **Continuous Native Generation** (CNG) y significa que las carpetas nativas son un artefacto generado, no código fuente.
+
+Puedes ejecutarlo en tu máquina para inspeccionar el resultado o para compilar localmente con `npx expo run:android` o `npx expo run:ios` (este último requiere macOS y Xcode). La opción `--clean` borra y regenera las carpetas, lo que garantiza que reflejan la configuración actual.
+
+<Callout kind="warning">
+  Si haces commit de `ios/` y `android/` y luego los editas a mano, esos cambios se pierden en el siguiente `prebuild --clean` y EAS Build dejará de regenerarlos (usa los tuyos). Es una decisión legítima, pero explícita: a partir de ahí tú mantienes los proyectos nativos. Mientras las carpetas estén en `.gitignore`, sigues en managed.
+</Callout>
+
+### Config plugins: modificar lo nativo desde JavaScript
+
+Un **config plugin** es una función que recibe la configuración de Expo y devuelve una configuración modificada, con instrucciones sobre qué tocar en los proyectos nativos cuando se ejecute prebuild (https://docs.expo.dev/config-plugins/introduction/). Las librerías con código nativo traen el suyo (`expo-camera`, `@sentry/react-native/expo`...). Tú puedes escribir uno local cuando necesitas un cambio que ninguna librería expone.
+
+Este plugin agrega un permiso a `AndroidManifest.xml` y una clave a `Info.plist`:
+
+```js
+// plugins/withNotesPlatformConfig.js
+const { withAndroidManifest, withInfoPlist } = require("expo/config-plugins");
+
+function addAndroidPermission(config, permission) {
+  return withAndroidManifest(config, (mod) => {
+    const manifest = mod.modResults.manifest;
+    manifest["uses-permission"] = manifest["uses-permission"] ?? [];
+    const exists = manifest["uses-permission"].some((p) => p.$["android:name"] === permission);
+    if (!exists) {
+      manifest["uses-permission"].push({ $: { "android:name": permission } });
+    }
+    return mod;
+  });
+}
+
+function addInfoPlistKey(config, key, value) {
+  return withInfoPlist(config, (mod) => {
+    mod.modResults[key] = value;
+    return mod;
+  });
+}
+
+module.exports = function withNotesPlatformConfig(config) {
+  config = addAndroidPermission(config, "android.permission.VIBRATE");
+  config = addInfoPlistKey(config, "ITSAppUsesNonExemptEncryption", false);
+  return config;
+};
+```
+
+Y se registra en `app.config.ts`:
+
+```ts
+plugins: [
+  "expo-router",
+  "./plugins/withNotesPlatformConfig",
+],
+```
+
+Dos detalles importan. El plugin se ejecuta en cada prebuild, así que debe ser **idempotente**: comprobar si el permiso ya existe antes de agregarlo evita duplicados. Y la clave `ITSAppUsesNonExemptEncryption` es un ejemplo útil: es la declaración de cifrado que App Store Connect pregunta en cada envío; ponerla en `false` (cuando la app solo usa HTTPS estándar) evita el formulario manual. Expo también expone ese caso como `ios.config.usesNonExemptEncryption`, lo que ilustra la regla: **antes de escribir un plugin, busca si la configuración ya tiene un campo para eso**. La lista de modificadores disponibles (`withAndroidManifest`, `withInfoPlist`, `withEntitlementsPlist`, `withGradleProperties`, `withAppBuildGradle`, entre otros) está en https://docs.expo.dev/config-plugins/plugins/.
+
+### Módulos nativos locales
+
+Cuando lo que necesitas es **código** nativo (una función en Kotlin o Swift), tampoco hace falta salir de managed. La **Expo Modules API** permite crear un módulo local dentro del repositorio:
+
+```sh
+npx create-expo-module@latest --local notes-haptics
+```
+
+Genera `modules/notes-haptics/` con un archivo Swift, uno Kotlin y su definición en TypeScript, más un config plugin propio si lo necesita. Prebuild lo enlaza automáticamente y EAS Build lo compila como cualquier otra dependencia. En la etapa de nativo viste el patrón desde el lado de JavaScript; aquí la novedad es que sigue funcionando con CNG.
+
+### Cuándo sí y cuándo no
+
+| Necesidad                                                     | Solución                                    |
+| ------------------------------------------------------------- | ------------------------------------------- |
+| Un campo de `Info.plist` o `AndroidManifest.xml`              | Campo de `app.config.ts` si existe; si no, config plugin local |
+| Cambiar Gradle, Podfile o entitlements                        | Config plugin local                         |
+| Una librería con código nativo                                | `npx expo install`; trae su propio plugin   |
+| Código nativo propio (Kotlin/Swift)                           | Módulo local con Expo Modules API           |
+| Un SDK de terceros que exige editar archivos nativos a mano   | Primero intenta un config plugin; muchos "requisitos manuales" son cambios de manifest o plist |
+| Un proyecto heredado con `ios/` y `android/` muy personalizados | Mantener las carpetas en el repositorio (workflow bare), sabiendo que pierdes CNG |
+
+La última fila es la única en la que "salir de managed" tiene sentido. Incluso entonces, el resto del tooling (EAS Build, Submit, Update, Expo Router) sigue funcionando: solo dejas de regenerar los proyectos nativos. La CLI de React Native sin Expo existe, pero no es el siguiente paso natural de un proyecto Expo: implica renunciar a prebuild, a los plugins y a la gestión de credenciales que llevas toda la etapa usando.
+
+## Práctica
+
+Sigue la sesión: genera los proyectos nativos, comprueba que el plugin se aplicó y vuelve a dejar el repositorio limpio.
+
+<Terminal
+  steps={[
+    { cmd: "npx expo prebuild --platform android --clean", out: "✔ Cleared android code\n✔ Created native directory\n✔ Updated package.json\n✔ Finished prebuild\n✔ Config synced" },
+    { cmd: "grep -n VIBRATE android/app/src/main/AndroidManifest.xml", out: "5:  <uses-permission android:name=\"android.permission.VIBRATE\"/>" },
+    { cmd: "npx expo prebuild --platform ios --clean && grep -A1 ITSAppUsesNonExemptEncryption ios/Notes/Info.plist", out: "✔ Cleared ios code\n✔ Created native directory\n✔ Finished prebuild\n✔ Config synced\n    <key>ITSAppUsesNonExemptEncryption</key>\n    <false/>" },
+    { cmd: "git status --short", out: "(no output: ios/ and android/ are listed in .gitignore, so the repository stays managed)" },
+    { cmd: "npx create-expo-module@latest --local notes-haptics", out: "✔ What is the name of the local module? … notes-haptics\n✔ What is the native module name? … NotesHaptics\n✔ What is the Android package name? … expo.modules.noteshaptics\n✔ Created the module in modules/notes-haptics\n\nYou can now import it with: import NotesHaptics from '../modules/notes-haptics';" },
+  ]}
+/>
+
+Antes de decidir que necesitas tocar algo nativo:
+
+<Checklist
+  id="10-build-release-operaciones/10-salir-de-managed/decision"
+  items={[
+    "Busqué en la documentación de app.config.ts si ya existe un campo para lo que necesito",
+    "Busqué si la librería que quiero usar trae su propio config plugin y se instala con npx expo install",
+    "Si el cambio es de manifest, plist, Gradle o entitlements, escribí un config plugin local idempotente",
+    "Si necesito código Kotlin o Swift propio, lo creé como módulo local con create-expo-module --local",
+    "ios/ y android/ siguen en .gitignore y npx expo prebuild --clean regenera el proyecto sin errores",
+    "Documenté en el README del proyecto qué hace cada plugin local y por qué existe",
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Plugin idempotente"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type Permission = { $: { "android:name": string } };
+type Manifest = { "uses-permission"?: Permission[] };
+
+function addPermission(manifest: Manifest, name: string): Manifest {
+  const current = manifest["uses-permission"] ?? [];
+  const exists = current.some((p) => p.$["android:name"] === name);
+  if (exists) return manifest;
+  return { ...manifest, "uses-permission": [...current, { $: { "android:name": name } }] };
+}
+
+let manifest: Manifest = {};
+manifest = addPermission(manifest, "android.permission.VIBRATE");
+manifest = addPermission(manifest, "android.permission.VIBRATE");
+manifest = addPermission(manifest, "android.permission.CAMERA");
+
+console.log((manifest["uses-permission"] ?? []).length);
+console.log((manifest["uses-permission"] ?? []).map((p) => p.$["android:name"]).join(","));`}
+    />
+  }
+>
+  Escribe una función `addPermission(manifest, name)` que agregue una entrada `uses-permission` al objeto de manifest solo si no existe ya. Llámala dos veces con `android.permission.VIBRATE` y una vez con `android.permission.CAMERA`, e imprime cuántos permisos hay (debe ser 2) y sus nombres. Es la misma lógica que usarías dentro de `withAndroidManifest`.
+</Challenge>
+
+## Errores comunes
+
+**Editar `AndroidManifest.xml` a mano tras un prebuild.** Funciona en local y desaparece en el siguiente build de EAS. Ocurre porque las carpetas nativas son generadas y EAS las regenera desde cero. Se detecta porque el build en la nube no tiene tu cambio. Solución: mueve el cambio a un config plugin o a un campo de `app.config.ts`.
+
+**Plugin que duplica entradas en cada prebuild.** El manifest acaba con tres permisos iguales o el plist con claves repetidas y el build falla o Google Play advierte. Ocurre porque el plugin agrega sin comprobar. Se detecta ejecutando `prebuild --clean` dos veces y comparando. Haz cada modificación idempotente.
+
+**Hacer commit de `ios/` y `android/` "por si acaso".** El repositorio pesa más, los conflictos de merge en archivos generados se multiplican y `prebuild` deja de aplicarse en EAS. Ocurre por copiar hábitos de proyectos sin Expo. Se detecta porque cambios en `app.config.ts` (icono, permisos) dejan de reflejarse en los builds. Mantén las carpetas en `.gitignore` salvo que hayas decidido conscientemente pasar al workflow bare.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué genera npx expo prebuild y a partir de qué?", back: "Las carpetas ios/ y android/ completas, a partir de app.config.ts y de las dependencias con código nativo. EAS Build lo ejecuta automáticamente cuando esas carpetas no están en el repositorio." },
+    { front: "¿Qué es un config plugin de Expo?", back: "Una función que recibe la configuración y describe cambios en los proyectos nativos (manifest, plist, Gradle) que prebuild aplica en cada generación." },
+    { front: "¿Por qué un config plugin debe ser idempotente?", back: "Porque se ejecuta en cada prebuild; si no comprueba antes de agregar, duplica entradas." },
+    { front: "¿Cómo agregas código Kotlin o Swift propio sin salir del workflow managed?", back: "Con un módulo local creado por npx create-expo-module@latest --local, que prebuild enlaza automáticamente." },
+    { front: "¿Cuándo tiene sentido mantener ios/ y android/ en el repositorio?", back: "Solo con proyectos nativos muy personalizados que ningún plugin puede reproducir; entonces pierdes la generación continua pero conservas EAS Build, Submit y Update." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Necesitas agregar un permiso a AndroidManifest.xml que ninguna librería declara. ¿Cuál es el primer paso correcto?",
+      options: [
+        { text: "Ejecutar prebuild, editar el manifest y hacer commit de android/", correct: false, feedback: "Eso te saca de la generación continua y el cambio se pierde si alguien regenera." },
+        { text: "Buscar un campo en app.config.ts (android.permissions) y, si no existe, escribir un config plugin local", correct: true, feedback: "Correcto: la configuración primero; el plugin cubre lo que la configuración no expone." },
+        { text: "Migrar el proyecto a la CLI de React Native", correct: false, feedback: "Es la opción más costosa para un cambio que un plugin resuelve en veinte líneas." },
+      ],
+    },
+    {
+      prompt: "Un compañero editó ios/Notes/Info.plist a mano y el cambio funciona en su Mac, pero el build de EAS no lo tiene. ¿Por qué?",
+      options: [
+        { text: "EAS Build regenera ios/ con prebuild porque la carpeta no está en el repositorio", correct: true, feedback: "Correcto: las carpetas nativas son un artefacto generado; el cambio debe vivir en la configuración o en un plugin." },
+        { text: "EAS Build no soporta Info.plist", correct: false, feedback: "Lo soporta; simplemente lo genera desde app.config.ts." },
+        { text: "Falta SENTRY_AUTH_TOKEN", correct: false, feedback: "Ese token no tiene relación con la configuración nativa." },
+      ],
+    },
+    {
+      prompt: "¿Qué pierdes al hacer commit de ios/ y android/ y editarlos a mano?",
+      options: [
+        { text: "EAS Build, EAS Submit y EAS Update dejan de funcionar", correct: false, feedback: "Siguen funcionando; solo dejas de regenerar los proyectos nativos." },
+        { text: "La generación continua: los cambios en app.config.ts ya no se reflejan en los proyectos nativos", correct: true, feedback: "Correcto: pasas a mantener tú los proyectos nativos, como en el workflow bare." },
+        { text: "Nada; es la práctica recomendada", correct: false, feedback: "La práctica recomendada es mantenerlos generados y en .gitignore." },
+      ],
+    },
+  ]}
+/>
