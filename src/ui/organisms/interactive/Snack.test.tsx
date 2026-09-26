@@ -22,6 +22,12 @@ describe('buildSnackUrl', () => {
     const url = new URL(buildSnackUrl({ code: 'x', platform: 'ios' }));
     expect(url.searchParams.has('dependencies')).toBe(false);
   });
+
+  it('round-trips code containing special characters exactly', () => {
+    const code = 'const a = "x&y=z#w";\nconsole.log(a);';
+    const url = new URL(buildSnackUrl({ code, platform: 'web' }));
+    expect(url.searchParams.get('code')).toBe(code);
+  });
 });
 
 describe('Snack', () => {
@@ -31,5 +37,13 @@ describe('Snack', () => {
     expect(frame.getAttribute('src')).toContain('https://snack.expo.dev/embedded?');
     expect(frame.getAttribute('src')).toContain('platform=ios');
     expect(screen.getByText(/necesita conexión/)).toBeInTheDocument();
+  });
+
+  it('sandboxes the iframe without top-navigation privileges', () => {
+    render(<Snack code="export default function App() { return null }" />);
+    const frame = screen.getByTitle('Expo Snack');
+    expect(frame.getAttribute('sandbox')).toBe(
+      'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals',
+    );
   });
 });

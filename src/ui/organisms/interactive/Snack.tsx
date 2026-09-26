@@ -41,6 +41,7 @@ export function Snack({
         src={buildSnackUrl({ code, dependencies, platform })}
         loading="lazy"
         allow="geolocation; camera; microphone"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals"
       />
       <p className={styles.note}>
         Este ejemplo se ejecuta en Expo Snack y necesita conexión a internet. Puedes abrirlo en tu
