@@ -12,7 +12,8 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest",
-    "validate:content": "tsx scripts/validate-content.ts"
+    "validate:content": "tsx scripts/validate-content.ts",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm validate:content && pnpm build"
   },
   "dependencies": {
     "@codesandbox/sandpack-react": "^2.19.0",
