@@ -1,0 +1,329 @@
+---
+id: "05-estado-datos-arquitectura/05-sqlite-y-securestore"
+title: "SQLite y SecureStore"
+stage: 5
+module: "Datos"
+order: 5
+minutes: 15
+prereqs: ["05-estado-datos-arquitectura/04-persistencia-asyncstorage-mmkv"]
+summary: "Guarda registros estructurados en una base SQLite local con expo-sqlite y secretos como tokens con expo-secure-store."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás crear una tabla de notas en SQLite con la API asíncrona de `expo-sqlite`, leer y escribir registros con parámetros, y guardar un token de sesión en `expo-secure-store`.
+
+**Prerrequisitos:** `05-estado-datos-arquitectura/04-persistencia-asyncstorage-mmkv`
+
+## Concepto
+
+AsyncStorage y MMKV son cajones con etiquetas: sacas y guardas por clave. Funcionan para preferencias, pero no para cientos de notas que quieres ordenar por fecha, filtrar por texto o contar. Para eso necesitas una base de datos. Y hay un tercer tipo de dato que no va en ninguno de los dos: los secretos.
+
+Piensa en tu casa otra vez. Los cajones etiquetados sirven para cosas sueltas. Tu colección de libros va en una estantería ordenada con un índice, donde puedes buscar por autor o por año (la base de datos). Y el pasaporte va en una caja fuerte (el almacenamiento seguro), aunque sea un solo documento, porque lo que importa no es el orden sino quién puede abrirla.
+
+### expo-sqlite
+
+`expo-sqlite` da acceso a una base SQLite en un archivo del dispositivo. Funciona en Expo Go y los datos sobreviven al cierre de la app. Documentación: https://docs.expo.dev/versions/latest/sdk/sqlite/
+
+```bash
+npx expo install expo-sqlite
+```
+
+La API actual es asíncrona. Las versiones antiguas usaban `openDatabase` y `transaction` con callbacks; si ves eso en un tutorial, está desactualizado.
+
+```ts
+import * as SQLite from "expo-sqlite";
+
+export type Note = { id: number; title: string; created_at: string };
+
+export async function openNotesDb() {
+  const db = await SQLite.openDatabaseAsync("notes.db");
+  await db.execAsync(`
+    PRAGMA journal_mode = WAL;
+    CREATE TABLE IF NOT EXISTS notes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+  `);
+  return db;
+}
+```
+
+Los métodos que usarás casi siempre:
+
+- **`execAsync(sql)`**: ejecuta uno o varios comandos sin parámetros ni resultado. Úsalo solo para crear tablas o migraciones con texto fijo, nunca con datos del usuario, porque no escapa los valores.
+- **`runAsync(sql, ...params)`**: ejecuta un `INSERT`, `UPDATE` o `DELETE` con parámetros. Devuelve `lastInsertRowId` y `changes`.
+- **`getAllAsync<T>(sql, ...params)`**: devuelve todas las filas como un arreglo de objetos.
+- **`getFirstAsync<T>(sql, ...params)`**: devuelve la primera fila o `null`.
+
+```ts
+export async function addNote(db: SQLite.SQLiteDatabase, title: string): Promise<number> {
+  const result = await db.runAsync(
+    "INSERT INTO notes (title, created_at) VALUES (?, ?)",
+    title,
+    new Date().toISOString(),
+  );
+  return result.lastInsertRowId;
+}
+
+export function listNotes(db: SQLite.SQLiteDatabase): Promise<Note[]> {
+  return db.getAllAsync<Note>("SELECT * FROM notes ORDER BY id DESC");
+}
+
+export async function deleteNote(db: SQLite.SQLiteDatabase, id: number): Promise<void> {
+  await db.runAsync("DELETE FROM notes WHERE id = ?", id);
+}
+```
+
+Los signos `?` son **parámetros**: SQLite recibe el valor por separado y nunca lo interpreta como SQL. Si concatenas el texto del usuario dentro de la consulta (`"... VALUES ('" + title + "')"`), una nota con un apóstrofo rompe la consulta y un texto malicioso puede modificar tu base. Esto se llama inyección SQL y los parámetros la evitan.
+
+Abre la base una sola vez y reutilízala. `expo-sqlite` también ofrece `SQLiteProvider` y el hook `useSQLiteContext` para compartir la conexión en todo el árbol de componentes; en esta etapa la abrirás desde un módulo y más adelante la esconderás detrás de un repositorio.
+
+### expo-secure-store
+
+`expo-secure-store` guarda pares clave-valor cifrados usando el Keychain en iOS y el Keystore en Android. Funciona en Expo Go, no funciona en la web, y está pensado para valores pequeños: históricamente algunas versiones de iOS rechazaban valores de más de unos 2048 bytes. Documentación: https://docs.expo.dev/versions/latest/sdk/securestore/
+
+```bash
+npx expo install expo-secure-store
+```
+
+```ts
+import * as SecureStore from "expo-secure-store";
+
+const TOKEN_KEY = "session_token";
+
+export function saveToken(token: string): Promise<void> {
+  return SecureStore.setItemAsync(TOKEN_KEY, token);
+}
+
+export function readToken(): Promise<string | null> {
+  return SecureStore.getItemAsync(TOKEN_KEY);
+}
+
+export function clearToken(): Promise<void> {
+  return SecureStore.deleteItemAsync(TOKEN_KEY);
+}
+```
+
+Las claves solo admiten caracteres alfanuméricos, `.`, `-` y `_`.
+
+<Callout kind="danger">
+  Los tokens de sesión, refresh tokens, claves de API del usuario y cualquier secreto van en `expo-secure-store`. Nunca en AsyncStorage, nunca en SQLite y nunca en MMKV sin cifrado: esos almacenes se guardan en texto plano y cualquiera con acceso a una copia de seguridad o a un dispositivo con root puede leerlos.
+</Callout>
+
+### Qué va en cada lugar
+
+<Callout kind="warning">
+  Elegir mal el almacén no da error: la app funciona igual hasta que crece o hasta que alguien revisa su seguridad. Decide antes de escribir el primer `setItem`.
+</Callout>
+
+| Dato | Almacén |
+| --- | --- |
+| Preferencias, tema, último filtro usado | AsyncStorage o MMKV |
+| Notas, tareas, mensajes: muchos registros que se consultan y ordenan | SQLite |
+| Token de sesión, refresh token, PIN | SecureStore |
+| Datos de una API que puedes volver a pedir | Caché de TanStack Query |
+
+## Práctica
+
+El Snack abre una base `notes.db`, crea la tabla `notes` y te deja agregar y borrar notas. Abajo, guarda un token de prueba en SecureStore y léelo. Recarga el Snack: las notas y el token siguen ahí. Estos módulos necesitan un dispositivo, así que usa la vista previa de iOS o Android, o abre el Snack en Expo Go.
+
+<Snack
+  platform="ios"
+  sdkVersion="56.0.0"
+  dependencies={{ 'expo-sqlite': '*', 'expo-secure-store': '*' }}
+  code={`import { useEffect, useState } from "react";
+import { Button, FlatList, StyleSheet, Text, TextInput, View } from "react-native";
+import * as SQLite from "expo-sqlite";
+import * as SecureStore from "expo-secure-store";
+
+async function openDb() {
+  const db = await SQLite.openDatabaseAsync("notes.db");
+  await db.execAsync(
+    "CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, created_at TEXT NOT NULL);"
+  );
+  return db;
+}
+
+export default function App() {
+  const [db, setDb] = useState(null);
+  const [notes, setNotes] = useState([]);
+  const [title, setTitle] = useState("");
+  const [token, setToken] = useState("(sin leer)");
+
+  const refresh = async (database) => {
+    setNotes(await database.getAllAsync("SELECT * FROM notes ORDER BY id DESC"));
+  };
+
+  useEffect(() => {
+    openDb().then((database) => {
+      setDb(database);
+      refresh(database);
+    });
+  }, []);
+
+  const add = async () => {
+    if (!db || title.trim() === "") return;
+    await db.runAsync("INSERT INTO notes (title, created_at) VALUES (?, ?)", title.trim(), new Date().toISOString());
+    setTitle("");
+    await refresh(db);
+  };
+
+  const remove = async (id) => {
+    await db.runAsync("DELETE FROM notes WHERE id = ?", id);
+    await refresh(db);
+  };
+
+  const saveToken = async () => {
+    await SecureStore.setItemAsync("session_token", "demo-" + Date.now());
+    setToken("guardado");
+  };
+
+  const readToken = async () => {
+    const value = await SecureStore.getItemAsync("session_token");
+    setToken(value ?? "(no hay token)");
+  };
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.row}>
+        <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="Nueva nota" />
+        <Button title="Agregar" onPress={add} />
+      </View>
+      <FlatList
+        data={notes}
+        keyExtractor={(n) => String(n.id)}
+        renderItem={({ item }) => (
+          <View style={styles.row}>
+            <Text style={styles.note}>{item.id}. {item.title}</Text>
+            <Button title="Borrar" onPress={() => remove(item.id)} />
+          </View>
+        )}
+      />
+      <Text style={styles.subtitle}>SecureStore: {token}</Text>
+      <View style={styles.row}>
+        <Button title="Guardar token" onPress={saveToken} />
+        <Button title="Leer token" onPress={readToken} />
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, paddingTop: 64, paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
+  row: { flexDirection: "row", alignItems: "center", gap: 8 },
+  input: { flex: 1, borderWidth: 1, borderColor: "#ccc", borderRadius: 6, padding: 8 },
+  note: { flex: 1, fontSize: 16 },
+  subtitle: { fontWeight: "600" },
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Buscar notas por texto"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="56.0.0"
+      dependencies={{ 'expo-sqlite': '*' }}
+      code={`import { useEffect, useState } from "react";
+import { FlatList, Text, TextInput, View } from "react-native";
+import * as SQLite from "expo-sqlite";
+
+async function openDb() {
+  const db = await SQLite.openDatabaseAsync("search.db");
+  await db.execAsync(
+    "CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL);"
+  );
+  const row = await db.getFirstAsync("SELECT COUNT(*) AS total FROM notes");
+  if (row.total === 0) {
+    for (const t of ["Comprar pan", "Llamar a Ana", "Pan para el desayuno", "Pagar la luz"]) {
+      await db.runAsync("INSERT INTO notes (title) VALUES (?)", t);
+    }
+  }
+  return db;
+}
+
+export default function App() {
+  const [db, setDb] = useState(null);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+
+  useEffect(() => {
+    openDb().then(setDb);
+  }, []);
+
+  useEffect(() => {
+    if (!db) return;
+    db.getAllAsync("SELECT * FROM notes WHERE title LIKE ? ORDER BY title", "%" + query + "%").then(setResults);
+  }, [db, query]);
+
+  return (
+    <View style={{ flex: 1, paddingTop: 64, paddingHorizontal: 16, gap: 12 }}>
+      <TextInput
+        style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 6, padding: 8 }}
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Buscar"
+      />
+      <FlatList
+        data={results}
+        keyExtractor={(n) => String(n.id)}
+        renderItem={({ item }) => <Text style={{ paddingVertical: 6 }}>{item.title}</Text>}
+      />
+    </View>
+  );
+}`}
+    />
+  }
+>
+  Crea una base `search.db` con una tabla `notes (id, title)`. Si la tabla está vacía, inserta cuatro notas de ejemplo usando `runAsync` con parámetros. Agrega un `TextInput` de búsqueda y muestra las notas cuyo título contenga el texto escrito, con `getAllAsync` y `LIKE ?`. El comodín `%` va en el valor del parámetro, no concatenado en el SQL.
+</Challenge>
+
+## Errores comunes
+
+**Concatenar texto del usuario en el SQL.** Se ve como `db.execAsync("INSERT INTO notes (title) VALUES ('" + title + "')")`. Pasa porque parece más directo que los parámetros. Una nota como `L'Oréal` rompe la consulta con un error de sintaxis, y un texto preparado puede borrar datos. Se detecta probando con un apóstrofo. Solución: `runAsync` con `?`.
+
+**Usar la API antigua de `expo-sqlite`.** Se ve como `SQLite.openDatabase("db")` y `db.transaction((tx) => tx.executeSql(...))`, copiado de un tutorial viejo. En las versiones actuales esos métodos ya no existen y la app falla con "is not a function". Se detecta por ese error. Solución: `openDatabaseAsync`, `runAsync` y `getAllAsync`.
+
+**Guardar el token en AsyncStorage "por ahora".** Se ve como `AsyncStorage.setItem("token", token)` en el flujo de login. Ocurre porque es la API que ya conoces y funciona igual. El token queda en texto plano. Se detecta en revisión de código buscando la palabra token cerca de AsyncStorage o MMKV. Solución: `SecureStore.setItemAsync`.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué método de expo-sqlite usas para un INSERT con valores del usuario?", back: "runAsync con parámetros ?, que devuelve lastInsertRowId y changes." },
+    { front: "¿Por qué execAsync no debe recibir datos del usuario?", back: "No escapa los valores; concatenar texto permite inyección SQL." },
+    { front: "¿Dónde guarda expo-secure-store los valores en iOS y Android?", back: "En el Keychain de iOS y en el Keystore de Android, cifrados." },
+    { front: "¿Dónde debe guardarse un token de sesión en una app de Expo?", back: "En expo-secure-store, nunca en AsyncStorage, SQLite ni MMKV sin cifrado." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Tu app guarda 500 tareas que el usuario filtra por fecha y estado. ¿Qué almacén encaja mejor?",
+      options: [
+        { text: "AsyncStorage con un JSON grande", correct: false, feedback: "Tendrías que leer y parsear todo para filtrar; no escala." },
+        { text: "SQLite", correct: true, feedback: "Correcto: registros estructurados que se consultan y ordenan." },
+        { text: "SecureStore", correct: false, feedback: "SecureStore es para secretos pequeños, no para colecciones." }
+      ]
+    },
+    {
+      prompt: "¿Qué hace el ? en db.runAsync(\"DELETE FROM notes WHERE id = ?\", id)?",
+      options: [
+        { text: "Marca un parámetro que SQLite recibe por separado, sin interpretarlo como SQL", correct: true, feedback: "Correcto: así se evita la inyección SQL." },
+        { text: "Borra todas las notas", correct: false, feedback: "Solo borra la nota con ese id." },
+        { text: "Es un comodín que coincide con cualquier id", correct: false, feedback: "Los comodines de texto en SQL son % y _ con LIKE." }
+      ]
+    },
+    {
+      prompt: "¿Cuál es un límite conocido de expo-secure-store?",
+      options: [
+        { text: "No funciona en Expo Go", correct: false, feedback: "Está incluido en Expo Go." },
+        { text: "Está pensado para valores pequeños y no funciona en la web", correct: true, feedback: "Correcto: algunas versiones de iOS rechazaban valores grandes y no hay soporte web." },
+        { text: "Solo guarda números", correct: false, feedback: "Guarda strings." }
+      ]
+    }
+  ]}
+/>

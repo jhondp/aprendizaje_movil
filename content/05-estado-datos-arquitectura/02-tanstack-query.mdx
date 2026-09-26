@@ -1,0 +1,316 @@
+---
+id: "05-estado-datos-arquitectura/02-tanstack-query"
+title: "TanStack Query"
+stage: 5
+module: "Datos"
+order: 2
+minutes: 15
+prereqs: ["05-estado-datos-arquitectura/01-zustand"]
+summary: "Obtén datos de una API con useQuery, entiende las query keys y la caché, y deja de escribir fetch dentro de useEffect."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás configurar TanStack Query en una app de React Native y mostrar datos de una API con `useQuery`, usando query keys para cachearlos.
+
+**Prerrequisitos:** `05-estado-datos-arquitectura/01-zustand`
+
+## Concepto
+
+En la lección de estado global separaste el estado del cliente del estado del servidor. TanStack Query (antes React Query) es la librería que se encarga del segundo: pide los datos, los guarda en caché, sabe cuándo están viejos, los vuelve a pedir y te da el estado de la petición listo para pintar. Documentación oficial: https://tanstack.com/query/latest/docs/framework/react/overview
+
+Piensa en una biblioteca con fotocopiadora. Cuando pides un artículo, el bibliotecario hace una copia y la guarda en una bandeja con una etiqueta (la query key). Si otra persona pide el mismo artículo, le da la copia de la bandeja de inmediato y, si la copia es vieja, va a buscar una nueva en segundo plano. Tú no te preocupas por el archivo ni por las copias: solo pides el artículo por su etiqueta.
+
+### Por qué no basta con fetch y useEffect
+
+Así se ve la versión a mano:
+
+```tsx
+const [posts, setPosts] = useState<Post[]>([]);
+const [loading, setLoading] = useState(true);
+const [error, setError] = useState<Error | null>(null);
+
+useEffect(() => {
+  fetch("https://jsonplaceholder.typicode.com/posts")
+    .then((res) => res.json())
+    .then(setPosts)
+    .catch(setError)
+    .finally(() => setLoading(false));
+}, []);
+```
+
+Funciona, pero cada pantalla repite estos tres estados, no hay caché (volver a la pantalla vuelve a descargar todo), no hay reintentos, dos pantallas que piden lo mismo hacen dos peticiones y, si la pantalla se desmonta antes de que llegue la respuesta, se actualiza estado de un componente que ya no existe. TanStack Query resuelve todo eso.
+
+### Instalar y configurar
+
+```bash
+npx expo install @tanstack/react-query
+```
+
+La caché vive en un `QueryClient`. Lo creas **una vez**, fuera de los componentes, y lo publicas con `QueryClientProvider` en la raíz de la app:
+
+```tsx
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+const queryClient = new QueryClient();
+
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <PostsScreen />
+    </QueryClientProvider>
+  );
+}
+```
+
+Con Expo Router, este proveedor va en `app/_layout.tsx`.
+
+### useQuery
+
+```tsx
+import { useQuery } from "@tanstack/react-query";
+
+type Post = { id: number; title: string; body: string };
+
+async function fetchPosts(): Promise<Post[]> {
+  const res = await fetch("https://jsonplaceholder.typicode.com/posts");
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  return res.json();
+}
+
+function PostsScreen() {
+  const { data, isPending, error } = useQuery({
+    queryKey: ["posts"],
+    queryFn: fetchPosts,
+  });
+
+  if (isPending) return <ActivityIndicator />;
+  if (error) return <Text>Error: {error.message}</Text>;
+  return <FlatList data={data} keyExtractor={(p) => String(p.id)} renderItem={({ item }) => <Text>{item.title}</Text>} />;
+}
+```
+
+Dos opciones obligatorias:
+
+- **`queryKey`**: un arreglo que identifica los datos. Es la etiqueta de la bandeja. Dos componentes con la misma key comparten caché y una sola petición.
+- **`queryFn`**: una función que devuelve una promesa con los datos o **lanza un error**. `fetch` no lanza error en respuestas 404 o 500, por eso se revisa `res.ok` y se lanza a mano.
+
+Y los campos que más vas a usar del resultado:
+
+- **`isPending`**: todavía no hay datos (primera carga). En la versión 5 este es el nombre correcto; `isLoading` existe pero significa "pendiente y además pidiendo", no lo uses para la carga inicial.
+- **`data`**: los datos, tipados según lo que devuelve `queryFn`.
+- **`error`**: el error lanzado por `queryFn`, o `null`.
+- **`isFetching`**: hay una petición en curso, incluida una recarga en segundo plano con datos ya visibles.
+
+### Keys con parámetros
+
+Si la consulta depende de un valor, ese valor va en la key:
+
+```tsx
+function PostDetail({ id }: { id: number }) {
+  const { data } = useQuery({
+    queryKey: ["posts", id],
+    queryFn: () =>
+      fetch("https://jsonplaceholder.typicode.com/posts/" + id).then((r) => r.json() as Promise<Post>),
+  });
+  return <Text>{data?.title}</Text>;
+}
+```
+
+`["posts", 1]` y `["posts", 2]` son entradas distintas en la caché. Cuando `id` cambia, la key cambia y TanStack Query pide los datos nuevos solo.
+
+### staleTime y gcTime
+
+Por defecto, un dato se considera **viejo** (stale) apenas llega, y se vuelve a pedir en segundo plano cuando un componente nuevo lo monta. En la web también se recarga al volver a enfocar la pestaña; en React Native ese comportamiento requiere conectar `focusManager` y `onlineManager` con `AppState` y el estado de red, como explica https://tanstack.com/query/latest/docs/framework/react/react-native. `staleTime` indica cuánto tiempo el dato se considera fresco. `gcTime` indica cuánto tiempo se guarda en caché un dato que ya no usa ningún componente (5 minutos por defecto).
+
+```ts
+useQuery({ queryKey: ["posts"], queryFn: fetchPosts, staleTime: 60_000 });
+```
+
+## Práctica
+
+El Snack muestra las publicaciones de jsonplaceholder. Toca una publicación para ver su detalle: la key `["posts", id]` crea una entrada nueva en la caché. Vuelve a la lista y abre la misma publicación otra vez: aparece al instante porque ya está en caché.
+
+<Snack
+  platform="ios"
+  sdkVersion="56.0.0"
+  dependencies={{ '@tanstack/react-query': '^5.0.0' }}
+  code={`import { useState } from "react";
+import { ActivityIndicator, Button, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+
+const API = "https://jsonplaceholder.typicode.com/posts";
+const queryClient = new QueryClient();
+
+async function getJson(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  return res.json();
+}
+
+function PostList({ onSelect }) {
+  const { data, isPending, error, isFetching } = useQuery({
+    queryKey: ["posts"],
+    queryFn: () => getJson(API),
+  });
+  if (isPending) return <ActivityIndicator size="large" />;
+  if (error) return <Text>Error: {error.message}</Text>;
+  return (
+    <View style={styles.flex}>
+      <Text style={styles.meta}>{isFetching ? "Actualizando..." : data.length + " publicaciones"}</Text>
+      <FlatList
+        data={data}
+        keyExtractor={(post) => String(post.id)}
+        renderItem={({ item }) => (
+          <Pressable onPress={() => onSelect(item.id)}>
+            <Text style={styles.row}>{item.id}. {item.title}</Text>
+          </Pressable>
+        )}
+      />
+    </View>
+  );
+}
+
+function PostDetail({ id, onBack }) {
+  const { data, isPending, error } = useQuery({
+    queryKey: ["posts", id],
+    queryFn: () => getJson(API + "/" + id),
+  });
+  return (
+    <View style={styles.flex}>
+      <Button title="Volver" onPress={onBack} />
+      {isPending ? <ActivityIndicator /> : null}
+      {error ? <Text>Error: {error.message}</Text> : null}
+      {data ? <Text style={styles.title}>{data.title}</Text> : null}
+      {data ? <Text>{data.body}</Text> : null}
+    </View>
+  );
+}
+
+function Screen() {
+  const [selected, setSelected] = useState(null);
+  if (selected !== null) return <PostDetail id={selected} onBack={() => setSelected(null)} />;
+  return <PostList onSelect={setSelected} />;
+}
+
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <View style={styles.container}>
+        <Screen />
+      </View>
+    </QueryClientProvider>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, paddingTop: 56, paddingHorizontal: 16 },
+  flex: { flex: 1, gap: 8 },
+  meta: { color: "#666" },
+  row: { paddingVertical: 10, borderBottomWidth: 1, borderColor: "#eee" },
+  title: { fontSize: 20, fontWeight: "600" },
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Comentarios de una publicación"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="56.0.0"
+      dependencies={{ '@tanstack/react-query': '^5.0.0' }}
+      code={`import { ActivityIndicator, FlatList, Text, View } from "react-native";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+
+const queryClient = new QueryClient();
+
+async function fetchComments(postId) {
+  const res = await fetch("https://jsonplaceholder.typicode.com/posts/" + postId + "/comments");
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  return res.json();
+}
+
+function Comments({ postId }) {
+  const { data, isPending, error } = useQuery({
+    queryKey: ["posts", postId, "comments"],
+    queryFn: () => fetchComments(postId),
+  });
+  if (isPending) return <ActivityIndicator />;
+  if (error) return <Text>Error: {error.message}</Text>;
+  return (
+    <FlatList
+      data={data}
+      keyExtractor={(c) => String(c.id)}
+      renderItem={({ item }) => (
+        <View style={{ paddingVertical: 8 }}>
+          <Text style={{ fontWeight: "600" }}>{item.email}</Text>
+          <Text>{item.body}</Text>
+        </View>
+      )}
+    />
+  );
+}
+
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <View style={{ flex: 1, paddingTop: 56, paddingHorizontal: 16 }}>
+        <Comments postId={1} />
+      </View>
+    </QueryClientProvider>
+  );
+}`}
+    />
+  }
+>
+  Crea un componente `Comments` que reciba `postId` y muestre los comentarios de https://jsonplaceholder.typicode.com/posts/1/comments con `useQuery`. Usa la key `["posts", postId, "comments"]`, lanza un error si la respuesta no es `ok` y muestra el email y el texto de cada comentario.
+</Challenge>
+
+## Errores comunes
+
+**Crear el `QueryClient` dentro del componente.** Se ve como `const queryClient = new QueryClient()` dentro de `App`. Pasa por copiar el ejemplo sin mirar dónde va. Cada render crea una caché vacía y todo se vuelve a pedir. Se detecta porque la lista vuelve a mostrar el indicador de carga en situaciones en que debería salir de la caché. Solución: créalo a nivel de módulo.
+
+**No lanzar error cuando la respuesta HTTP falla.** Se ve como `queryFn: () => fetch(url).then((r) => r.json())`. Ocurre porque se asume que `fetch` falla con un 404, y no es así. TanStack Query recibe el cuerpo de error como si fueran datos válidos, y la pantalla se rompe al intentar leer campos inexistentes. Se detecta cuando `error` es `null` pero `data` tiene una forma inesperada. Solución: revisar `res.ok` y lanzar.
+
+**Dejar fuera de la key un valor del que depende la consulta.** Se ve como `queryKey: ["post"]` con `queryFn` que usa `id`. Al cambiar de publicación se muestra la anterior, porque para la caché es la misma entrada. Se detecta cuando el detalle no cambia al navegar. Solución: toda variable que use `queryFn` va en `queryKey`.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué problema resuelve TanStack Query?", back: "Gestiona el estado del servidor: peticiones, caché, recargas, reintentos y estado de carga y error." },
+    { front: "¿Para qué sirve queryKey en useQuery?", back: "Identifica los datos en la caché; misma key significa misma entrada y una sola petición compartida." },
+    { front: "En TanStack Query v5, ¿qué campo indica la primera carga sin datos?", back: "isPending." },
+    { front: "¿Por qué una queryFn debe revisar res.ok?", back: "Porque fetch no lanza error en respuestas 4xx o 5xx, y TanStack Query solo detecta errores lanzados." },
+    { front: "¿Qué diferencia hay entre staleTime y gcTime?", back: "staleTime es cuánto tiempo el dato se considera fresco; gcTime es cuánto se guarda en caché cuando nadie lo usa." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Dónde debes crear el QueryClient?",
+      options: [
+        { text: "Dentro de cada pantalla que hace consultas", correct: false, feedback: "Cada pantalla tendría su propia caché y no compartirían datos." },
+        { text: "Una vez, a nivel de módulo, y publicarlo con QueryClientProvider en la raíz", correct: true, feedback: "Correcto: una sola caché para toda la app." },
+        { text: "Dentro de la queryFn", correct: false, feedback: "La queryFn solo obtiene datos; no crea la caché." }
+      ]
+    },
+    {
+      prompt: "Dos componentes montados a la vez usan queryKey: [\"posts\"]. ¿Cuántas peticiones se hacen?",
+      options: [
+        { text: "Una, compartida por ambos", correct: true, feedback: "Correcto: la misma key deduplica la petición." },
+        { text: "Dos, una por componente", correct: false, feedback: "TanStack Query deduplica consultas con la misma key." },
+        { text: "Ninguna hasta que el usuario toque la pantalla", correct: false, feedback: "useQuery pide los datos al montarse." }
+      ]
+    },
+    {
+      prompt: "Una pantalla de detalle usa queryKey: [\"post\"] y una queryFn que depende de id. ¿Qué ocurre al cambiar de id?",
+      options: [
+        { text: "Se piden los datos del nuevo id", correct: false, feedback: "La key no cambió, así que para la caché es la misma consulta." },
+        { text: "Se sigue mostrando la publicación anterior", correct: true, feedback: "Correcto: id debe formar parte de la key." },
+        { text: "La app lanza un error", correct: false, feedback: "No hay error; el fallo es que se reutiliza la caché equivocada." }
+      ]
+    }
+  ]}
+/>

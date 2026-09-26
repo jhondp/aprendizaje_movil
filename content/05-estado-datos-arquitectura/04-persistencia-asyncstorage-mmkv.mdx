@@ -1,0 +1,285 @@
+---
+id: "05-estado-datos-arquitectura/04-persistencia-asyncstorage-mmkv"
+title: "Persistencia: AsyncStorage y MMKV"
+stage: 5
+module: "Datos"
+order: 4
+minutes: 12
+prereqs: ["05-estado-datos-arquitectura/03-errores-loading-y-reintentos"]
+summary: "Guarda datos simples entre sesiones con AsyncStorage, conoce MMKV como alternativa rápida y persiste un store de Zustand."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás guardar y leer datos clave-valor que sobreviven al cierre de la app con AsyncStorage, explicar cuándo conviene MMKV y persistir un store de Zustand.
+
+**Prerrequisitos:** `05-estado-datos-arquitectura/03-errores-loading-y-reintentos`
+
+## Concepto
+
+Todo lo que guardaste hasta ahora con `useState` o con Zustand vive en memoria. Cierras la app y desaparece. Para que las preferencias del usuario, un borrador o la última pestaña abierta sobrevivan, necesitas escribirlos en el almacenamiento del dispositivo.
+
+Piensa en una pizarra y una libreta. La pizarra (la memoria) es rápida y cómoda, pero la borran al final del día. La libreta (el almacenamiento persistente) tarda un poco más en escribirse, pero lo que anotas sigue ahí mañana. Una app bien hecha escribe en la libreta lo que no puede perder y, al abrir, copia de la libreta a la pizarra.
+
+### AsyncStorage
+
+`@react-native-async-storage/async-storage` es un almacén clave-valor asíncrono, sin cifrar, que funciona en Expo Go. Solo guarda **strings**. Documentación: https://docs.expo.dev/versions/latest/sdk/async-storage/ y https://react-native-async-storage.github.io/async-storage/docs/install
+
+```bash
+npx expo install @react-native-async-storage/async-storage
+```
+
+```ts
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+await AsyncStorage.setItem("draft", "Comprar pan");
+const draft = await AsyncStorage.getItem("draft"); // "Comprar pan" or null
+await AsyncStorage.removeItem("draft");
+```
+
+Para guardar objetos, conviértelos a JSON y vuelve a parsearlos al leer. Protege el `JSON.parse`: un valor corrupto o de una versión anterior de la app no debe tumbar la pantalla.
+
+```ts
+type Settings = { fontSize: number; darkMode: boolean };
+
+const DEFAULT_SETTINGS: Settings = { fontSize: 16, darkMode: false };
+
+export async function saveSettings(settings: Settings): Promise<void> {
+  await AsyncStorage.setItem("settings", JSON.stringify(settings));
+}
+
+export async function loadSettings(): Promise<Settings> {
+  const raw = await AsyncStorage.getItem("settings");
+  if (raw === null) return DEFAULT_SETTINGS;
+  try {
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
+```
+
+Todas las operaciones devuelven promesas. Lo habitual es leer en un `useEffect` al montar la pantalla y escribir cuando el usuario cambia algo.
+
+### Persistir un store de Zustand
+
+Zustand trae el middleware `persist`, que guarda el store automáticamente cada vez que cambia y lo restaura al abrir la app. Le indicas un nombre (la clave) y un almacenamiento:
+
+```ts
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
+
+type PrefsState = { fontSize: number; setFontSize: (size: number) => void };
+
+export const usePrefsStore = create<PrefsState>()(
+  persist(
+    (set) => ({
+      fontSize: 16,
+      setFontSize: (fontSize) => set({ fontSize }),
+    }),
+    {
+      name: "prefs",
+      storage: createJSONStorage(() => AsyncStorage),
+    },
+  ),
+);
+```
+
+Aquí se ve por qué `create<T>()` lleva dos pares de paréntesis: el middleware se inserta en el segundo sin perder los tipos. Como AsyncStorage es asíncrono, el primer render muestra el valor por defecto y un instante después aparece el valor restaurado. Si eso produce un parpadeo molesto, espera a que termine la hidratación con `usePrefsStore.persist.hasHydrated()`.
+
+### MMKV
+
+`react-native-mmkv` (https://github.com/mrousavy/react-native-mmkv) es un almacén clave-valor escrito en C++ que se accede de forma **síncrona** a través de JSI. Es mucho más rápido que AsyncStorage, guarda strings, números, booleanos y buffers, y admite cifrado con una clave. A cambio, trae código nativo que no está incluido en Expo Go: necesitas un development build (`npx expo prebuild` o un build de EAS).
+
+```ts
+import { createMMKV } from "react-native-mmkv";
+
+export const storage = createMMKV();
+
+storage.set("user.name", "Ana");
+storage.set("launches", 3);
+const name = storage.getString("user.name"); // "Ana"
+const launches = storage.getNumber("launches"); // 3
+storage.remove("user.name");
+```
+
+No hay `await`: el valor está disponible en la misma línea. Eso elimina el parpadeo de hidratación y es la razón principal para elegir MMKV en apps grandes.
+
+### Cuál elegir
+
+| Criterio | AsyncStorage | MMKV |
+| --- | --- | --- |
+| Funciona en Expo Go | Sí | No, requiere development build |
+| API | Asíncrona | Síncrona |
+| Tipos | Solo string | string, number, boolean, buffer |
+| Cifrado | No | Opcional con clave |
+| Uso típico | Preferencias, borradores, caché pequeña | Lo mismo con mejor rendimiento y lectura inmediata |
+
+Ninguno de los dos es una base de datos: si necesitas buscar, filtrar u ordenar cientos de registros, usa SQLite, que ves en la siguiente lección. Y ninguno es un lugar para secretos: los tokens de sesión van en un almacenamiento seguro, también en la siguiente lección.
+
+## Práctica
+
+El Snack guarda un borrador de nota en AsyncStorage cada vez que pulsas "Guardar" y lo recupera al abrir. Escribe algo, guárdalo y recarga el Snack: el texto sigue ahí. Luego pulsa "Borrar" y vuelve a recargar.
+
+<Snack
+  platform="ios"
+  sdkVersion="56.0.0"
+  dependencies={{ '@react-native-async-storage/async-storage': '*' }}
+  code={`import { useEffect, useState } from "react";
+import { ActivityIndicator, Button, StyleSheet, Text, TextInput, View } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const DRAFT_KEY = "note-draft";
+
+export default function App() {
+  const [text, setText] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const [status, setStatus] = useState("");
+
+  useEffect(() => {
+    AsyncStorage.getItem(DRAFT_KEY)
+      .then((saved) => {
+        if (saved !== null) setText(saved);
+        setStatus(saved === null ? "Sin borrador guardado" : "Borrador recuperado");
+      })
+      .catch(() => setStatus("No se pudo leer el borrador"))
+      .finally(() => setLoaded(true));
+  }, []);
+
+  const save = async () => {
+    await AsyncStorage.setItem(DRAFT_KEY, text);
+    setStatus("Guardado a las " + new Date().toLocaleTimeString());
+  };
+
+  const clear = async () => {
+    await AsyncStorage.removeItem(DRAFT_KEY);
+    setText("");
+    setStatus("Borrador eliminado");
+  };
+
+  if (!loaded) return <ActivityIndicator style={styles.container} />;
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Borrador de nota</Text>
+      <TextInput
+        style={styles.input}
+        value={text}
+        onChangeText={setText}
+        placeholder="Escribe algo"
+        multiline
+      />
+      <View style={styles.row}>
+        <Button title="Guardar" onPress={save} />
+        <Button title="Borrar" onPress={clear} />
+      </View>
+      <Text style={styles.status}>{status}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, paddingTop: 64, paddingHorizontal: 16, gap: 12 },
+  title: { fontSize: 20, fontWeight: "600" },
+  input: { minHeight: 100, borderWidth: 1, borderColor: "#ccc", borderRadius: 6, padding: 8 },
+  row: { flexDirection: "row", gap: 12 },
+  status: { color: "#666" },
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Contador de aperturas"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="56.0.0"
+      dependencies={{ '@react-native-async-storage/async-storage': '*' }}
+      code={`import { useEffect, useState } from "react";
+import { Button, Text, View } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const KEY = "launch-count";
+
+async function registerLaunch() {
+  const raw = await AsyncStorage.getItem(KEY);
+  const previous = raw === null ? 0 : Number(raw);
+  const next = Number.isNaN(previous) ? 1 : previous + 1;
+  await AsyncStorage.setItem(KEY, String(next));
+  return next;
+}
+
+export default function App() {
+  const [count, setCount] = useState(null);
+
+  useEffect(() => {
+    registerLaunch().then(setCount);
+  }, []);
+
+  const reset = async () => {
+    await AsyncStorage.removeItem(KEY);
+    setCount(0);
+  };
+
+  return (
+    <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 12 }}>
+      <Text style={{ fontSize: 20 }}>
+        {count === null ? "Cargando..." : "Has abierto la app " + count + " veces"}
+      </Text>
+      <Button title="Reiniciar" onPress={reset} />
+    </View>
+  );
+}`}
+    />
+  }
+>
+  Escribe una función `registerLaunch` que lea la clave `launch-count` de AsyncStorage, le sume 1 (tratando `null` o un valor no numérico como 0) y guarde el nuevo valor como string. Llámala al montar la app, muestra cuántas veces se ha abierto y agrega un botón que reinicie el contador.
+</Challenge>
+
+## Errores comunes
+
+**Guardar un objeto sin `JSON.stringify`.** Se ve como `AsyncStorage.setItem("settings", settings)`. Pasa porque se asume que la librería serializa sola. Se guarda `"[object Object]"` o la llamada falla, y al leer no recuperas nada útil. Se detecta leyendo la clave y viendo ese texto. Solución: `JSON.stringify` al guardar y `JSON.parse` protegido al leer.
+
+**Olvidar que la lectura es asíncrona.** Se ve como `const draft = AsyncStorage.getItem("draft")` y luego `setText(draft)`. Ocurre por la costumbre de las APIs síncronas. `draft` es una promesa, no un string, y el `TextInput` recibe un objeto. Se detecta con errores de tipo en TypeScript o con un texto vacío. Solución: `await` o `.then`.
+
+**Instalar MMKV y abrir la app en Expo Go.** Se ve como un error al iniciar que dice que el módulo nativo no se encontró. Pasa porque MMKV incluye código nativo que Expo Go no trae. Se detecta por el mensaje de error al importar la librería. Solución: crear un development build o usar AsyncStorage mientras tanto.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué tipo de valores guarda AsyncStorage?", back: "Solo strings; los objetos se guardan con JSON.stringify y se leen con JSON.parse." },
+    { front: "¿Qué ventaja principal tiene MMKV sobre AsyncStorage?", back: "Es síncrono y mucho más rápido, y admite cifrado con clave." },
+    { front: "¿Por qué MMKV no funciona en Expo Go?", back: "Incluye código nativo que Expo Go no trae; necesita un development build." },
+    { front: "¿Qué middleware de Zustand guarda el store en el almacenamiento del dispositivo?", back: "persist, junto con createJSONStorage(() => AsyncStorage)." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué devuelve AsyncStorage.getItem(\"clave\") si la clave no existe?",
+      options: [
+        { text: "Una promesa que se resuelve con null", correct: true, feedback: "Correcto: siempre es asíncrono y devuelve null si no hay valor." },
+        { text: "undefined de forma síncrona", correct: false, feedback: "AsyncStorage es asíncrono; devuelve una promesa." },
+        { text: "Lanza un error", correct: false, feedback: "Una clave inexistente no es un error." }
+      ]
+    },
+    {
+      prompt: "Estás prototipando en Expo Go y necesitas guardar las preferencias del usuario. ¿Qué usas?",
+      options: [
+        { text: "MMKV", correct: false, feedback: "MMKV requiere un development build." },
+        { text: "AsyncStorage", correct: true, feedback: "Correcto: funciona en Expo Go y basta para preferencias." },
+        { text: "Una variable global", correct: false, feedback: "Vive en memoria y se pierde al cerrar la app." }
+      ]
+    },
+    {
+      prompt: "¿Por qué un store persistido con AsyncStorage puede mostrar un valor por defecto un instante antes del valor guardado?",
+      options: [
+        { text: "Porque la restauración es asíncrona", correct: true, feedback: "Correcto: el primer render ocurre antes de que termine la lectura." },
+        { text: "Porque persist borra el valor al abrir", correct: false, feedback: "persist restaura el valor, no lo borra." },
+        { text: "Porque Zustand no admite persistencia", correct: false, feedback: "Zustand trae el middleware persist." }
+      ]
+    }
+  ]}
+/>

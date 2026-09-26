@@ -1,0 +1,264 @@
+---
+id: "05-estado-datos-arquitectura/00-estado-global"
+title: "Estado global: Context vs Zustand vs Redux"
+stage: 5
+module: "Estado"
+order: 0
+minutes: 12
+prereqs: ["04-react-native-expo/11-proyecto-app-de-notas"]
+summary: "Distingue estado local, estado global y estado del servidor, y elige entre Context, Zustand y Redux Toolkit según el caso."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás decidir cuándo un dato debe vivir en estado local, en un Context de React o en un store global como Zustand, y justificar la elección.
+
+**Prerrequisitos:** `04-react-native-expo/11-proyecto-app-de-notas`
+
+## Concepto
+
+En la app de notas de la etapa anterior, la lista de notas vivía en un `useState` de la pantalla principal. Funcionaba mientras solo una pantalla la necesitaba. En cuanto la pantalla de detalle, la de edición y un contador en la barra de pestañas quieren leer o modificar esas notas, aparece la pregunta de esta lección: ¿dónde guardo un dato que muchas partes de la app necesitan?
+
+Piensa en una casa. Cada persona tiene objetos en su cuarto (estado local): solo esa persona los usa. La nevera está en la cocina (estado global): todos la consultan y cualquiera puede agregar o sacar algo. Y el supermercado es otro lugar (estado del servidor): tú no controlas su inventario, solo llevas una copia a casa que en algún momento deja de estar fresca. Mezclar las tres cosas es el origen de muchos errores: guardar en la nevera lo que solo usa una persona, o creer que la copia de la nevera es la verdad del supermercado.
+
+### Tres tipos de estado
+
+- **Estado local**: pertenece a un componente. El texto de un `TextInput`, si un modal está abierto. Se queda en `useState`.
+- **Estado global del cliente**: datos que crea la app y comparten varias pantallas. El usuario con sesión iniciada, las preferencias de tema, un carrito. Aquí entran Context, Zustand o Redux.
+- **Estado del servidor**: datos que viven en una API y la app solo cachea. La lista de publicaciones de un backend. Lo resuelve una librería de fetching, que ves en la lección `05-estado-datos-arquitectura/02-tanstack-query`.
+
+La regla práctica: empieza local y sube el estado solo cuando dos componentes que no son padre e hijo directo lo necesitan.
+
+### Context de React
+
+Context es la herramienta que React ya trae. Un proveedor publica un valor y cualquier descendiente lo lee con `useContext`. Documentación: https://react.dev/reference/react/useContext
+
+```tsx
+import { createContext, useContext, useState, type ReactNode } from "react";
+
+type CounterValue = { count: number; increment: () => void };
+
+const CounterContext = createContext<CounterValue | null>(null);
+
+export function CounterProvider({ children }: { children: ReactNode }) {
+  const [count, setCount] = useState(0);
+  const increment = () => setCount((c) => c + 1);
+  return (
+    <CounterContext.Provider value={{ count, increment }}>
+      {children}
+    </CounterContext.Provider>
+  );
+}
+
+export function useCounter(): CounterValue {
+  const value = useContext(CounterContext);
+  if (!value) throw new Error("useCounter must be used inside CounterProvider");
+  return value;
+}
+```
+
+Context es ideal para valores que cambian poco: tema, idioma, el usuario actual. Su costo aparece cuando el valor cambia a menudo: **todos** los componentes que llaman a `useContext` de ese proveedor se vuelven a renderizar, aunque solo usen una parte del valor. Además necesitas un proveedor que envuelva el árbol y, si tienes muchos contextos, terminas con una pirámide de proveedores.
+
+### Zustand
+
+Zustand es un store pequeño basado en hooks. No necesita proveedor: creas el store una vez y cualquier componente lo lee. Documentación: https://zustand.docs.pmnd.rs/
+
+```tsx
+import { create } from "zustand";
+
+type CounterState = { count: number; increment: () => void };
+
+export const useCounterStore = create<CounterState>()((set) => ({
+  count: 0,
+  increment: () => set((state) => ({ count: state.count + 1 })),
+}));
+
+// In any component:
+const count = useCounterStore((state) => state.count);
+```
+
+La diferencia clave es el **selector** `(state) => state.count`: el componente solo se vuelve a renderizar cuando cambia lo que seleccionó. Eso hace a Zustand una buena opción para estado global que cambia con frecuencia. Lo estudias a fondo en la siguiente lección.
+
+### Redux Toolkit
+
+Redux es la librería de estado global más usada históricamente en la industria, y Redux Toolkit (https://redux-toolkit.js.org/) es su forma moderna y oficial. Organiza el estado en slices con reducers puros, pasa todo cambio por acciones despachadas y ofrece herramientas de depuración muy maduras, como el viaje en el tiempo entre estados. El precio es más código y más conceptos (store, slice, dispatch, middleware) para problemas que en una app pequeña o mediana resuelve un store de Zustand en diez líneas. Este curso usa Zustand; vas a encontrar Redux Toolkit en equipos grandes o en proyectos con años de historia, y lo que aprendas aquí sobre selectores y acciones se traslada casi directo.
+
+### Cómo decidir
+
+| Situación | Herramienta |
+| --- | --- |
+| Solo un componente usa el dato | `useState` |
+| Valor que cambia poco (tema, idioma, usuario) | Context |
+| Estado del cliente que cambia seguido y comparten varias pantallas | Zustand |
+| Equipo grande con convenciones Redux ya establecidas | Redux Toolkit |
+| Datos que vienen de una API | Librería de estado del servidor |
+
+## Práctica
+
+El Snack monta dos contadores. El de arriba usa Context y el de abajo usa Zustand. Cada fila muestra cuántas veces se ha renderizado. Pulsa los botones y observa: con Context, la etiqueta que no lee el contador también se vuelve a renderizar; con Zustand, solo lo hace el componente que seleccionó `count`.
+
+El código del Snack no tiene anotaciones de tipo porque el editor en línea lo ejecuta como JavaScript; en tu proyecto usa las versiones tipadas de arriba.
+
+<Snack
+  platform="ios"
+  sdkVersion="56.0.0"
+  dependencies={{ zustand: '^5.0.0' }}
+  code={`import { createContext, useContext, useRef, useState } from "react";
+import { Button, StyleSheet, Text, View } from "react-native";
+import { create } from "zustand";
+
+const CounterContext = createContext(null);
+
+function CounterProvider({ children }) {
+  const [count, setCount] = useState(0);
+  const increment = () => setCount((c) => c + 1);
+  return (
+    <CounterContext.Provider value={{ count, increment }}>
+      {children}
+    </CounterContext.Provider>
+  );
+}
+
+function useRenders() {
+  const renders = useRef(0);
+  renders.current += 1;
+  return renders.current;
+}
+
+function ContextCount() {
+  const { count, increment } = useContext(CounterContext);
+  const renders = useRenders();
+  return <Button title={"Context: " + count + " (renders " + renders + ")"} onPress={increment} />;
+}
+
+function ContextLabel() {
+  useContext(CounterContext);
+  return <Text>Etiqueta con Context, renders: {useRenders()}</Text>;
+}
+
+const useCounterStore = create((set) => ({
+  count: 0,
+  increment: () => set((state) => ({ count: state.count + 1 })),
+}));
+
+function StoreCount() {
+  const count = useCounterStore((state) => state.count);
+  const increment = useCounterStore((state) => state.increment);
+  const renders = useRenders();
+  return <Button title={"Zustand: " + count + " (renders " + renders + ")"} onPress={increment} />;
+}
+
+function StoreLabel() {
+  useCounterStore((state) => state.increment);
+  return <Text>Etiqueta con Zustand, renders: {useRenders()}</Text>;
+}
+
+export default function App() {
+  return (
+    <View style={styles.container}>
+      <CounterProvider>
+        <ContextCount />
+        <ContextLabel />
+      </CounterProvider>
+      <View style={styles.separator} />
+      <StoreCount />
+      <StoreLabel />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", padding: 24, gap: 8 },
+  separator: { height: 32 },
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Tema claro y oscuro con Context"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="56.0.0"
+      code={`import { createContext, useContext, useState } from "react";
+import { Button, Text, View } from "react-native";
+
+const ThemeContext = createContext({ dark: false, toggle: () => {} });
+
+function ThemeProvider({ children }) {
+  const [dark, setDark] = useState(false);
+  const toggle = () => setDark((d) => !d);
+  return <ThemeContext.Provider value={{ dark, toggle }}>{children}</ThemeContext.Provider>;
+}
+
+function Screen() {
+  const { dark, toggle } = useContext(ThemeContext);
+  return (
+    <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: dark ? "#111" : "#fff" }}>
+      <Text style={{ color: dark ? "#fff" : "#111", marginBottom: 12 }}>
+        Tema actual: {dark ? "oscuro" : "claro"}
+      </Text>
+      <Button title="Cambiar tema" onPress={toggle} />
+    </View>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <Screen />
+    </ThemeProvider>
+  );
+}`}
+    />
+  }
+>
+  El tema de la app es un valor que cambia poco y que casi todas las pantallas leen, así que es un buen candidato para Context. Crea un `ThemeContext` con `dark` (booleano) y `toggle` (función), un `ThemeProvider` que guarde el valor con `useState`, y una pantalla que cambie su fondo y color de texto según el tema, con un botón que alterne entre claro y oscuro.
+</Challenge>
+
+## Errores comunes
+
+**Meter todo en un solo Context.** Se ve como un `AppContext` con usuario, tema, carrito y notas juntos. Ocurre porque Context parece gratis. Cada cambio en cualquier campo vuelve a renderizar a todos los consumidores, y la app se siente lenta al escribir en un formulario. Se detecta con el React DevTools Profiler o con un contador de renders como el del Snack: componentes que no usan el dato cambiado se renderizan igual.
+
+**Subir a global un estado que es local.** Se ve como un store con `isModalOpen` o el texto de un input que solo usa una pantalla. Pasa por querer tener todo en un solo lugar. El resultado es acoplamiento: otra pantalla puede cambiar ese valor sin querer y el estado sobrevive cuando la pantalla se desmonta. Se detecta preguntando cuántos componentes lo leen; si es uno, vuelve a `useState`.
+
+**Copiar datos del servidor en el estado global.** Se ve como un `useEffect` que hace `fetch` y guarda la respuesta en Zustand o Redux. Ocurre porque es lo primero que se nos ocurre. Terminas reescribiendo a mano caché, recarga y manejo de errores. Se detecta cuando el store tiene campos como `isLoading`, `error` y `lastFetchedAt` para cada recurso.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué tres tipos de estado distingue una app móvil típica?", back: "Estado local de un componente, estado global del cliente y estado del servidor." },
+    { front: "¿Por qué Context puede causar renders innecesarios?", back: "Todos los consumidores de un proveedor se vuelven a renderizar cuando cambia su valor, aunque solo usen una parte." },
+    { front: "¿Qué ventaja da un selector en Zustand?", back: "El componente solo se vuelve a renderizar cuando cambia la parte del estado que seleccionó." },
+    { front: "¿Cuándo tiene sentido elegir Redux Toolkit sobre Zustand?", back: "En equipos grandes o proyectos que ya usan Redux, donde sus convenciones y herramientas de depuración compensan el código extra." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Tu app guarda el idioma elegido por el usuario y casi nunca cambia. ¿Qué herramienta encaja mejor?",
+      options: [
+        { text: "Context", correct: true, feedback: "Correcto: es un valor que cambia poco y lo leen muchas pantallas." },
+        { text: "useState en cada pantalla", correct: false, feedback: "Cada pantalla tendría su propia copia y quedarían desincronizadas." },
+        { text: "Una librería de estado del servidor", correct: false, feedback: "El idioma lo crea la app, no viene de una API." }
+      ]
+    },
+    {
+      prompt: "Un carrito que se actualiza en cada toque y lo muestran tres pantallas. ¿Qué elección sigue el criterio del curso?",
+      options: [
+        { text: "Un Context con todo el carrito", correct: false, feedback: "Funciona, pero cada cambio re-renderiza a todos los consumidores." },
+        { text: "Un store de Zustand con selectores", correct: true, feedback: "Correcto: estado del cliente que cambia seguido y se comparte." },
+        { text: "Estado local en la pantalla del carrito", correct: false, feedback: "Otras dos pantallas lo necesitan; el estado local no alcanza." }
+      ]
+    },
+    {
+      prompt: "¿Qué describe mejor el estado del servidor?",
+      options: [
+        { text: "Datos que la app crea y controla por completo", correct: false, feedback: "Eso es estado del cliente." },
+        { text: "Una copia en caché de datos que pertenecen a una API y pueden quedar desactualizados", correct: true, feedback: "Correcto: la app no es dueña de esos datos, solo los cachea." },
+        { text: "El texto que el usuario está escribiendo", correct: false, feedback: "Eso es estado local de un componente." }
+      ]
+    }
+  ]}
+/>

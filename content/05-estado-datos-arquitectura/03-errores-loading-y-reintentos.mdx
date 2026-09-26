@@ -1,0 +1,307 @@
+---
+id: "05-estado-datos-arquitectura/03-errores-loading-y-reintentos"
+title: "Errores, loading y reintentos"
+stage: 5
+module: "Datos"
+order: 3
+minutes: 12
+prereqs: ["05-estado-datos-arquitectura/02-tanstack-query"]
+summary: "Muestra estados de carga y error claros, configura reintentos y ofrece al usuario un botón para volver a intentar."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás pintar los estados de carga, error y éxito de una consulta de TanStack Query, configurar los reintentos automáticos y ofrecer un reintento manual con `refetch`.
+
+**Prerrequisitos:** `05-estado-datos-arquitectura/02-tanstack-query`
+
+## Concepto
+
+Una app móvil vive en redes malas: metro, ascensores, datos móviles lentos. La diferencia entre una app que se siente sólida y una que se siente rota casi nunca está en el camino feliz, sino en qué muestra mientras espera y qué hace cuando algo falla. Guía oficial de reintentos: https://tanstack.com/query/latest/docs/framework/react/guides/query-retries
+
+Piensa en llamar por teléfono a una tienda. Mientras suena, sabes que estás esperando (loading). Si da ocupado, vuelves a marcar un par de veces, dejando un rato entre intentos (reintentos con espera). Si después de eso nadie contesta, te rindes y decides tú cuándo volver a intentar (error con reintento manual). Nadie marca cincuenta veces seguidas sin pausa.
+
+### Los estados de una consulta
+
+`useQuery` expone un campo `status` con tres valores, y un booleano por cada uno:
+
+| `status` | Booleano | Significado |
+| --- | --- | --- |
+| `"pending"` | `isPending` | Todavía no hay datos |
+| `"error"` | `isError` | La consulta falló después de todos los reintentos |
+| `"success"` | `isSuccess` | Hay datos |
+
+Aparte, `isFetching` indica si hay una petición en curso en este momento, tenga o no datos previos. Con eso cubres los cuatro casos de una pantalla:
+
+```tsx
+function PostsScreen() {
+  const { data, isPending, isError, error, isFetching, refetch } = useQuery({
+    queryKey: ["posts"],
+    queryFn: fetchPosts,
+  });
+
+  if (isPending) return <ActivityIndicator size="large" />;
+
+  if (isError) {
+    return (
+      <View>
+        <Text>No pudimos cargar las publicaciones: {error.message}</Text>
+        <Button title="Reintentar" onPress={() => refetch()} />
+      </View>
+    );
+  }
+
+  return (
+    <View>
+      {isFetching ? <Text>Actualizando...</Text> : null}
+      <PostList posts={data} />
+    </View>
+  );
+}
+```
+
+El orden de los `if` importa: al comprobar primero `isPending` y luego `isError`, TypeScript sabe que en el último `return` `data` está definido.
+
+### Reintentos automáticos
+
+Cuando `queryFn` lanza un error, TanStack Query no muestra el error enseguida. Por defecto reintenta **3 veces** con una espera que crece de forma exponencial (1 s, 2 s, 4 s, hasta un máximo de 30 s). Durante esos reintentos la consulta sigue en `pending` y `failureCount` indica cuántos intentos fallaron.
+
+Puedes cambiarlo por consulta:
+
+```ts
+useQuery({
+  queryKey: ["posts"],
+  queryFn: fetchPosts,
+  retry: 2,
+  retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10_000),
+});
+```
+
+`retry` acepta un número, `false` para no reintentar, o una función que decide según el error:
+
+```ts
+class HttpError extends Error {
+  constructor(public status: number) {
+    super("HTTP " + status);
+  }
+}
+
+useQuery({
+  queryKey: ["posts"],
+  queryFn: fetchPosts,
+  retry: (failureCount, error) => {
+    if (error instanceof HttpError && error.status === 404) return false;
+    return failureCount < 3;
+  },
+});
+```
+
+Reintentar un 404 no tiene sentido: el recurso no existe y no va a aparecer. Un error de red o un 503 sí puede resolverse solo.
+
+También puedes fijar valores por defecto para toda la app en el `QueryClient`:
+
+```ts
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { retry: 2, staleTime: 30_000 },
+  },
+});
+```
+
+### Reintento manual
+
+`refetch` vuelve a ejecutar la consulta. Úsalo en el botón "Reintentar" de la pantalla de error y en el gesto de tirar para recargar de una `FlatList`:
+
+```tsx
+<FlatList
+  data={data}
+  refreshing={isFetching}
+  onRefresh={() => refetch()}
+  renderItem={renderPost}
+/>
+```
+
+### Mensajes de error para personas
+
+`error.message` sirve para depurar, no para el usuario. En la interfaz escribe qué pasó y qué puede hacer ("Revisa tu conexión y vuelve a intentarlo"), y deja el detalle técnico en los logs.
+
+## Práctica
+
+El Snack tiene un interruptor que apunta la consulta a una ruta inexistente. Con el interruptor activo, observa cómo `failureCount` sube mientras la consulta sigue en `pending`, y cómo aparece el error después de 2 reintentos. Pulsa "Reintentar" para lanzar un reintento manual con `refetch`. Por último desactiva el interruptor: la key cambia y la publicación correcta se carga sola.
+
+<Snack
+  platform="ios"
+  sdkVersion="56.0.0"
+  dependencies={{ '@tanstack/react-query': '^5.0.0' }}
+  code={`import { useState } from "react";
+import { ActivityIndicator, Button, StyleSheet, Switch, Text, View } from "react-native";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+
+const queryClient = new QueryClient();
+const BASE = "https://jsonplaceholder.typicode.com";
+
+async function fetchPost(path) {
+  const res = await fetch(BASE + path);
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  return res.json();
+}
+
+function Post({ broken }) {
+  const path = broken ? "/does-not-exist/1" : "/posts/1";
+  const { data, status, isPending, isError, error, isFetching, failureCount, refetch } = useQuery({
+    queryKey: ["post", path],
+    queryFn: () => fetchPost(path),
+    retry: 2,
+    retryDelay: 1000,
+  });
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.meta}>status: {status} | fetching: {String(isFetching)} | fallos: {failureCount}</Text>
+      {isPending ? <ActivityIndicator size="large" /> : null}
+      {isError ? (
+        <View style={styles.gap}>
+          <Text style={styles.error}>No pudimos cargar la publicación. Revisa tu conexión.</Text>
+          <Text style={styles.meta}>Detalle: {error.message}</Text>
+          <Button title="Reintentar" onPress={() => refetch()} />
+        </View>
+      ) : null}
+      {data ? <Text style={styles.title}>{data.title}</Text> : null}
+    </View>
+  );
+}
+
+export default function App() {
+  const [broken, setBroken] = useState(false);
+  return (
+    <QueryClientProvider client={queryClient}>
+      <View style={styles.container}>
+        <View style={styles.row}>
+          <Text>Forzar error 404</Text>
+          <Switch value={broken} onValueChange={setBroken} />
+        </View>
+        <Post broken={broken} />
+      </View>
+    </QueryClientProvider>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, paddingTop: 64, paddingHorizontal: 16, gap: 16 },
+  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  card: { gap: 12 },
+  gap: { gap: 8 },
+  meta: { color: "#666", fontSize: 12 },
+  error: { color: "#b00020", fontSize: 16 },
+  title: { fontSize: 20, fontWeight: "600" },
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="No reintentar los 404"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="56.0.0"
+      dependencies={{ '@tanstack/react-query': '^5.0.0' }}
+      code={`import { ActivityIndicator, Button, Text, View } from "react-native";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+
+const queryClient = new QueryClient();
+
+class HttpError extends Error {
+  constructor(status) {
+    super("HTTP " + status);
+    this.status = status;
+  }
+}
+
+async function fetchMissing() {
+  const res = await fetch("https://jsonplaceholder.typicode.com/posts/99999");
+  if (!res.ok) throw new HttpError(res.status);
+  return res.json();
+}
+
+function Screen() {
+  const { isPending, isError, error, failureCount, refetch } = useQuery({
+    queryKey: ["missing-post"],
+    queryFn: fetchMissing,
+    retry: (count, err) => {
+      if (err instanceof HttpError && err.status === 404) return false;
+      return count < 3;
+    },
+  });
+  if (isPending) return <ActivityIndicator />;
+  if (isError) {
+    return (
+      <View style={{ gap: 8 }}>
+        <Text>Error: {error.message} tras {failureCount} intento(s)</Text>
+        <Button title="Reintentar" onPress={() => refetch()} />
+      </View>
+    );
+  }
+  return <Text>Encontrado</Text>;
+}
+
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <View style={{ flex: 1, justifyContent: "center", padding: 24 }}>
+        <Screen />
+      </View>
+    </QueryClientProvider>
+  );
+}`}
+    />
+  }
+>
+  Crea una clase `HttpError` que guarde el código de estado y lánzala desde la `queryFn` cuando la respuesta no sea `ok`. Pide https://jsonplaceholder.typicode.com/posts/99999 (devuelve 404) y configura `retry` con una función que no reintente los 404 pero sí otros errores hasta 3 veces. Muestra cuántos intentos fallaron y un botón "Reintentar".
+</Challenge>
+
+## Errores comunes
+
+**Usar `isLoading` para la carga inicial.** Se ve como `if (isLoading) return <Spinner />` copiado de tutoriales de la versión 4. En la versión 5, `isLoading` solo es verdadero si además hay una petición en curso; con una consulta deshabilitada, por ejemplo, queda en `false` sin datos y la pantalla intenta pintar `undefined`. Se detecta por errores del tipo "Cannot read properties of undefined". Solución: `isPending`.
+
+**Esperar que el error aparezca de inmediato.** Se ve como una pantalla que se queda varios segundos cargando cuando no hay red y alguien concluye que "el error no funciona". Pasa porque se desconocen los 3 reintentos por defecto. Se detecta mirando `failureCount`, que sube mientras la consulta sigue en `pending`. Solución: ajustar `retry` y `retryDelay` a lo que tenga sentido para esa pantalla.
+
+**Mostrar un spinner de pantalla completa en cada recarga.** Se ve como `if (isFetching) return <ActivityIndicator />`. Ocurre por confundir `isFetching` con `isPending`. Cada recarga en segundo plano borra la lista que el usuario estaba leyendo. Se detecta porque la lista parpadea al volver a la pantalla. Solución: spinner completo con `isPending`, indicador discreto con `isFetching`.
+
+<Flashcards
+  cards={[
+    { front: "¿Cuántas veces reintenta TanStack Query una consulta fallida por defecto?", back: "3 veces, con espera exponencial entre intentos." },
+    { front: "¿Qué diferencia hay entre isPending e isFetching en TanStack Query?", back: "isPending indica que aún no hay datos; isFetching indica que hay una petición en curso, aunque ya existan datos." },
+    { front: "¿Qué hace refetch en el resultado de useQuery?", back: "Vuelve a ejecutar la consulta; se usa en botones de reintentar y en tirar para recargar." },
+    { front: "¿Por qué no conviene reintentar un error 404?", back: "El recurso no existe; reintentar solo retrasa el mensaje de error." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Durante los reintentos automáticos de una consulta que nunca tuvo datos, ¿en qué estado está?",
+      options: [
+        { text: "error", correct: false, feedback: "El error solo se expone cuando se agotan los reintentos." },
+        { text: "pending", correct: true, feedback: "Correcto: sigue pendiente y failureCount aumenta." },
+        { text: "success", correct: false, feedback: "No hay datos, así que no puede ser success." }
+      ]
+    },
+    {
+      prompt: "¿Qué campo usas para mostrar un indicador discreto mientras se recarga una lista que ya está visible?",
+      options: [
+        { text: "isPending", correct: false, feedback: "isPending es false cuando ya hay datos." },
+        { text: "isFetching", correct: true, feedback: "Correcto: indica una petición en curso aunque haya datos." },
+        { text: "isError", correct: false, feedback: "isError indica fallo, no recarga." }
+      ]
+    },
+    {
+      prompt: "¿Qué configuración desactiva los reintentos automáticos de una consulta?",
+      options: [
+        { text: "retry: 0 o retry: false", correct: true, feedback: "Correcto: ambos desactivan los reintentos." },
+        { text: "staleTime: 0", correct: false, feedback: "staleTime controla la frescura de los datos, no los reintentos." },
+        { text: "gcTime: 0", correct: false, feedback: "gcTime controla cuánto se guarda en caché un dato sin uso." }
+      ]
+    }
+  ]}
+/>
