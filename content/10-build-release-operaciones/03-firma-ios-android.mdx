@@ -1,0 +1,191 @@
+---
+id: "10-build-release-operaciones/03-firma-ios-android"
+title: "Firma: certificados, provisioning y keystore"
+stage: 10
+module: "Build"
+order: 3
+minutes: 15
+prereqs: ["10-build-release-operaciones/02-eas-build-perfiles"]
+summary: "Entiende qué firma cada plataforma exige, deja que EAS gestione las credenciales y respalda el keystore de Android fuera de EAS."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás explicar qué son el certificado de distribución y el provisioning profile de iOS y el keystore de Android, dejar que EAS los genere y guarde, y descargar una copia de respaldo con `eas credentials`.
+
+**Prerrequisitos:** `10-build-release-operaciones/02-eas-build-perfiles`
+
+## Concepto
+
+En la lección anterior viste que el primer `eas build` "generó un nuevo Android Keystore" casi sin preguntarte. Esa línea esconde el tema más delicado de toda la etapa: la **firma**. Cada archivo instalable lleva una firma criptográfica que demuestra quién lo produjo. Los sistemas operativos la comprueban al instalar, y las tiendas la usan para decidir si una nueva versión pertenece a la misma app que la anterior.
+
+Piensa en el sello de un notario. Cualquier documento posterior debe llevar el mismo sello para que se acepte como continuación del anterior. Si el notario pierde el sello, no puede firmar la continuación de ningún expediente abierto. En Android, ese sello es el keystore; en iOS, el certificado de distribución. Por eso lo importante no es solo generarlos: es no perderlos.
+
+### Las credenciales de iOS
+
+Apple exige tres piezas, todas emitidas a través de tu cuenta de Apple Developer:
+
+- **Certificado de distribución** (distribution certificate): identifica a tu equipo como desarrollador. Es un par de claves; la privada es la que hay que proteger.
+- **Provisioning profile**: une el certificado con un `bundleIdentifier` concreto y con las capacidades que la app usa (notificaciones push, iCloud, etc.). Para App Store se usa un perfil de tipo App Store; para distribución interna, uno de tipo Ad Hoc que lista los dispositivos permitidos.
+- **Clave de notificaciones push** (APNs key): solo si la app envía notificaciones. Es opcional para la app de notas.
+
+Los certificados caducan cada año. Cuando un certificado de distribución expira, las apps ya instaladas siguen funcionando; solo necesitas uno nuevo para firmar builds futuros.
+
+### Las credenciales de Android
+
+Android usa un único archivo: el **keystore**, un contenedor cifrado con una o más claves. Se identifica por tres datos que debes guardar juntos: la contraseña del keystore, el alias de la clave y la contraseña de la clave.
+
+Aquí hay un matiz que cambia lo que significa "perder" el keystore. Google Play ofrece **Play App Signing**: Google guarda la clave con la que realmente se firma lo que descargan los usuarios, y tú firmas lo que subes con una **clave de subida** (upload key) distinta. Si pierdes la clave de subida, puedes pedir a Google que la reinicie y seguir publicando. Play App Signing es obligatorio para apps nuevas, así que en la práctica el keystore que EAS genera es tu upload key.
+
+<Callout kind="danger">
+  Si distribuyes fuera de Google Play (por ejemplo, un .apk de preview que la gente instala a mano) o si la app se publicó sin Play App Signing, el keystore es la única firma. Perderlo significa que nunca podrás actualizar esa app: cada instalación existente rechazará una versión firmada con otra clave. La única salida sería publicar una app nueva con otro package name y perder a todos los usuarios.
+</Callout>
+
+### Quién gestiona las credenciales: EAS
+
+La forma recomendada es dejar que EAS las genere y las guarde en sus servidores: son las **credenciales gestionadas** (https://docs.expo.dev/app-signing/managed-credentials/). En iOS, la CLI inicia sesión en tu cuenta de Apple, crea el certificado y el perfil y los registra; en Android, genera el keystore. En los siguientes builds las reutiliza, y en la lección de cuentas verás qué necesitas tener listo en Apple y Google para que esto funcione.
+
+El comando `eas credentials` abre un menú interactivo por plataforma donde puedes ver, regenerar, subir o **descargar** las credenciales. La descarga es lo que convierte a EAS en un gestor cómodo en lugar de en un punto único de fallo: EAS las guarda, pero tú conservas una copia.
+
+Cuando descargas, la CLI escribe un archivo `credentials.json` en la raíz del proyecto con esta forma:
+
+```json
+{
+  "android": {
+    "keystore": {
+      "keystorePath": "credentials/android/keystore.jks",
+      "keystorePassword": "<keystore-password>",
+      "keyAlias": "<key-alias>",
+      "keyPassword": "<key-password>"
+    }
+  },
+  "ios": {
+    "provisioningProfilePath": "credentials/ios/profile.mobileprovision",
+    "distributionCertificate": {
+      "path": "credentials/ios/dist-cert.p12",
+      "password": "<certificate-password>"
+    }
+  }
+}
+```
+
+Ese archivo y la carpeta `credentials/` son secretos de máximo nivel. Nunca se suben a Git: añádelos a `.gitignore` de inmediato y muévelos a un gestor de contraseñas o a un almacenamiento cifrado con acceso restringido. El mismo formato permite hacer el camino inverso: si algún día prefieres credenciales locales, EAS las lee de `credentials.json` con `"credentialsSource": "local"` en el perfil de build (https://docs.expo.dev/app-signing/local-credentials/).
+
+### Qué respaldar y dónde
+
+El respaldo mínimo por plataforma:
+
+| Plataforma | Qué guardar                                             | Sin esto...                                         |
+| ---------- | ------------------------------------------------------- | --------------------------------------------------- |
+| Android    | `keystore.jks` + las tres contraseñas/alias             | no puedes subir versiones nuevas a Play sin reset   |
+| iOS        | `dist-cert.p12` + su contraseña                         | regeneras uno nuevo desde Apple; menos grave        |
+| Ambas      | Acceso a la cuenta de Apple / Google del propietario    | no puedes regenerar nada                            |
+
+Guarda las contraseñas separadas del archivo binario, y comprueba una vez al año que el respaldo sigue abriéndose.
+
+## Práctica
+
+Sigue la sesión: es la ruta para ver qué credenciales guarda EAS y descargar una copia.
+
+<Terminal
+  steps={[
+    { cmd: "eas credentials --platform android", out: "✔ Using project @<account>/notes\n\nAndroid Credentials\n  Project: notes\n  Application Identifier: com.example.notes\n\n  Keystore\n    Type                 JKS\n    Key Alias            <key-alias>\n    MD5 Fingerprint      AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99\n    SHA1 Fingerprint     AA:BB:...:99\n    SHA256 Fingerprint   AA:BB:...:99\n    Updated              2 hours ago\n\n? What do you want to do? › credentials.json: Download credentials from EAS to credentials.json" },
+    { cmd: "# (menu) credentials.json: Download credentials from EAS to credentials.json", out: "✔ Saved credentials to credentials.json and credentials/android/keystore.jks\n\n⚠ Keep these files secret. Do not commit them to your repository." },
+    { cmd: "printf 'credentials.json\\ncredentials/\\n' >> .gitignore && git status --short", out: " M .gitignore" },
+    { cmd: "eas credentials --platform ios", out: "✔ Using project @<account>/notes\n\niOS Credentials\n  Project: notes\n  Bundle Identifier: com.example.notes\n\n  Distribution Certificate\n    Serial Number        6B7C8D9E0F1A2B3C\n    Expiration Date      Sat, 25 Sep 2027 10:20:00 UTC\n    Apple Team           <apple-team-id> (Ana Developer)\n\n  Provisioning Profile\n    Status               active\n    Expiration Date      Sat, 25 Sep 2027 10:20:00 UTC\n    Apple Team           <apple-team-id>\n\n? What do you want to do? › Go back" },
+  ]}
+/>
+
+Respalda las credenciales antes del primer envío a las tiendas:
+
+<Checklist
+  id="10-build-release-operaciones/03-firma-ios-android/backup"
+  items={[
+    "Descargaste credentials.json y la carpeta credentials/ con eas credentials",
+    "credentials.json y credentials/ están en .gitignore y git status no los muestra",
+    "El keystore.jks y sus tres datos (keystore password, key alias, key password) están en un gestor de contraseñas o almacenamiento cifrado",
+    "El certificado .p12 de iOS y su contraseña están guardados en el mismo lugar",
+    "Al menos otra persona del equipo (o un segundo factor tuyo) puede acceder al respaldo",
+    "Anotaste la fecha de expiración del certificado de distribución de iOS",
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Auditoría de un respaldo de credenciales"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type Backup = {
+  keystoreFile: boolean;
+  keystorePassword: boolean;
+  keyAlias: boolean;
+  keyPassword: boolean;
+  playAppSigning: boolean;
+};
+
+function assessAndroidBackup(b: Backup): string {
+  const complete = b.keystoreFile && b.keystorePassword && b.keyAlias && b.keyPassword;
+  if (complete) return "OK: keystore and all three values are backed up";
+  if (b.playAppSigning) {
+    return "WARNING: incomplete backup; Play App Signing allows an upload key reset";
+  }
+  return "CRITICAL: incomplete backup and no Play App Signing; losing the key means no more updates";
+}
+
+console.log(assessAndroidBackup({ keystoreFile: true, keystorePassword: true, keyAlias: true, keyPassword: true, playAppSigning: true }));
+console.log(assessAndroidBackup({ keystoreFile: true, keystorePassword: false, keyAlias: true, keyPassword: true, playAppSigning: true }));
+console.log(assessAndroidBackup({ keystoreFile: true, keystorePassword: false, keyAlias: true, keyPassword: true, playAppSigning: false }));`}
+    />
+  }
+>
+  Escribe una función `assessAndroidBackup(backup)` que reciba un objeto con banderas `keystoreFile`, `keystorePassword`, `keyAlias`, `keyPassword` y `playAppSigning`. Devuelve `"OK"` cuando las cuatro primeras son verdaderas; si falta alguna y la app usa Play App Signing, devuelve un aviso de que se puede pedir un reset de la clave de subida; si falta alguna y no hay Play App Signing, devuelve un mensaje crítico explicando que perder la clave impide actualizar la app. Prueba los tres casos.
+</Challenge>
+
+## Errores comunes
+
+**Confiar en que EAS guarda el keystore y no descargarlo.** Todo funciona hasta el día en que pierdes el acceso a la cuenta de Expo, cambias de organización o EAS deja de estar disponible. Ocurre porque la CLI genera el keystore sin exigir un respaldo. Se detecta preguntándote dónde está tu copia: si la respuesta es "en EAS", no tienes respaldo. Descárgalo con `eas credentials` hoy.
+
+**Subir `credentials.json` al repositorio.** Cualquier persona con acceso al repositorio puede firmar builds en tu nombre y publicarlos como si fueran tuyos. Ocurre porque la descarga escribe el archivo en la raíz del proyecto, justo donde `git add .` lo recoge. Se detecta con `git log --all -- credentials.json`. Si ya pasó, considera la clave comprometida: regenera credenciales y, en Android, pide a Google el reset de la upload key.
+
+**Regenerar el keystore para "arreglar" un build que falla.** La opción existe en el menú de `eas credentials` y parece inofensiva. Pero un keystore nuevo produce una firma distinta: Google Play rechazará la subida (firma no coincide con la upload key registrada) y los usuarios con el `.apk` de preview no podrán actualizar. Se detecta porque el error de la tienda menciona el certificado o la huella (fingerprint). Antes de regenerar nada, lee el error real del build.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué tres datos hay que guardar junto con el archivo keystore.jks de Android?", back: "La contraseña del keystore, el alias de la clave y la contraseña de la clave." },
+    { front: "¿Qué pasa si pierdes el keystore de una app Android publicada sin Play App Signing?", back: "No puedes volver a actualizarla: cada instalación rechazará una versión firmada con otra clave." },
+    { front: "¿Qué es un provisioning profile en iOS?", back: "Un archivo que une el certificado de distribución con un bundleIdentifier y sus capacidades; de tipo App Store o Ad Hoc." },
+    { front: "¿Con qué comando descargas una copia de las credenciales que EAS gestiona?", back: "eas credentials, opción de descargar a credentials.json." },
+    { front: "¿Por qué Play App Signing hace menos grave perder el keystore?", back: "Porque Google firma lo que descargan los usuarios con su propia clave; tú solo pierdes la upload key, que Google puede reiniciar." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Distribuyes un .apk de preview fuera de Google Play y pierdes el keystore. ¿Qué puedes hacer?",
+      options: [
+        { text: "Generar otro keystore y publicar una actualización normal", correct: false, feedback: "Las instalaciones existentes rechazan una versión con firma distinta." },
+        { text: "Pedir a Google el reset de la upload key", correct: false, feedback: "Eso solo aplica a apps publicadas en Play con Play App Signing; un .apk distribuido a mano no pasa por Google." },
+        { text: "Nada para esa app: solo publicar una app nueva con otro package name", correct: true, feedback: "Correcto: por eso el respaldo del keystore es obligatorio, no opcional." },
+      ],
+    },
+    {
+      prompt: "¿Cuál es la relación entre el certificado de distribución y el provisioning profile en iOS?",
+      options: [
+        { text: "Son lo mismo con dos nombres", correct: false, feedback: "Son dos piezas distintas y ambas necesarias." },
+        { text: "El provisioning profile une el certificado con un bundleIdentifier y sus capacidades", correct: true, feedback: "Correcto: el certificado identifica al equipo; el perfil dice para qué app y con qué permisos puede firmar." },
+        { text: "El certificado se genera a partir del provisioning profile", correct: false, feedback: "Es al revés: el perfil se crea referenciando un certificado existente." },
+      ],
+    },
+    {
+      prompt: "Descargaste credentials.json con eas credentials. ¿Cuál es el siguiente paso obligatorio?",
+      options: [
+        { text: "Hacer commit para que el equipo tenga acceso", correct: false, feedback: "Es un secreto de máximo nivel; en Git quedaría expuesto para siempre en el historial." },
+        { text: "Añadirlo a .gitignore y moverlo a un almacenamiento cifrado con las contraseñas", correct: true, feedback: "Correcto: EAS guarda una copia; la tuya vive fuera del repositorio y bajo control de acceso." },
+        { text: "Borrarlo, porque EAS ya lo tiene", correct: false, feedback: "Entonces no tendrías respaldo propio, que es justamente el objetivo de descargarlo." },
+      ],
+    },
+  ]}
+/>
