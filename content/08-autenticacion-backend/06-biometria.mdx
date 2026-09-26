@@ -1,0 +1,273 @@
+---
+id: "08-autenticacion-backend/06-biometria"
+title: "Biometría"
+stage: 8
+module: "Login seguro"
+order: 6
+minutes: 12
+prereqs: ["08-autenticacion-backend/05-securestore-y-refresh-tokens"]
+summary: "Bloquea la app al volver del segundo plano y desbloquéala con huella, Face ID o el código del dispositivo usando expo-local-authentication."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás bloquear la app cuando vuelve del segundo plano, pedir huella o Face ID con `expo-local-authentication` para desbloquearla y explicar qué protege la biometría y qué no.
+
+**Prerrequisitos:** `08-autenticacion-backend/05-securestore-y-refresh-tokens`
+
+## Concepto
+
+Con la sesión guardada en SecureStore, el usuario ya no escribe la contraseña cada vez que abre la app. Es cómodo, pero abre otro riesgo: quien tome el teléfono desbloqueado puede abrir la app de notas y leerlo todo. La biometría añade una comprobación local rápida: "¿sigue siendo el dueño quien tiene el teléfono en la mano?".
+
+### La analogía de la puerta de casa
+
+Tu casa tiene cerradura con llave, pero dentro también puedes tener un cajón con candado para los documentos importantes. La llave de casa (la sesión) demuestra que vives ahí. El candado del cajón (la biometría) evita que un invitado que ya está dentro abra ese cajón concreto. El candado no sustituye a la puerta: si alguien tiene tu llave, puede entrar igual por otra vía.
+
+### Qué protege y qué no
+
+La biometría en una app móvil es una **comprobación local**:
+
+- El sistema operativo compara la huella o la cara con las registradas en el dispositivo y responde solo "sí" o "no". Tu app nunca recibe la huella ni la imagen de la cara.
+- El servidor de Supabase no se entera de nada: no es una autenticación contra el backend, sino una puerta delante de una sesión que ya existe.
+- Protege frente a alguien que usa el teléfono desbloqueado. No protege frente a un atacante que ya extrajo el refresh token, porque ese atacante no usa tu app.
+
+Por eso la biometría se suma a lo que ya tienes (sesión en SecureStore, RLS en el servidor), nunca lo reemplaza.
+
+### La API de `expo-local-authentication`
+
+Instálala con `npx expo install expo-local-authentication`. Antes de pedir la biometría, comprueba que el dispositivo puede usarla:
+
+```ts
+import * as LocalAuthentication from "expo-local-authentication";
+
+async function canUseBiometrics(): Promise<boolean> {
+  const hasHardware = await LocalAuthentication.hasHardwareAsync();
+  const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+  return hasHardware && isEnrolled;
+}
+
+async function unlock(): Promise<boolean> {
+  const result = await LocalAuthentication.authenticateAsync({
+    promptMessage: "Desbloquea tus notas",
+    cancelLabel: "Cancelar",
+    disableDeviceFallback: false, // allow the device passcode if biometrics fail
+  });
+  return result.success;
+}
+```
+
+- `hasHardwareAsync` indica si hay sensor; `isEnrolledAsync`, si el usuario registró al menos una huella o cara.
+- `authenticateAsync` muestra el diálogo del sistema y devuelve `{ success: true }` o `{ success: false, error }`, donde `error` explica el motivo (por ejemplo `user_cancel` o `lockout`).
+- Con `disableDeviceFallback: false` el sistema ofrece el código del dispositivo si la biometría falla varias veces. Es la opción recomendada: una huella dañada no debe dejar al usuario fuera de sus datos.
+
+En iOS, Face ID necesita un texto que explique su uso. Con el config plugin se declara en `app.json`:
+
+```json
+{
+  "expo": {
+    "plugins": [
+      ["expo-local-authentication", { "faceIDPermission": "Usamos Face ID para desbloquear tus notas." }]
+    ]
+  }
+}
+```
+
+La documentación oficial advierte que Face ID no funciona en Expo Go: para probarlo necesitas un development build. La huella en Android sí funciona en Expo Go. Referencia completa: https://docs.expo.dev/versions/latest/sdk/local-authentication/.
+
+### Bloquear al volver del segundo plano
+
+`AppState` informa de los cambios de estado de la app: `active`, `background` e `inactive` (este último solo en iOS, durante transiciones breves). La estrategia es:
+
+1. Al pasar a `background`, guarda la hora.
+2. Al volver a `active`, si pasó más tiempo que el margen elegido (por ejemplo 30 segundos), muestra la pantalla de bloqueo y pide la biometría.
+
+```ts
+const lastBackgroundAt = useRef<number | null>(null);
+
+useEffect(() => {
+  const subscription = AppState.addEventListener("change", (state) => {
+    if (state === "background") lastBackgroundAt.current = Date.now();
+    if (state === "active" && lastBackgroundAt.current !== null) {
+      if (Date.now() - lastBackgroundAt.current > LOCK_AFTER_MS) setLocked(true);
+      lastBackgroundAt.current = null;
+    }
+  });
+  return () => subscription.remove();
+}, []);
+```
+
+Un detalle importante: el propio diálogo de Face ID hace que iOS pase la app a `inactive` y luego a `active`. Si bloquearas en `inactive`, cada desbloqueo provocaría un bloqueo nuevo, en un bucle infinito. Por eso la hora se guarda solo en `background`.
+
+Mientras la app está bloqueada, no renderices las notas debajo de la pantalla de bloqueo: devuelve solo la pantalla de bloqueo. Así los datos no aparecen ni un instante.
+
+## Práctica
+
+La Snack simula una app de notas con bloqueo. Pulsa "Bloquear ahora" o envía la app al segundo plano más de 5 segundos y vuelve: aparece la pantalla de bloqueo. Abre la Snack en Expo Go en Android para usar la huella; en la vista web no hay sensor y verás el mensaje correspondiente.
+
+<Snack
+  platform="android"
+  sdkVersion="55.0.0"
+  dependencies={{ "expo-local-authentication": "*" }}
+  code={`import { useEffect, useRef, useState } from "react";
+import { AppState, View, Text, Pressable, StyleSheet } from "react-native";
+import * as LocalAuthentication from "expo-local-authentication";
+
+const LOCK_AFTER_MS = 5000;
+
+export default function App() {
+  const [locked, setLocked] = useState(true);
+  const [message, setMessage] = useState("");
+  const lastBackgroundAt = useRef<number | null>(null);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "background") lastBackgroundAt.current = Date.now();
+      if (state === "active" && lastBackgroundAt.current !== null) {
+        if (Date.now() - lastBackgroundAt.current > LOCK_AFTER_MS) setLocked(true);
+        lastBackgroundAt.current = null;
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+
+  const unlock = async () => {
+    const hasHardware = await LocalAuthentication.hasHardwareAsync();
+    const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+    if (!hasHardware || !isEnrolled) {
+      setMessage("Este dispositivo no tiene biometría configurada");
+      return;
+    }
+    const result = await LocalAuthentication.authenticateAsync({
+      promptMessage: "Desbloquea tus notas",
+      cancelLabel: "Cancelar",
+      disableDeviceFallback: false,
+    });
+    if (result.success) {
+      setLocked(false);
+      setMessage("");
+    } else {
+      setMessage("No desbloqueado: " + result.error);
+    }
+  };
+
+  if (locked) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>Notas bloqueadas</Text>
+        <Pressable style={styles.button} onPress={unlock}>
+          <Text style={styles.buttonText}>Desbloquear</Text>
+        </Pressable>
+        <Text style={styles.message}>{message}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Mis notas</Text>
+      <Text>Comprar pan</Text>
+      <Text>Llamar al dentista</Text>
+      <Pressable style={styles.button} onPress={() => setLocked(true)}>
+        <Text style={styles.buttonText}>Bloquear ahora</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", padding: 24, gap: 12 },
+  title: { fontSize: 22, fontWeight: "600" },
+  button: { backgroundColor: "#10484a", padding: 12, borderRadius: 8, alignItems: "center" },
+  buttonText: { color: "#fff", fontWeight: "600" },
+  message: { color: "#b00020" },
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Decidir cuándo bloquear"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type AppStateStatus = "active" | "background" | "inactive";
+type LockState = { locked: boolean; lastBackgroundAt: number | null };
+
+function nextLockState(current: LockState, state: AppStateStatus, now: number, lockAfterMs: number): LockState {
+  if (state === "background") return { ...current, lastBackgroundAt: now };
+  if (state === "active" && current.lastBackgroundAt !== null) {
+    const expired = now - current.lastBackgroundAt > lockAfterMs;
+    return { locked: current.locked || expired, lastBackgroundAt: null };
+  }
+  return current; // "inactive" never changes anything
+}
+
+let lock: LockState = { locked: false, lastBackgroundAt: null };
+lock = nextLockState(lock, "background", 1000, 30000);
+lock = nextLockState(lock, "active", 11000, 30000);
+console.log(lock.locked);
+
+lock = nextLockState(lock, "background", 20000, 30000);
+lock = nextLockState(lock, "active", 60000, 30000);
+console.log(lock.locked);
+
+let faceId: LockState = { locked: false, lastBackgroundAt: null };
+faceId = nextLockState(faceId, "inactive", 1000, 0);
+faceId = nextLockState(faceId, "active", 99000, 0);
+console.log(faceId.locked);`}
+      expected={`false
+true
+false`}
+    />
+  }
+>
+  Escribe la función pura `nextLockState(current, state, now, lockAfterMs)` que calcule el nuevo estado de bloqueo a partir del estado de `AppState`. En `background` guarda `now`; en `active`, bloquea si pasó más de `lockAfterMs` desde el último `background` y limpia la hora; en `inactive` no cambia nada. Comprueba tres casos: una vuelta rápida (no bloquea), una vuelta lenta (bloquea) y el paso `inactive` a `active` que provoca el diálogo de Face ID (no bloquea).
+</Challenge>
+
+## Errores comunes
+
+**Bloquear en `inactive`.** La app pide Face ID, el usuario se autentica y aparece otra vez la pantalla de bloqueo, sin fin. Ocurre porque el diálogo del sistema pasa la app a `inactive` y de vuelta a `active`. Se detecta registrando cada cambio de `AppState` en consola: si ves `inactive` justo después de pedir la biometría, el bloqueo debe depender solo de `background`.
+
+**Tratar la biometría como autenticación contra el servidor.** El código borra la sesión y "vuelve a iniciar sesión" con la huella, o envía `success: true` a la API como prueba. Ocurre por confundir comprobación local con identidad. Se detecta revisando qué ocurre tras `authenticateAsync`: solo debe cambiar un estado local de la app; la identidad ante Supabase sigue siendo el token.
+
+**Dejar al usuario sin salida.** Con `disableDeviceFallback: true` y un sensor que falla, el usuario no puede entrar nunca. Se detecta probando en un dispositivo sin huellas registradas o cancelando varias veces el diálogo. Ofrece siempre el código del dispositivo o, como último recurso, cerrar sesión y volver a entrar con la contraseña.
+
+**Probar Face ID en Expo Go.** El diálogo no aparece o falla en iOS. Ocurre porque Expo Go no incluye el permiso de Face ID. Se detecta porque funciona en Android pero no en iPhone; crea un development build con el config plugin.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué recibe la app cuando el usuario se autentica con huella mediante expo-local-authentication?", back: "Solo si tuvo éxito o no; nunca la huella ni datos biométricos." },
+    { front: "¿Por qué no se debe bloquear la app en el estado inactive de AppState?", back: "Porque el diálogo de Face ID pasa la app a inactive y provocaría un bucle de bloqueos." },
+    { front: "¿Qué comprueban hasHardwareAsync e isEnrolledAsync?", back: "Si el dispositivo tiene sensor biométrico y si el usuario registró al menos una huella o cara." },
+    { front: "¿La biometría sustituye a la sesión de Supabase?", back: "No. Es una comprobación local delante de una sesión existente; la identidad ante el servidor sigue siendo el token." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Frente a qué protege el bloqueo biométrico de la app de notas?",
+      options: [
+        { text: "Frente a alguien que usa el teléfono desbloqueado", correct: true, feedback: "Correcto: comprueba que quien abre la app es el dueño del dispositivo." },
+        { text: "Frente a un atacante que robó el refresh token", correct: false, feedback: "Ese atacante no usa tu app; la biometría no le afecta." },
+        { text: "Frente a consultas a la base de datos sin RLS", correct: false, feedback: "Solo RLS en el servidor protege esas consultas." }
+      ]
+    },
+    {
+      prompt: "¿En qué cambio de AppState conviene guardar la hora para decidir el bloqueo?",
+      options: [
+        { text: "background", correct: true, feedback: "Correcto: indica que el usuario salió de la app." },
+        { text: "inactive", correct: false, feedback: "inactive también ocurre al mostrar el diálogo de Face ID." },
+        { text: "active", correct: false, feedback: "active es cuando se vuelve; ahí se compara, no se guarda." }
+      ]
+    },
+    {
+      prompt: "¿Qué opción de authenticateAsync permite usar el código del dispositivo si la biometría falla?",
+      options: [
+        { text: "disableDeviceFallback: false", correct: true, feedback: "Correcto: deja que el sistema ofrezca el código como alternativa." },
+        { text: "promptMessage", correct: false, feedback: "promptMessage solo cambia el texto del diálogo." },
+        { text: "cancelLabel", correct: false, feedback: "cancelLabel solo cambia el texto del botón de cancelar." }
+      ]
+    }
+  ]}
+/>

@@ -1,0 +1,310 @@
+---
+id: "08-autenticacion-backend/05-securestore-y-refresh-tokens"
+title: "SecureStore y refresh tokens"
+stage: 8
+module: "Login seguro"
+order: 5
+minutes: 15
+prereqs: ["08-autenticacion-backend/04-storage"]
+summary: "Guarda la sesión de Supabase cifrada con un adaptador de SecureStore y entiende cómo el refresh token renueva el acceso sin volver a pedir la contraseña."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás persistir la sesión de Supabase en SecureStore mediante un adaptador de `auth.storage`, sortear el límite de tamaño de SecureStore y controlar la renovación automática del access token según el estado de la app.
+
+**Prerrequisitos:** `08-autenticacion-backend/04-storage`
+
+## Concepto
+
+Hasta ahora el cliente de Supabase usaba `persistSession: false`: cada vez que cierras la app, el usuario vuelve a escribir su contraseña. Nadie usa una app así. Pero guardar la sesión significa guardar en el teléfono dos credenciales valiosas, el access token y el refresh token, y el sitio donde las guardes decide quién puede leerlas.
+
+### La analogía de la caja fuerte del hotel
+
+Cuando te alojas en un hotel, puedes dejar el pasaporte encima de la mesa o dentro de la caja fuerte de la habitación. Ambos sitios están "en tu habitación", pero la mesa la ve cualquiera que entre a limpiar. AsyncStorage es la mesa: un archivo sin cifrar dentro del almacenamiento de la app. SecureStore es la caja fuerte: usa el Keychain en iOS y el Keystore en Android, que cifran los datos con claves protegidas por el sistema operativo.
+
+### Access token y refresh token
+
+Supabase entrega dos tokens al iniciar sesión:
+
+- **Access token**: un JWT de vida corta (una hora por defecto) que acompaña cada petición a la base de datos o a Storage. RLS lee de él `auth.uid()`.
+- **Refresh token**: una cadena opaca de vida larga que solo sirve para pedir un access token nuevo al servidor de autenticación.
+
+Supabase aplica **rotación**: cada refresh token se puede usar una sola vez, y al usarlo recibes un par nuevo. Si alguien roba un refresh token y lo usa después que tú, el servidor detecta la reutilización y puede revocar la sesión. Por eso el refresh token es la credencial más valiosa del teléfono: quien lo tiene puede fabricar access tokens nuevos durante días.
+
+<Callout kind="danger">
+  Nunca guardes la sesión en AsyncStorage ni en MMKV sin cifrar. Ambos escriben texto plano en el sistema de archivos de la app: en un teléfono con root, en una copia de seguridad o con una herramienta de depuración, el refresh token se lee directamente y da acceso a la cuenta. El cliente de Supabase usa AsyncStorage si le pasas ese módulo como `storage`; pásale siempre un adaptador de SecureStore.
+</Callout>
+
+### El adaptador de `auth.storage`
+
+El cliente de Supabase no sabe nada de SecureStore. Solo necesita un objeto con tres métodos asíncronos: `getItem`, `setItem` y `removeItem`. Cualquier cosa que cumpla esa forma sirve como almacén:
+
+```ts
+import * as SecureStore from "expo-secure-store";
+import { createClient } from "@supabase/supabase-js";
+
+const secureStoreAdapter = {
+  getItem: (key: string) => SecureStore.getItemAsync(key),
+  setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value),
+  removeItem: (key: string) => SecureStore.deleteItemAsync(key),
+};
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    storage: secureStoreAdapter,
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: false,
+  },
+});
+```
+
+Con esto, al abrir la app el cliente lee la sesión guardada y emite el evento `INITIAL_SESSION` con ella, sin pedir la contraseña.
+
+### El límite de tamaño y cómo sortearlo
+
+La documentación de SecureStore advierte que algunas versiones de iOS rechazaban valores de más de unos 2048 bytes (https://docs.expo.dev/versions/latest/sdk/securestore/). La sesión de Supabase es un JSON con el access token, el refresh token y los datos del usuario, y puede superar ese tamaño. Hay dos soluciones documentadas:
+
+1. **Trocear el valor** en fragmentos pequeños, cada uno con su propia clave (`key.0`, `key.1`...) y una clave extra con el número de fragmentos. Todo sigue dentro de SecureStore.
+2. **Cifrar y separar**, como hace el `LargeSecureStore` del tutorial de Supabase para Expo (https://supabase.com/docs/guides/getting-started/tutorials/with-expo-react-native): se genera una clave AES aleatoria que se guarda en SecureStore, y la sesión cifrada con ella se guarda en AsyncStorage. En AsyncStorage solo queda texto cifrado inútil sin la clave.
+
+En esta lección usas la primera, que no necesita librerías de cifrado:
+
+```ts
+const CHUNK_SIZE = 1800; // conservative: stays under 2048 bytes for ASCII values
+
+async function removeChunks(key: string) {
+  const count = Number(await SecureStore.getItemAsync(key + ".count")) || 0;
+  for (let i = 0; i < count; i++) await SecureStore.deleteItemAsync(key + "." + i);
+  await SecureStore.deleteItemAsync(key + ".count");
+}
+
+export const chunkedSecureStore = {
+  async getItem(key: string) {
+    const count = Number(await SecureStore.getItemAsync(key + ".count"));
+    if (!count) return null;
+    let value = "";
+    for (let i = 0; i < count; i++) {
+      const part = await SecureStore.getItemAsync(key + "." + i);
+      if (part === null) return null; // incomplete: treat as signed out
+      value += part;
+    }
+    return value;
+  },
+  async setItem(key: string, value: string) {
+    await removeChunks(key);
+    const count = Math.ceil(value.length / CHUNK_SIZE);
+    for (let i = 0; i < count; i++) {
+      await SecureStore.setItemAsync(key + "." + i, value.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE));
+    }
+    await SecureStore.setItemAsync(key + ".count", String(count));
+  },
+  removeItem: removeChunks,
+};
+```
+
+Las claves de SecureStore solo admiten letras, números, `.`, `-` y `_`; la clave que usa Supabase (`sb-<ref>-auth-token`) cumple esa regla, y los sufijos `.0` o `.count` también.
+
+### Renovar solo en primer plano
+
+`autoRefreshToken: true` programa la renovación antes de que caduque el access token. En React Native, los temporizadores no son fiables cuando la app está en segundo plano, así que Supabase recomienda encender y apagar la renovación según el estado de la app con `AppState`:
+
+```ts
+import { AppState } from "react-native";
+
+AppState.addEventListener("change", (state) => {
+  if (state === "active") supabase.auth.startAutoRefresh();
+  else supabase.auth.stopAutoRefresh();
+});
+```
+
+Al volver a primer plano, `startAutoRefresh` comprueba el token y lo renueva de inmediato si ya caducó.
+
+### Cerrar sesión de verdad
+
+`supabase.auth.signOut()` hace dos cosas: revoca el refresh token en el servidor y llama a `removeItem` en tu adaptador. Si solo borras SecureStore a mano, el refresh token sigue siendo válido en el servidor hasta que caduque.
+
+## Práctica
+
+La Snack crea el cliente con el adaptador troceado y restaura la sesión al abrir. Pon tu URL y tu anon key, inicia sesión y recarga la Snack: el email aparece sin volver a escribir la contraseña. SecureStore no funciona en la vista web; usa la vista de iOS o Android, o abre la Snack en Expo Go.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  dependencies={{ "@supabase/supabase-js": "*", "expo-secure-store": "*" }}
+  code={`import { useEffect, useState } from "react";
+import { AppState, View, Text, TextInput, Pressable, StyleSheet } from "react-native";
+import * as SecureStore from "expo-secure-store";
+import { createClient } from "@supabase/supabase-js";
+
+const CHUNK = 1800;
+async function removeItem(key: string) {
+  const count = Number(await SecureStore.getItemAsync(key + ".count")) || 0;
+  for (let i = 0; i < count; i++) await SecureStore.deleteItemAsync(key + "." + i);
+  await SecureStore.deleteItemAsync(key + ".count");
+}
+const storage = {
+  async getItem(key: string) {
+    const count = Number(await SecureStore.getItemAsync(key + ".count"));
+    if (!count) return null;
+    const parts: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const part = await SecureStore.getItemAsync(key + "." + i);
+      if (part === null) return null;
+      parts.push(part);
+    }
+    return parts.join("");
+  },
+  async setItem(key: string, value: string) {
+    await removeItem(key);
+    const count = Math.ceil(value.length / CHUNK);
+    for (let i = 0; i < count; i++) await SecureStore.setItemAsync(key + "." + i, value.slice(i * CHUNK, (i + 1) * CHUNK));
+    await SecureStore.setItemAsync(key + ".count", String(count));
+  },
+  removeItem,
+};
+
+const supabase = createClient(
+  process.env.EXPO_PUBLIC_SUPABASE_URL ?? "https://YOUR_PROJECT_REF.supabase.co",
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "YOUR_SUPABASE_ANON_KEY",
+  { auth: { storage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } }
+);
+
+export default function App() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      setUserEmail(session?.user.email ?? null);
+      setMessage(event);
+    });
+    const appState = AppState.addEventListener("change", (state) => {
+      if (state === "active") supabase.auth.startAutoRefresh();
+      else supabase.auth.stopAutoRefresh();
+    });
+    return () => { data.subscription.unsubscribe(); appState.remove(); };
+  }, []);
+
+  const signIn = async () => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) setMessage(error.message);
+  };
+
+  return (
+    <View style={styles.container}>
+      {userEmail ? (
+        <>
+          <Text style={styles.title}>Sesión de {userEmail}</Text>
+          <Pressable style={styles.button} onPress={() => supabase.auth.signOut()}><Text style={styles.buttonText}>Cerrar sesión</Text></Pressable>
+        </>
+      ) : (
+        <>
+          <TextInput style={styles.input} placeholder="Email" autoCapitalize="none" value={email} onChangeText={setEmail} />
+          <TextInput style={styles.input} placeholder="Contraseña" secureTextEntry value={password} onChangeText={setPassword} />
+          <Pressable style={styles.button} onPress={signIn}><Text style={styles.buttonText}>Entrar</Text></Pressable>
+        </>
+      )}
+      <Text style={styles.message}>{message}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", padding: 24, gap: 12 },
+  title: { fontSize: 20, fontWeight: "600" },
+  input: { borderWidth: 1, borderColor: "#999", borderRadius: 8, padding: 10 },
+  button: { backgroundColor: "#10484a", padding: 12, borderRadius: 8, alignItems: "center" },
+  buttonText: { color: "#fff", fontWeight: "600" },
+  message: { color: "#555" },
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Trocear y recomponer"
+  solution={
+    <Playground
+      lang="ts"
+      code={`function splitIntoChunks(value: string, size: number): string[] {
+  if (size <= 0) throw new Error("Chunk size must be positive");
+  const chunks: string[] = [];
+  for (let i = 0; i < value.length; i += size) {
+    chunks.push(value.slice(i, i + size));
+  }
+  return chunks;
+}
+
+function joinChunks(chunks: Array<string | null>): string | null {
+  if (chunks.length === 0 || chunks.some((chunk) => chunk === null)) return null;
+  return chunks.join("");
+}
+
+const session = JSON.stringify({ access_token: "a".repeat(30), refresh_token: "r".repeat(12) });
+const chunks = splitIntoChunks(session, 20);
+console.log(session.length);
+console.log(chunks.length);
+console.log(joinChunks(chunks) === session);
+console.log(joinChunks([chunks[0], null, chunks[2]]));`}
+      expected={`80
+4
+true
+null`}
+    />
+  }
+>
+  Escribe dos funciones puras que el adaptador pueda usar. `splitIntoChunks(value, size)` devuelve un array de fragmentos de como máximo `size` caracteres. `joinChunks(chunks)` recibe los fragmentos leídos (alguno puede ser `null` si faltaba) y devuelve el valor original, o `null` si el array está vacío o falta algún fragmento. Pruébalas con un JSON de sesión de ejemplo de 80 caracteres troceado de 20 en 20.
+</Challenge>
+
+## Errores comunes
+
+**Dejar AsyncStorage como almacén de la sesión.** Se ve como `auth: { storage: AsyncStorage }`, copiado de un ejemplo antiguo. Ocurre porque funciona igual y no da errores. Se detecta buscando `storage:` en la configuración de `createClient` o inspeccionando el almacenamiento de la app en un emulador: si aparece un JSON con `refresh_token` legible, la sesión está en texto plano.
+
+**Superar el límite de SecureStore sin trocear.** La sesión se guarda en algunos dispositivos y en otros no, y el usuario "pierde" la sesión al reiniciar la app sin ningún mensaje claro. Ocurre porque el JSON de sesión crece con los metadatos del usuario. Se detecta registrando `value.length` en `setItem` durante el desarrollo y capturando los errores de `setItemAsync`.
+
+**No parar la renovación en segundo plano.** Tras dejar la app minimizada un rato, las peticiones fallan con 401 al volver, o aparecen avisos de temporizadores largos. Ocurre porque los temporizadores de JavaScript se congelan en segundo plano. Se detecta dejando la app en segundo plano más de una hora y volviendo: con el listener de `AppState` el token se renueva al activarse.
+
+**Borrar el almacén en lugar de llamar a `signOut`.** La app parece cerrar sesión, pero el refresh token sigue vivo en el servidor. Se detecta en **Authentication, Users** del panel, donde la sesión sigue apareciendo activa.
+
+<Flashcards
+  cards={[
+    { front: "¿Por qué no se debe guardar la sesión de Supabase en AsyncStorage?", back: "Porque AsyncStorage escribe texto plano; el refresh token quedaría legible en copias de seguridad o teléfonos con root." },
+    { front: "¿Qué métodos debe tener el objeto que se pasa en auth.storage de createClient?", back: "getItem, setItem y removeItem, que pueden devolver promesas." },
+    { front: "¿Qué significa que Supabase rote los refresh tokens?", back: "Que cada refresh token se usa una sola vez y se reemplaza por uno nuevo; reutilizar uno viejo revela un posible robo." },
+    { front: "¿Cómo se sortea el límite de unos 2048 bytes de SecureStore para la sesión?", back: "Troceando el valor en varias claves, o cifrándolo con una clave AES guardada en SecureStore." },
+    { front: "¿Para qué sirven startAutoRefresh y stopAutoRefresh en React Native?", back: "Para renovar el token solo mientras la app está activa, porque los temporizadores no son fiables en segundo plano." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué credencial guardada en el teléfono permite a un atacante obtener access tokens nuevos durante días?",
+      options: [
+        { text: "El refresh token", correct: true, feedback: "Correcto: por eso debe vivir en almacenamiento cifrado." },
+        { text: "La anon key", correct: false, feedback: "La anon key es pública y no identifica a ningún usuario." },
+        { text: "La URL del proyecto", correct: false, feedback: "La URL es pública y no da acceso a ninguna cuenta." }
+      ]
+    },
+    {
+      prompt: "¿Qué opción de createClient conecta la sesión de Supabase con SecureStore?",
+      options: [
+        { text: "auth.storage con un adaptador getItem, setItem y removeItem", correct: true, feedback: "Correcto: el cliente usa ese objeto para leer y escribir la sesión." },
+        { text: "detectSessionInUrl: true", correct: false, feedback: "Esa opción busca tokens en la URL del navegador; en móvil va en false." },
+        { text: "persistSession: false", correct: false, feedback: "Con false la sesión no se guarda en ningún sitio." }
+      ]
+    },
+    {
+      prompt: "¿Qué hace supabase.auth.signOut() además de borrar la sesión local?",
+      options: [
+        { text: "Revoca el refresh token en el servidor", correct: true, feedback: "Correcto: así el token robado deja de servir." },
+        { text: "Borra la cuenta del usuario", correct: false, feedback: "Cerrar sesión no elimina la cuenta." },
+        { text: "Cambia la anon key del proyecto", correct: false, feedback: "La anon key no cambia al cerrar sesión." }
+      ]
+    }
+  ]}
+/>
