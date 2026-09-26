@@ -7,7 +7,7 @@ in the browser.
 ## Requirements
 
 - Node.js 22
-- pnpm 9
+- pnpm 12
 
 ## Run
 
