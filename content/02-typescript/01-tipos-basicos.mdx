@@ -1,0 +1,184 @@
+---
+id: "02-typescript/01-tipos-basicos"
+title: "Tipos básicos"
+stage: 2
+module: "Por qué tipos"
+order: 1
+minutes: 12
+prereqs: ["02-typescript/00-por-que-tipos"]
+summary: "Anota variables con los tipos primitivos, arrays y tuplas, y distingue any de unknown."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a poder anotar variables con `string`, `number`, `boolean`, arrays y tuplas, y explicar por qué `unknown` es la alternativa segura a `any`.
+
+**Prerrequisitos:** `02-typescript/00-por-que-tipos`
+
+## Concepto
+
+Piensa en las etiquetas de los cajones de una cocina: uno dice "cubiertos", otro "servilletas", otro "especias". La etiqueta no cambia lo que hay adentro, pero avisa de inmediato si alguien intenta guardar una sartén en el cajón de las servilletas. Los tipos básicos de TypeScript son esas etiquetas para tus variables.
+
+### Los tipos primitivos
+
+```ts
+const name: string = "Ana";
+const age: number = 32;
+const isActive: boolean = true;
+```
+
+`string`, `number` y `boolean` cubren texto, números (TypeScript no distingue enteros de decimales, todo es `number`) y verdadero/falso. En la mayoría de los casos no hace falta escribir la anotación: TypeScript la **infiere** a partir del valor inicial.
+
+```ts
+const name = "Ana"; // TypeScript infiere: string
+```
+
+La anotación explícita (`: string`) es útil cuando declaras una variable sin valor inicial, o cuando quieres dejar constancia del tipo esperado en una firma de función, tema de la próxima lección.
+
+### Arrays
+
+Un array de un tipo se escribe con corchetes después del tipo, o con la forma genérica `Array<T>` (equivalentes, la primera es más común):
+
+```ts
+const scores: number[] = [10, 8, 9];
+const names: Array<string> = ["Ana", "Luis"];
+```
+
+Si intentas `scores.push("diez")`, el compilador rechaza el `"diez"` porque el array está anotado como `number[]`.
+
+### Tuplas
+
+Un array normal no limita cuántos elementos tiene ni en qué posición va cada tipo. Una **tupla** sí: es un array de longitud fija donde cada posición tiene su propio tipo.
+
+```ts
+const point: [number, number] = [3, 4];
+const entry: [string, number] = ["temperatura", 21.5];
+```
+
+`point[0]` es siempre `number`, y `point` no puede tener un tercer elemento. Las tuplas son útiles para representar pares con significado fijo, como coordenadas o pares clave-valor, sin necesitar una interfaz completa (tema de la lección siguiente).
+
+### `any`: la escotilla de escape que hay que evitar
+
+`any` le dice a TypeScript "deja de revisar esta variable". Cualquier operación sobre un valor `any` se acepta sin comprobar nada:
+
+```ts
+let data: any = "hola";
+data = 42; // sin error
+data.toUpperCase(); // sin error, aunque data ahora es un número
+```
+
+La última línea es un error en tiempo de ejecución esperando a suceder: `42.toUpperCase()` no existe, pero TypeScript no lo advierte porque `any` desactivó toda revisión. Usar `any` es renunciar al motivo por el que elegiste TypeScript. Aparece casi siempre como una salida rápida bajo presión de tiempo, y conviene tratarlo como una deuda técnica marcada, nunca como una opción por defecto.
+
+### `unknown`: la alternativa segura
+
+`unknown` también acepta cualquier valor, pero no permite operar sobre él sin antes comprobar de qué tipo es realmente:
+
+```ts
+let data: unknown = "hola";
+data = 42;
+data.toString(); // error: Object is of type 'unknown'.
+
+if (typeof data === "number") {
+  data.toString(); // ahora sí: TypeScript sabe que aquí data es number
+}
+```
+
+Esa comprobación (`typeof data === "number"`) se llama **narrowing** (acotar el tipo) y es el tema completo de la lección 5. Por ahora, la regla práctica es: cuando no sepas el tipo exacto de un valor de antemano (una respuesta de red, la entrada de un usuario), anota `unknown` en vez de `any`, y deja que el compilador te obligue a comprobar antes de usar. Documentación oficial: [Everyday Types](https://www.typescriptlang.org/docs/handbook/2/everyday-types.html).
+
+## Práctica
+
+Ejecuta el código y observa cómo cada valor respeta su tipo declarado. Después intenta cambiar `scores.push("nueve")` y observa que, aunque el `Playground` no revisa tipos y lo ejecuta igual, el editor real lo marcaría como error.
+
+<Playground
+  lang="ts"
+  code={`const name: string = "Ana";
+const age: number = 32;
+const isActive: boolean = true;
+
+const scores: number[] = [10, 8, 9];
+const point: [number, number] = [3, 4];
+
+let data: unknown = "hola";
+if (typeof data === "string") {
+  data = data.toUpperCase();
+}
+
+console.log(name, age, isActive);
+console.log(scores);
+console.log(point);
+console.log(data);`}
+  expected={`Ana 32 true
+[10,8,9]
+[3,4]
+HOLA`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Tupla de coordenadas"
+  solution={
+    <Playground
+      lang="ts"
+      code={`const origin: [number, number] = [0, 0];
+const destination: [number, number] = [10, 5];
+
+function distance(a: [number, number], b: [number, number]): number {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+console.log(distance(origin, destination));`}
+      expected={`11.180339887498949`}
+    />
+  }
+>
+  Declara dos tuplas `[number, number]` llamadas `origin` (`[0, 0]`) y `destination` (`[10, 5]`). Escribe una función `distance` que reciba dos tuplas de ese tipo y devuelva la distancia entre ambas con la fórmula `Math.sqrt(dx * dx + dy * dy)`. Imprime el resultado de `distance(origin, destination)`.
+</Challenge>
+
+## Errores comunes
+
+**Usar `any` para "que compile rápido".** `any` desactiva toda revisión sobre esa variable, incluyendo errores reales como llamar a un método que no existe. Cómo detectarlo: revisa el código en busca de la palabra `any`; cada aparición es una zona donde TypeScript no te protege.
+
+**Tratar `unknown` como si fuera `any`.** Asignar un valor a una variable `unknown` es libre, pero usarlo (llamar a un método, sumarlo) sin antes comprobar su tipo con `typeof` o similar produce un error de compilación. Cómo detectarlo: el compilador dice algo como "Object is of type 'unknown'" en la línea donde intentas operar sin comprobar antes.
+
+**Confundir un array con una tupla.** `number[]` acepta cualquier cantidad de números; `[number, number]` exige exactamente dos. Si necesitas un par con significado fijo (como una coordenada) y usas `number[]`, pierdes la garantía de longitud. Cómo detectarlo: si accedes a `point[2]` y el tipo lo permite sin protestar, es un array, no una tupla.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué tipos primitivos ofrece TypeScript para texto, números y booleanos?", back: "string, number y boolean." },
+    { front: "¿Cuál es la diferencia entre un array y una tupla en TypeScript?", back: "El array tiene longitud variable y un solo tipo de elemento; la tupla tiene longitud fija con un tipo específico por posición." },
+    { front: "¿Qué hace any respecto a la revisión de tipos?", back: "La desactiva por completo para esa variable: cualquier operación se acepta sin comprobar nada." },
+    { front: "¿Qué exige unknown antes de dejarte operar con un valor?", back: "Que compruebes su tipo real, por ejemplo con typeof, antes de usarlo." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué tipo describe correctamente const point = [3, 4] si quieres exactamente dos números en ese orden?",
+      options: [
+        { text: "number[]", correct: false, feedback: "number[] acepta cualquier cantidad de números, no garantiza exactamente dos." },
+        { text: "[number, number]", correct: true, feedback: "Correcto: esa es la sintaxis de tupla con dos posiciones number." },
+        { text: "any", correct: false, feedback: "any no describe nada, solo desactiva la revisión de tipos." },
+      ],
+    },
+    {
+      prompt: "¿Qué diferencia principal hay entre any y unknown?",
+      options: [
+        { text: "Ninguna, son intercambiables", correct: false, feedback: "unknown obliga a comprobar el tipo antes de operar; any no exige nada." },
+        { text: "unknown exige comprobar el tipo real antes de usar el valor; any no exige nada", correct: true, feedback: "Correcto: esa comprobación previa es lo que hace a unknown la opción segura." },
+        { text: "any es más seguro porque acepta más valores", correct: false, feedback: "Aceptar más valores sin revisión es justamente lo que hace a any inseguro." },
+      ],
+    },
+    {
+      prompt: "Dado let data: unknown = \"hola\", ¿qué ocurre si escribes data.toUpperCase() sin comprobar el tipo antes?",
+      options: [
+        { text: "Se ejecuta normalmente porque data contiene un string", correct: false, feedback: "TypeScript no sabe en ese punto que data es un string; exige la comprobación explícita." },
+        { text: "El compilador marca un error porque no se comprobó el tipo antes de usarlo", correct: true, feedback: "Correcto: unknown exige narrowing antes de permitir operaciones específicas." },
+        { text: "TypeScript lo convierte automáticamente a string", correct: false, feedback: "TypeScript no hace conversiones automáticas de tipos por ti." },
+      ],
+    },
+  ]}
+/>

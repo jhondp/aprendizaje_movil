@@ -1,0 +1,153 @@
+---
+id: "02-typescript/07-strict-mode-y-tsconfig"
+title: "strict mode y tsconfig"
+stage: 2
+module: "Proyecto"
+order: 7
+minutes: 10
+prereqs: ["02-typescript/06-utility-types"]
+summary: "Instala TypeScript, genera un tsconfig.json y activa strict mode para que el compilador exija el máximo de seguridad de tipos."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a poder instalar TypeScript en un proyecto, generar un `tsconfig.json` con `tsc --init`, y explicar qué exige activar `strict: true`.
+
+**Prerrequisitos:** `02-typescript/06-utility-types`
+
+## Concepto
+
+Piensa en las reglas de seguridad de una obra de construcción. En una obra sin supervisión, cada trabajador decide si usa casco. En una obra con inspección estricta, el casco es obligatorio y un inspector lo revisa antes de dejar entrar a nadie. `strict: true` en TypeScript es esa inspección: activa, de una sola vez, un conjunto de reglas que por defecto están apagadas, y que en conjunto atrapan la mayoría de los errores de tipos que este curso viene mostrando.
+
+### El archivo `tsconfig.json`
+
+`tsconfig.json` es el archivo de configuración que le dice a `tsc` cómo compilar un proyecto: qué archivos incluir, a qué versión de JavaScript compilar, y qué reglas de revisión aplicar. Se genera con:
+
+```
+npx tsc --init
+```
+
+Esto crea un `tsconfig.json` con decenas de opciones comentadas. Las que importan para este curso son pocas:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  }
+}
+```
+
+### Qué activa `strict: true`
+
+`strict` no es una sola regla: es un interruptor que enciende varias a la vez. Las tres más relevantes para lo aprendido en esta etapa:
+
+- **`noImplicitAny`**: si una variable o parámetro no tiene anotación de tipo y TypeScript no puede inferirlo, en vez de asumir `any` en silencio, marca un error. Esto evita que código sin anotar se cuele como `any` sin que nadie lo note.
+- **`strictNullChecks`**: `null` y `undefined` dejan de ser asignables a cualquier tipo. Sin esta regla, una variable `string` podría contener `null` sin ningún aviso, y fallaría en tiempo de ejecución al llamar un método sobre ella. Con la regla activa, si una variable puede ser `null`, tiene que anotarse explícitamente como `string | null`, y el compilador exige comprobarlo antes de usarla, igual que con `unknown` en la lección 1.
+- **`strictPropertyInitialization`**: en una clase, una propiedad declarada sin valor inicial y sin marcar como opcional debe inicializarse en el constructor. Evita propiedades que quedan en `undefined` sin que el tipo lo refleje.
+
+Sin `strict`, TypeScript revisa mucho menos de lo que parece: acepta código que en la práctica esconde los mismos errores que JavaScript. Activar `strict: true` desde el inicio de un proyecto es más simple que activarlo después, cuando ya hay cientos de líneas que dependían de las reglas apagadas. Documentación oficial: [tsconfig Reference](https://www.typescriptlang.org/tsconfig).
+
+### Compilar el proyecto
+
+```
+npx tsc
+```
+
+Sin argumentos, `tsc` lee `tsconfig.json`, compila todos los archivos `.ts` incluidos, y termina sin imprimir nada si no hay errores. Si hay errores de tipos, los lista con archivo, línea y columna, y no genera el JavaScript de salida (a menos que se desactive esa protección con `noEmitOnError: false`, algo que este curso no recomienda).
+
+## Práctica
+
+Sigue los pasos para crear un proyecto TypeScript desde cero, generar su configuración y activar `strict`.
+
+<Terminal
+  steps={[
+    { cmd: "npm init -y", out: "Wrote to package.json:\n\n{\n  \"name\": \"todo-ts\",\n  \"version\": \"1.0.0\"\n}" },
+    { cmd: "npm i -D typescript", out: "added 1 package in 2s" },
+    { cmd: "npx tsc --init", out: "Created a new tsconfig.json with:\n  target: es2016\n  module: commonjs\n  strict: true\n  esModuleInterop: true\n  skipLibCheck: true\n  forceConsistentCasingInFileNames: true\n\nYou can learn more at https://aka.ms/tsconfig" },
+    { cmd: "npx tsc", out: "" },
+  ]}
+/>
+
+<Checklist
+  id="02-typescript/07-strict-mode-y-tsconfig/flags"
+  items={[
+    "strict está en true en tsconfig.json",
+    "noImplicitAny está activo (incluido por strict): ninguna variable queda como any sin anotarla",
+    "strictNullChecks está activo (incluido por strict): null y undefined no se asignan a cualquier tipo",
+    "npx tsc termina sin errores antes de continuar al siguiente paso",
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Detectar qué regla de strict falla"
+  solution={
+    <Playground
+      lang="ts"
+      code={`function greet(name: string | null): string {
+  if (name === null) {
+    return "Hola, invitado";
+  }
+  return "Hola, " + name;
+}
+
+console.log(greet("Ana"));
+console.log(greet(null));`}
+      expected={`Hola, Ana
+Hola, invitado`}
+    />
+  }
+>
+  Con `strictNullChecks` activo, la función `function greet(name: string): string { return "Hola, " + name; }` no compila si se la llama como `greet(null)`. Reescríbela para que el parámetro acepte explícitamente `string | null`, y agrega una comprobación que devuelva `"Hola, invitado"` cuando `name` sea `null`. Prueba la función con `"Ana"` y con `null`.
+</Challenge>
+
+## Errores comunes
+
+**Dejar `strict: false` "por ahora" y nunca volver a activarlo.** Cada línea escrita sin `strict` puede depender, sin saberlo, de que TypeScript no revise `null` o no marque `any` implícitos. Activarlo después obliga a corregir todo el código acumulado de una vez. Cómo detectarlo: abre `tsconfig.json` y busca `"strict"`; si no aparece o está en `false`, el proyecto no tiene la protección completa.
+
+**Confundir errores de `tsc` con errores del `Playground`.** Como se explicó en la lección 0, el `Playground` de esta plataforma no ejecuta `tsc`: solo quita tipos con Sucrase. Los pasos de esta lección (`npx tsc --init`, `npx tsc`) son comandos reales de una terminal, no algo que el `Playground` reproduzca. Cómo detectarlo: si esperas ver un error de `tsc` dentro de un `Playground`, no vas a verlo; usa una terminal real o el editor.
+
+**Ignorar el código de salida de `npx tsc`.** `tsc` no imprime nada cuando compila sin errores, lo cual puede confundirse con que "no hizo nada". Cómo detectarlo: revisa el código de salida del comando (`echo $?` en una terminal Unix); `0` significa éxito, cualquier otro valor indica que hubo errores de compilación.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué comando genera un tsconfig.json nuevo?", back: "npx tsc --init" },
+    { front: "¿Qué hace strictNullChecks?", back: "Impide que null y undefined se asignen a cualquier tipo sin declararlo explícitamente, por ejemplo como string | null." },
+    { front: "¿Qué hace noImplicitAny?", back: "Marca un error cuando una variable o parámetro no tiene tipo anotado y TypeScript no puede inferirlo, en vez de asumir any en silencio." },
+    { front: "¿Qué comando compila un proyecto TypeScript según su tsconfig.json?", back: "npx tsc, sin argumentos." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué comando genera un tsconfig.json con opciones comentadas?",
+      options: [
+        { text: "npx tsc --init", correct: true, feedback: "Correcto: --init genera el archivo de configuración inicial." },
+        { text: "npm init -y", correct: false, feedback: "Ese comando genera package.json, no tsconfig.json." },
+        { text: "npx tsc --strict", correct: false, feedback: "No existe esa bandera para generar el archivo; --init es la correcta." },
+      ],
+    },
+    {
+      prompt: "¿Qué evita strictNullChecks?",
+      options: [
+        { text: "Que el programa use la palabra null en el código", correct: false, feedback: "null sigue siendo válido; lo que cambia es que ya no se asigna a cualquier tipo sin declararlo." },
+        { text: "Que null o undefined se asignen a un tipo que no los declara explícitamente", correct: true, feedback: "Correcto: con esta regla activa, una variable string ya no acepta null a menos que se anote string | null." },
+        { text: "Que el programa se ejecute más lento", correct: false, feedback: "strictNullChecks es una revisión en tiempo de compilación, no afecta el rendimiento en ejecución." },
+      ],
+    },
+    {
+      prompt: "¿Por qué no aparece el error de tsc dentro de un Playground lang=\"ts\" de esta plataforma?",
+      options: [
+        { text: "Porque el Playground sí corre tsc pero oculta los errores", correct: false, feedback: "El Playground no ejecuta tsc en absoluto; usa Sucrase para quitar tipos sin revisarlos." },
+        { text: "Porque el Playground solo quita las anotaciones de tipo con Sucrase, sin invocar al compilador", correct: true, feedback: "Correcto: por eso esta lección usa Terminal para mostrar el flujo real con tsc." },
+        { text: "Porque strict está desactivado en el Playground", correct: false, feedback: "No es un tema de configuración de strict: el Playground simplemente no ejecuta ningún compilador." },
+      ],
+    },
+  ]}
+/>
