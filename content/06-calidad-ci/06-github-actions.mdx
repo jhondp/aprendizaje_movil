@@ -1,0 +1,219 @@
+---
+id: "06-calidad-ci/06-github-actions"
+title: "GitHub Actions"
+stage: 6
+module: "CI"
+order: 6
+minutes: 15
+prereqs: ["06-calidad-ci/05-e2e-con-maestro"]
+summary: "Crea un workflow de GitHub Actions que instala dependencias con pnpm y ejecuta lint, tipos y pruebas en cada pull request."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás escribir un workflow de GitHub Actions que ejecuta lint, verificación de tipos y pruebas en cada pull request, y leer su resultado desde la terminal.
+
+**Prerrequisitos:** `06-calidad-ci/05-e2e-con-maestro`
+
+## Concepto
+
+En una fábrica de pan, cada lote pasa por un control de calidad antes de salir hacia las tiendas: alguien pesa una muestra, revisa la cocción y la etiqueta. No depende de que el panadero se acuerde; ocurre siempre, con cada lote, y un lote que no pasa no sale. La **integración continua** (CI) es ese control para tu código: cada vez que alguien propone un cambio, un servidor limpio descarga el repositorio y ejecuta las mismas verificaciones que tú ejecutas en tu máquina. Si algo falla, el cambio no entra en `main`.
+
+### Por qué no basta con tu máquina
+
+Tu computadora tiene dependencias instaladas hace meses, variables de entorno que olvidaste y archivos que no están en Git. Un servidor de CI empieza siempre desde cero, así que detecta el clásico "en mi máquina funciona". Además, las verificaciones dejan de depender de la disciplina de cada persona: aunque alguien olvide ejecutar `pnpm test`, la PR lo muestra en rojo.
+
+### Conceptos de GitHub Actions
+
+GitHub Actions es el servicio de CI integrado en GitHub. Documentación oficial en español: https://docs.github.com/es/actions
+
+- **Workflow**: un archivo YAML en `.github/workflows/`. Un repositorio puede tener varios.
+- **Evento**: lo que dispara el workflow, declarado en `on`. Por ejemplo, `pull_request` o `push` a una rama.
+- **Job**: un conjunto de pasos que se ejecuta en una máquina virtual nueva, llamada **runner**. Los jobs de un workflow corren en paralelo salvo que declares dependencias.
+- **Step**: un paso dentro del job. Puede ser un comando de terminal (`run`) o una **action** reutilizable publicada por otra persona (`uses`).
+
+### El workflow completo
+
+Este es el archivo completo para la app de notas. Asume que `package.json` tiene los scripts `lint`, `format:check`, `typecheck` y `test` que definiste en lecciones anteriores:
+
+```yaml
+# .github/workflows/ci.yml
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint, typecheck and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js with the pnpm cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test --ci
+```
+
+Recorre el archivo de arriba abajo:
+
+- `on` dispara el workflow en cada pull request y en cada push a `main`. Así verificas la propuesta y también el resultado después de integrarla.
+- `concurrency` cancela la ejecución anterior de la misma rama cuando subes un commit nuevo. Sin esto, tres pushes seguidos generan tres ejecuciones y solo te importa la última.
+- `timeout-minutes` corta el job si se queda colgado, por ejemplo por un `jest --watchAll` olvidado. El límite por defecto es de seis horas.
+- `actions/checkout` descarga el repositorio en el runner.
+- `pnpm/action-setup` instala pnpm. Lee la versión exacta del campo `packageManager` de tu `package.json`, por ejemplo `"packageManager": "pnpm@10.18.0"`. Si ese campo no existe, agrégalo con la versión que muestra `pnpm --version`.
+- `actions/setup-node` instala Node y, con `cache: pnpm`, guarda el almacén de paquetes de pnpm entre ejecuciones. La clave del caché incluye el hash de `pnpm-lock.yaml`: mientras el lockfile no cambie, la instalación reutiliza lo descargado y tarda segundos en lugar de minutos.
+- `pnpm install --frozen-lockfile` falla si `package.json` y `pnpm-lock.yaml` no coinciden. En CI nunca quieres que el lockfile se actualice solo: quieres instalar exactamente lo que se revisó.
+- Los cuatro pasos finales ejecutan tus scripts. Si cualquiera termina con un código distinto de cero, el job se detiene y se marca en rojo. La opción `--ci` de Jest desactiva la escritura de snapshots nuevos, para que una prueba sin snapshot falle en lugar de crearlo en silencio.
+
+El orden importa por velocidad: lint y formato fallan en segundos, así que van antes que las pruebas.
+
+### Checks en la pull request
+
+Cuando abres una PR, GitHub muestra el job "Lint, typecheck and test" en la sección de checks, con un punto amarillo mientras corre y una marca verde o una cruz roja al terminar. Desde la terminal puedes seguir lo mismo con `gh`:
+
+```bash
+gh pr checks
+gh run watch
+gh run view --log-failed
+```
+
+`gh run view --log-failed` muestra solo el log de los pasos fallidos, que es casi siempre lo único que necesitas leer.
+
+### Proteger main
+
+Un check en rojo es solo un aviso si alguien puede integrar la PR igual. En GitHub, ve a **Settings → Branches** (o **Rules → Rulesets**) y crea una regla para `main` que exija que el check "Lint, typecheck and test" pase antes de integrar. Desde ese momento, el botón de merge queda bloqueado mientras el pipeline esté en rojo.
+
+### La insignia de estado
+
+GitHub genera una imagen que muestra el estado del último run de un workflow. Agrégala al inicio del `README.md`:
+
+```markdown
+![CI](https://github.com/ana/notes/actions/workflows/ci.yml/badge.svg)
+```
+
+Cambia `ana/notes` por tu usuario y repositorio. Quien visite el repositorio ve de inmediato si `main` está sano.
+
+## Práctica
+
+Sigue una PR desde que se abre hasta que el pipeline queda verde. El primer run falla por un error de tipos que no se detectó en local.
+
+<Terminal
+  steps={[
+    { cmd: "git push -u origin feat/notes-search", out: "branch 'feat/notes-search' set up to track 'origin/feat/notes-search'." },
+    { cmd: "gh pr create --fill", out: "Creating pull request for feat/notes-search into main in ana/notes\n\nhttps://github.com/ana/notes/pull/14" },
+    { cmd: "gh pr checks", out: "Some checks were not successful\n0 cancelled, 1 failing, 0 successful, 0 skipped, and 0 pending checks\n\nX  CI/Lint, typecheck and test (pull_request)  41s  https://github.com/ana/notes/actions/runs/1187" },
+    { cmd: "gh run view --log-failed", out: "verify  Typecheck  > notes@1.0.0 typecheck /home/runner/work/notes/notes\nverify  Typecheck  > tsc --noEmit\nverify  Typecheck  src/features/notes/ui/SearchBar.tsx(9,26): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.\nverify  Typecheck   ELIFECYCLE  Command failed with exit code 2." },
+    { cmd: "git commit -am \"fix(notes): handle missing search query\" && git push", out: "[feat/notes-search 2c9f41e] fix(notes): handle missing search query\n 1 file changed, 1 insertion(+), 1 deletion(-)" },
+    { cmd: "gh run watch", out: "✓ feat/notes-search CI · 1188\nTriggered via pull_request less than a minute ago\n\nJOBS\n✓ Lint, typecheck and test in 52s (ID 3312)\n  ✓ Set up job\n  ✓ Check out the repository\n  ✓ Install pnpm\n  ✓ Set up Node.js with the pnpm cache\n  ✓ Install dependencies\n  ✓ Lint\n  ✓ Check formatting\n  ✓ Typecheck\n  ✓ Unit tests\n  ✓ Complete job" },
+    { cmd: "gh pr checks", out: "All checks were successful\n0 cancelled, 0 failing, 1 successful, 0 skipped, and 0 pending checks\n\n✓  CI/Lint, typecheck and test (pull_request)  52s  https://github.com/ana/notes/actions/runs/1188" },
+  ]}
+/>
+
+Configura el pipeline en tu repositorio y marca cada punto.
+
+<Checklist
+  id="06-calidad-ci/06-github-actions-setup"
+  items={[
+    ".github/workflows/ci.yml existe y se dispara en pull_request y en push a main",
+    "package.json tiene el campo packageManager con la versión de pnpm",
+    "La instalación usa --frozen-lockfile y el caché de pnpm",
+    "El workflow ejecuta lint, formato, tipos y pruebas",
+    "Una regla de GitHub exige el check verde para integrar en main",
+    "El README.md muestra la insignia de estado del workflow",
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Rompe el pipeline a propósito"
+  solution={
+    <Terminal
+      steps={[
+        { cmd: "git switch -c test/broken-lint", out: "Switched to a new branch 'test/broken-lint'" },
+        { cmd: "git commit -am \"test: add unused variable to break lint\" && git push -u origin test/broken-lint", out: "branch 'test/broken-lint' set up to track 'origin/test/broken-lint'." },
+        { cmd: "gh pr create --fill --draft", out: "https://github.com/ana/notes/pull/15" },
+        { cmd: "gh run view --log-failed", out: "verify  Lint  /home/runner/work/notes/notes/app/index.tsx\nverify  Lint    7:9  warning  'unused' is assigned a value but never used  @typescript-eslint/no-unused-vars\nverify  Lint  ✖ 1 problem (0 errors, 1 warning)\nverify  Lint  ESLint found too many warnings (maximum: 0)." },
+        { cmd: "gh pr close 15 --delete-branch", out: "✓ Closed pull request ana/notes#15\n✓ Deleted branch test/broken-lint" },
+      ]}
+    />
+  }
+>
+  Comprueba que tu pipeline realmente bloquea errores. Crea una rama, agrega una variable sin usar en cualquier pantalla, sube la rama y abre una PR en borrador. Confirma con `gh run view --log-failed` que el paso Lint falla y explica por qué falla aunque ESLint solo reporte una advertencia. Cierra la PR y borra la rama al terminar.
+</Challenge>
+
+## Errores comunes
+
+**Instalar sin `--frozen-lockfile`.** El CI instala versiones distintas de las que probaste y aparece un fallo que no puedes reproducir, o peor, pasa algo que en tu máquina falla. Ocurre porque `pnpm install` puede actualizar el lockfile. Se detecta revisando el log de instalación: con `--frozen-lockfile`, un lockfile desactualizado detiene el job con un error explícito.
+
+**Versión de pnpm sin declarar.** El paso `pnpm/action-setup` falla con un mensaje que pide una versión. Ocurre porque no hay campo `packageManager` en `package.json` ni `version` en el paso. Se detecta en el primer run; la solución es declarar `packageManager` para que tu máquina y el CI usen la misma versión.
+
+**Checks que nadie exige.** El pipeline está en rojo desde hace una semana y las PR se integran igual. Ocurre porque el workflow existe pero no hay regla de protección sobre `main`. Se detecta abriendo una PR en rojo: si el botón de merge está disponible, el check es decorativo.
+
+<Flashcards
+  cards={[
+    { front: "¿Dónde se guardan los workflows de GitHub Actions?", back: "En archivos YAML dentro de .github/workflows/." },
+    { front: "¿Qué hace pnpm install --frozen-lockfile en CI?", back: "Instala exactamente lo que dice pnpm-lock.yaml y falla si no coincide con package.json." },
+    { front: "¿De dónde obtiene pnpm/action-setup la versión de pnpm?", back: "Del campo packageManager de package.json, salvo que se indique version en el paso." },
+    { front: "¿Para qué sirve concurrency con cancel-in-progress en un workflow?", back: "Cancela la ejecución anterior de la misma rama cuando llega un commit nuevo." },
+    { front: "¿Qué comando de gh muestra solo los logs de los pasos fallidos?", back: "gh run view --log-failed" },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué logra cache: pnpm en actions/setup-node?",
+      options: [
+        { text: "Guarda el almacén de paquetes entre ejecuciones según el hash del lockfile", correct: true, feedback: "Correcto: la instalación reutiliza lo descargado mientras el lockfile no cambie." },
+        { text: "Guarda node_modules dentro del repositorio", correct: false, feedback: "El caché vive en GitHub, no en tu repositorio." },
+        { text: "Instala pnpm", correct: false, feedback: "Eso lo hace pnpm/action-setup." },
+      ],
+    },
+    {
+      prompt: "¿Por qué lint va antes que las pruebas en el workflow?",
+      options: [
+        { text: "Porque las pruebas necesitan el resultado de lint", correct: false, feedback: "Son independientes." },
+        { text: "Porque falla en segundos y da la respuesta más rápido", correct: true, feedback: "Correcto: los pasos baratos primero acortan el ciclo de corrección." },
+        { text: "Porque GitHub lo exige", correct: false, feedback: "GitHub ejecuta los pasos en el orden que declares." },
+      ],
+    },
+    {
+      prompt: "El pipeline está en rojo pero alguien pudo integrar la PR. ¿Qué falta?",
+      options: [
+        { text: "Agregar más pasos al workflow", correct: false, feedback: "Los pasos ya detectaron el problema." },
+        { text: "Una regla de protección de main que exija el check", correct: true, feedback: "Correcto: sin ella, el check es solo informativo." },
+        { text: "Ejecutar el workflow dos veces", correct: false, feedback: "El resultado sería el mismo." },
+      ],
+    },
+  ]}
+/>
