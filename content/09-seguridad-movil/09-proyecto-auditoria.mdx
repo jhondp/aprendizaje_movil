@@ -1,0 +1,212 @@
+---
+id: "09-seguridad-movil/09-proyecto-auditoria"
+title: "Proyecto: auditoría de tu app"
+stage: 9
+module: "Proyecto"
+order: 9
+minutes: 35
+prereqs: ["09-seguridad-movil/08-crash-reporting-sin-fugas"]
+summary: "Audita la app de notas con usuarios contra el perfil MAS-L1, corrige lo que falle y documenta cada control con su evidencia en SECURITY_AUDIT.md."
+---
+
+## Objetivo
+
+Al terminar este proyecto tendrás un archivo `SECURITY_AUDIT.md` en el repositorio de tu app de notas con el estado, la evidencia y la corrección aplicada para cada control del perfil MAS-L1 (más los de privacidad), y la app corregida en consecuencia.
+
+**Prerrequisitos:** `09-seguridad-movil/08-crash-reporting-sin-fugas`
+
+## Concepto
+
+Este proyecto recorre **todas** las categorías MASVS (STORAGE, CRYPTO, AUTH, NETWORK, PLATFORM, CODE, RESILIENCE y PRIVACY) y las convierte en un documento verificable sobre tu propia app.
+
+### La inspección técnica del vehículo
+
+Una inspección técnica no es una opinión sobre si el coche "parece seguro": es una lista fija de puntos, cada uno con un resultado (pasa, no pasa, no aplica) y una observación que cualquier otro inspector podría reproducir. Si los frenos fallan, el informe dice qué se midió y qué valor dio. Tu auditoría de seguridad es eso: no una declaración de intenciones, sino una tabla en la que cada fila puede comprobarse abriendo un archivo o ejecutando un comando.
+
+### Sobre qué app trabajas
+
+Partes de la app de notas con usuarios que cerró la etapa 8: [Proyecto: app con usuarios](/etapa/08-autenticacion-backend/07-proyecto-app-con-usuarios). Si en las lecciones anteriores ya aplicaste correcciones (mover secretos, cambiar a SecureStore, configurar `beforeSend`), la auditoría las recoge como evidencia; si no, este es el momento de hacerlas.
+
+### El alcance: MAS-L1 más privacidad
+
+MASVS agrupa controles en perfiles. En líneas generales, **MAS-L1** exige los controles de STORAGE, CRYPTO, AUTH, NETWORK-1, PLATFORM y CODE; **MAS-L2** añade NETWORK-2 (pinning) y endurece otros; **MAS-R** cubre los cuatro de RESILIENCE; y **MAS-P** los cuatro de PRIVACY. Tu alcance es L1 + P. Los controles de L2 y R aparecen en la tabla con estado "decisión": no los implementas, pero documentas por qué y qué condición cambiaría la decisión. Referencia oficial de perfiles y controles: [https://mas.owasp.org/MASVS/](https://mas.owasp.org/MASVS/).
+
+### La estructura del documento
+
+`SECURITY_AUDIT.md` tiene cuatro partes:
+
+1. **Cabecera**: nombre de la app, versión auditada (commit), fecha, perfil objetivo, quién audita.
+2. **Resumen**: cuántos controles cumplen, cuántos no, cuántos no aplican y cuántas decisiones documentadas. Tres líneas.
+3. **Tabla de controles**: una fila por control.
+4. **Hallazgos corregidos**: lista de lo que cambió durante la auditoría, con el commit de cada corrección.
+
+La tabla es el corazón. Cada fila tiene cuatro columnas fijas:
+
+| Control           | Estado   | Evidencia                                                       | Corrección                                  |
+| ----------------- | -------- | --------------------------------------------------------------- | ------------------------------------------- |
+| MASVS-STORAGE-1   | Cumple   | `src/infrastructure/auth/sessionStore.ts` usa `SecureStore`     | Commit `a1b2c3d`: migrado desde AsyncStorage |
+| MASVS-STORAGE-2   | Cumple   | `beforeSend` en `src/infrastructure/monitoring/scrub.ts`; sin `console.log` fuera de `__DEV__` | —                     |
+| MASVS-NETWORK-2   | Decisión | Sin pinning; TLS moderno y HSTS en el servidor (`curl -sI`)     | Revisar si la app maneja datos de salud o pagos |
+| MASVS-PLATFORM-2  | No aplica | La app no usa WebViews                                         | —                                           |
+
+Los estados posibles son exactamente cuatro: **Cumple**, **No cumple**, **No aplica** y **Decisión**. La evidencia es siempre algo que otra persona puede abrir o ejecutar: una ruta de archivo, un comando con su salida, una captura del panel de la tienda. "Revisado, está bien" no es evidencia.
+
+### Cómo recorrer cada categoría
+
+Usa las lecciones de la etapa como guía de comprobación:
+
+- **STORAGE**: la clasificación de datos y el uso de SecureStore (lección 03); la ausencia de secretos en el bundle y en el historial (lección 02); la limpieza del crash reporting (lección 08).
+- **CRYPTO**: la app de notas no implementa criptografía propia; el estado esperado es "Cumple" con la evidencia de que TLS y SecureStore delegan en la plataforma, y de que no hay ningún `crypto` casero en el código. Si lo hay, es un hallazgo a evaluar.
+- **AUTH**: lo que construiste en la etapa 8. Evidencia: el backend comprueba el dueño de cada nota en cada endpoint; los tokens expiran; el cierre de sesión borra el token local y lo invalida en el servidor. Los controles AUTH-2 y AUTH-3 (autenticación local y adicional) suelen ser "No aplica" en una app de notas, salvo que hayas añadido bloqueo biométrico.
+- **NETWORK**: HTTPS sin excepciones y la decisión de pinning (lección 04).
+- **PLATFORM**: deep links validados y sin datos sensibles (lección 05); WebViews, si las hay; y la decisión sobre ocultar la pantalla en el selector de apps.
+- **CODE**: versión mínima de plataforma actual (`CODE-1`), mecanismo de actualización forzada o su ausencia justificada (`CODE-2`), auditoría de dependencias (`CODE-3`, lección 06) y validación de entrada (`CODE-4`, lección 05).
+- **RESILIENCE**: cuatro filas con estado "Decisión". Detección de root, anti-tampering y ofuscación son defensa en profundidad; para MAS-L1 documentas que no las implementas y por qué.
+- **PRIVACY**: inventario, permisos, declaraciones de las tiendas y borrado de cuenta (lección 07).
+
+### Qué significa "terminado"
+
+El proyecto está completo cuando se cumplen todas estas condiciones:
+
+1. `SECURITY_AUDIT.md` existe en la raíz del repositorio con las cuatro partes y **todas** las filas de la tabla (24 controles).
+2. Ningún control del alcance L1 + P está en estado "No cumple". Si alguno lo estaba al empezar, hay un commit de corrección enlazado.
+3. Los secretos están fuera del bundle: `grep` sobre el bundle exportado no encuentra ninguno, y `.env*` está en `.gitignore`.
+4. El token de sesión vive en SecureStore y ninguna clave de AsyncStorage guarda datos sensibles.
+5. La decisión sobre pinning está escrita con su justificación.
+6. `pnpm audit` no reporta vulnerabilidades altas o críticas en dependencias de producción, y `pnpm-lock.yaml` está versionado.
+7. Existe el borrador de App Privacy details y Data safety, derivado del inventario de datos.
+8. `beforeSend` y `beforeBreadcrumb` están configurados y probados con un evento de prueba.
+9. `THREAT_MODEL.md` de la lección 00 está actualizado con lo aprendido durante la auditoría.
+
+<Callout kind="tip">
+  Haz la auditoría en dos pasadas. En la primera, rellena solo Control y Estado sin corregir nada: obtienes la foto real. En la segunda, corrige de mayor a menor riesgo y completa Evidencia y Corrección. Mezclar las dos pasadas es la forma más segura de olvidar filas.
+</Callout>
+
+## Práctica
+
+Esta es la lista de comprobación completa. Cada punto corresponde a una fila de `SECURITY_AUDIT.md`; márcalo solo cuando la fila tenga estado y evidencia escritos.
+
+<Checklist
+  id="09-seguridad-movil/09-auditoria-masvs-l1"
+  items={[
+    "Cabecera: app, commit auditado, fecha, perfil objetivo (MAS-L1 + MAS-P), auditor",
+    "MASVS-STORAGE-1: datos sensibles en SecureStore o SQLite según clasificación; evidencia: archivo del store de sesión",
+    "MASVS-STORAGE-2: sin secretos en bundle ni historial; sin console.log sensibles; beforeSend configurado; evidencia: grep del bundle y scrub.ts",
+    "MASVS-CRYPTO-1: sin criptografía casera; TLS y SecureStore delegan en la plataforma; evidencia: búsqueda de 'crypto' en src",
+    "MASVS-CRYPTO-2: sin claves criptográficas gestionadas por la app, o gestionadas vía SecureStore; evidencia",
+    "MASVS-AUTH-1: el backend valida sesión y dueño en cada endpoint; tokens expiran; logout invalida; evidencia: rutas del backend",
+    "MASVS-AUTH-2: autenticación local (biometría/PIN) no aplica o está implementada con la API de la plataforma; evidencia",
+    "MASVS-AUTH-3: operaciones sensibles (borrar cuenta) piden confirmación o reautenticación; evidencia: pantalla de borrado",
+    "MASVS-NETWORK-1: todas las URLs https; sin NSAllowsArbitraryLoads ni usesCleartextTraffic; evidencia: grep y app.json",
+    "MASVS-NETWORK-2: decisión de pinning documentada con justificación y condición de cambio",
+    "MASVS-PLATFORM-1: deep links validados (formato y sesión), sin datos sensibles en la URL; evidencia: validador de rutas",
+    "MASVS-PLATFORM-2: WebViews no aplica, o configuradas sin JavaScript bridge innecesario; evidencia",
+    "MASVS-PLATFORM-3: decisión sobre ocultar contenido en el selector de apps y sobre el portapapeles; evidencia",
+    "MASVS-CODE-1: versión mínima de iOS y Android actual según el SDK de Expo; evidencia: app.json / expo-build-properties",
+    "MASVS-CODE-2: mecanismo de actualización forzada o decisión justificada de no tenerlo; evidencia",
+    "MASVS-CODE-3: pnpm audit sin altas/críticas en producción; lockfile versionado; --frozen-lockfile en CI; evidencia: salida de audit",
+    "MASVS-CODE-4: esquemas en fronteras y SQL parametrizado; evidencia: archivos de esquemas y búsqueda de interpolación en SQL",
+    "MASVS-RESILIENCE-1: decisión sobre detección de root/jailbreak (defensa en profundidad, no garantía)",
+    "MASVS-RESILIENCE-2: decisión sobre anti-tampering; integridad del build vía lockfile y EAS",
+    "MASVS-RESILIENCE-3: decisión sobre ofuscación del bundle",
+    "MASVS-RESILIENCE-4: decisión sobre anti-depuración en producción",
+    "MASVS-PRIVACY-1: inventario de datos; permisos mínimos y en contexto; evidencia: inventario y app.json",
+    "MASVS-PRIVACY-2: sin identificadores estables del dispositivo; id de diagnóstico aleatorio; evidencia",
+    "MASVS-PRIVACY-3: borradores de App Privacy details y Data safety coherentes con el inventario; evidencia: los borradores",
+    "MASVS-PRIVACY-4: borrado de cuenta y datos desde la app con endpoint en el backend; evidencia: pantalla y ruta",
+    "Resumen con conteo por estado y lista de hallazgos corregidos con sus commits",
+    "THREAT_MODEL.md actualizado con lo aprendido"
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Generar el resumen de la auditoría"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type Status = "Cumple" | "No cumple" | "No aplica" | "Decisión";
+type Row = { control: string; status: Status; evidence: string };
+
+const rows: Row[] = [
+  { control: "MASVS-STORAGE-1", status: "Cumple", evidence: "sessionStore.ts uses SecureStore" },
+  { control: "MASVS-STORAGE-2", status: "Cumple", evidence: "bundle grep clean; scrub.ts" },
+  { control: "MASVS-NETWORK-1", status: "Cumple", evidence: "no http:// in src; app.json clean" },
+  { control: "MASVS-NETWORK-2", status: "Decisión", evidence: "no pinning; TLS + HSTS documented" },
+  { control: "MASVS-PLATFORM-2", status: "No aplica", evidence: "no WebViews" },
+  { control: "MASVS-CODE-3", status: "No cumple", evidence: "pnpm audit: 1 high in production" },
+];
+
+const counts: Record<Status, number> = { "Cumple": 0, "No cumple": 0, "No aplica": 0, "Decisión": 0 };
+for (const r of rows) counts[r.status] += 1;
+
+console.log("| Control | Estado | Evidencia |");
+console.log("| --- | --- | --- |");
+for (const r of rows) console.log("| " + r.control + " | " + r.status + " | " + r.evidence + " |");
+console.log("Cumple: " + counts["Cumple"] + ", No cumple: " + counts["No cumple"] + ", No aplica: " + counts["No aplica"] + ", Decisión: " + counts["Decisión"]);
+console.log(counts["No cumple"] === 0 ? "READY" : "NOT READY: fix " + counts["No cumple"] + " control(s)");`}
+      expected={`| Control | Estado | Evidencia |
+| --- | --- | --- |
+| MASVS-STORAGE-1 | Cumple | sessionStore.ts uses SecureStore |
+| MASVS-STORAGE-2 | Cumple | bundle grep clean; scrub.ts |
+| MASVS-NETWORK-1 | Cumple | no http:// in src; app.json clean |
+| MASVS-NETWORK-2 | Decisión | no pinning; TLS + HSTS documented |
+| MASVS-PLATFORM-2 | No aplica | no WebViews |
+| MASVS-CODE-3 | No cumple | pnpm audit: 1 high in production |
+Cumple: 3, No cumple: 1, No aplica: 1, Decisión: 1
+NOT READY: fix 1 control(s)`}
+    />
+  }
+>
+  Modela las filas de tu auditoría como objetos `{ control, status, evidence }` con los cuatro estados posibles. Escribe un programa que imprima la tabla en formato Markdown, luego una línea con el conteo por estado, y por último `READY` si no hay ningún "No cumple" o `NOT READY: fix N control(s)` en caso contrario. Ese programa es el generador del resumen de tu `SECURITY_AUDIT.md`; puedes ejecutarlo con tus filas reales.
+</Challenge>
+
+## Errores comunes
+
+**Rellenar "Cumple" sin evidencia.** La fila dice que cumple y la columna de evidencia dice "revisado". Ocurre por prisa o por auditar de memoria. Se detecta pidiendo a otra persona que reproduzca cada evidencia: si no puede abrir un archivo o ejecutar un comando, la fila no vale.
+
+**Auditar una versión distinta de la que se publica.** La auditoría se hace en una rama y el release sale de otra con cambios posteriores. Ocurre por no anotar el commit auditado. Se detecta comparando el commit de la cabecera con el del build publicado; si difieren, la auditoría no describe lo que enviaste.
+
+**Marcar "No aplica" para no trabajar.** MASVS-CODE-4 aparece como "No aplica" porque "la app no tiene formularios complejos". Ocurre por confundir "poco" con "ninguno". Se detecta preguntando si existe al menos un punto de entrada para ese control; si existe, el estado es Cumple o No cumple.
+
+**Dejar la auditoría como documento único.** Se hace una vez, se archiva y la app sigue cambiando. Ocurre por tratarla como entregable y no como proceso. Se detecta comparando la fecha de la cabecera con la del último release; la solución es repetir al menos las filas afectadas en cada release con cambios de seguridad.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué cuatro columnas tiene la tabla de SECURITY_AUDIT.md?", back: "Control, Estado, Evidencia y Corrección." },
+    { front: "¿Cuáles son los cuatro estados posibles de un control en la auditoría?", back: "Cumple, No cumple, No aplica y Decisión." },
+    { front: "¿Qué cuenta como evidencia válida en una auditoría MASVS?", back: "Algo que otra persona puede abrir o ejecutar: ruta de archivo, comando con salida, captura del panel." },
+    { front: "¿Qué estado reciben los controles MASVS-RESILIENCE en una app que apunta a MAS-L1?", back: "Decisión: se documenta por qué no se implementan y qué condición lo cambiaría." },
+    { front: "¿Cuándo está terminada la auditoría del proyecto?", back: "Cuando las 24 filas tienen estado y evidencia, ningún control L1 + P está en No cumple y las correcciones tienen commit." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "La app no usa WebViews. ¿Qué estado corresponde a MASVS-PLATFORM-2?",
+      options: [
+        { text: "Cumple", correct: false, feedback: "No hay nada que cumplir si el mecanismo no existe en la app." },
+        { text: "No aplica, con la evidencia de que no hay WebViews en el código", correct: true, feedback: "Correcto: y la evidencia debe ser comprobable, por ejemplo una búsqueda en src." },
+        { text: "Decisión", correct: false, feedback: "Decisión es para controles que podrías implementar y eliges no hacerlo con justificación." }
+      ]
+    },
+    {
+      prompt: "¿Cuál de estas es evidencia válida para MASVS-STORAGE-2?",
+      options: [
+        { text: "\"El equipo tiene cuidado con los logs\"", correct: false, feedback: "No es reproducible por otra persona." },
+        { text: "La salida de grep sobre el bundle exportado y la ruta del archivo con beforeSend", correct: true, feedback: "Correcto: cualquier persona puede repetir ambas comprobaciones." },
+        { text: "Una captura de la app funcionando", correct: false, feedback: "No demuestra nada sobre fugas de datos." }
+      ]
+    },
+    {
+      prompt: "Al terminar la primera pasada, MASVS-CODE-3 está en 'No cumple' por una vulnerabilidad alta. ¿Qué hace que el proyecto pueda darse por terminado?",
+      options: [
+        { text: "Cambiar el estado a 'Decisión' explicando que se corregirá más adelante", correct: false, feedback: "Decisión no es para posponer controles del alcance L1." },
+        { text: "Corregir la dependencia, enlazar el commit en la columna Corrección y actualizar el estado a Cumple", correct: true, feedback: "Correcto: ningún control L1 + P puede quedar en No cumple." },
+        { text: "Eliminar la fila de la tabla", correct: false, feedback: "Las 24 filas son obligatorias." }
+      ]
+    }
+  ]}
+/>

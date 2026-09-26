@@ -21,7 +21,7 @@ Esta lección recorre las ocho categorías MASVS (STORAGE, CRYPTO, AUTH, NETWORK
 
 ### Un código de edificación para apps
 
-Cuando se construye un edificio, nadie inventa desde cero cuánto debe resistir una viga: existe un código de edificación que lo fija, y un inspector que lo verifica. OWASP publica el equivalente para apps móviles. El **OWASP Mobile Top 10** es la lista de los fallos que más veces se encuentran en la práctica; **MASVS** (Mobile Application Security Verification Standard) es el código que dice qué debe cumplir la app; y **MASTG** (Mobile Application Security Testing Guide) es el manual del inspector, con los procedimientos para comprobar cada control. Los tres viven en <https://mas.owasp.org/>.
+Cuando se construye un edificio, nadie inventa desde cero cuánto debe resistir una viga: existe un código de edificación que lo fija, y un inspector que lo verifica. OWASP publica el equivalente para apps móviles. El **OWASP Mobile Top 10** es la lista de los fallos que más veces se encuentran en la práctica; **MASVS** (Mobile Application Security Verification Standard) es el código que dice qué debe cumplir la app; y **MASTG** (Mobile Application Security Testing Guide) es el manual del inspector, con los procedimientos para comprobar cada control. Los tres viven en [https://mas.owasp.org/](https://mas.owasp.org/).
 
 ### OWASP Mobile Top 10 (edición 2024)
 
@@ -93,7 +93,7 @@ async function login(email: string, password: string) {
 `__DEV__` es una constante global de React Native que vale `true` solo en desarrollo, así que el log desaparece del bundle de producción.
 
 <Callout kind="tip">
-  Guarda el enlace <https://mas.owasp.org/MASVS/> en tu repositorio. Cada vez que encuentres una debilidad, anota su id MASVS: en la lección 09 esa costumbre te ahorrará la mitad del trabajo de la auditoría.
+  Guarda el enlace [https://mas.owasp.org/MASVS/](https://mas.owasp.org/MASVS/) en tu repositorio. Cada vez que encuentres una debilidad, anota su id MASVS: en la lección 09 esa costumbre te ahorrará la mitad del trabajo de la auditoría.
 </Callout>
 
 ## Práctica
@@ -214,7 +214,7 @@ PRIVACY: 1`}
 
 **Usar el Top 10 como lista de verificación.** Se marca "M9 revisado" sin haber comprobado ningún control concreto. Ocurre porque el Top 10 describe riesgos, no requisitos. Se detecta cuando la auditoría no puede citar qué archivo o configuración demuestra el cumplimiento; la solución es trabajar con los controles MASVS y su evidencia.
 
-**Citar ids MASVS v1.** Aparecen `MSTG-STORAGE-1` o "requisito 2.1" copiados de artículos antiguos. Ocurre porque muchos tutoriales no se han actualizado. Se detecta porque el id no existe en <https://mas.owasp.org/MASVS/>; corrige al formato `MASVS-STORAGE-1`.
+**Citar ids MASVS v1.** Aparecen `MSTG-STORAGE-1` o "requisito 2.1" copiados de artículos antiguos. Ocurre porque muchos tutoriales no se han actualizado. Se detecta porque el id no existe en [https://mas.owasp.org/MASVS/](https://mas.owasp.org/MASVS/); corrige al formato `MASVS-STORAGE-1`.
 
 **Apuntar a MAS-L2 o MAS-R sin cumplir L1.** El equipo discute ofuscación y detección de root mientras el token sigue en AsyncStorage. Ocurre porque los controles de resistencia parecen más "de seguridad". Se detecta comparando el trabajo pendiente con el perfil: primero L1 completo, luego lo demás.
 

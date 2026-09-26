@@ -34,7 +34,7 @@ Las plataformas ya bloquean el tráfico en claro por defecto: Android desde la v
 
 Con Expo, esas claves se configuran desde `app.json` (`ios.infoPlist`) o mediante config plugins. Búscalas en tu proyecto: si aparecen, son un hallazgo. Para desarrollo local con Metro no las necesitas; Expo configura excepciones acotadas al servidor de desarrollo.
 
-Además de no romper los valores por defecto, la app debe cumplir dos cosas: que **todas** las URLs sean `https://` (revisa constantes, `.env`, deep links y URLs construidas dinámicamente) y que el servidor tenga TLS bien configurado (certificado vigente, versiones modernas del protocolo, HSTS). La guía oficial de React Native resume el punto de partida: <https://reactnative.dev/docs/security#networking>.
+Además de no romper los valores por defecto, la app debe cumplir dos cosas: que **todas** las URLs sean `https://` (revisa constantes, `.env`, deep links y URLs construidas dinámicamente) y que el servidor tenga TLS bien configurado (certificado vigente, versiones modernas del protocolo, HSTS). La guía oficial de React Native resume el punto de partida: [https://reactnative.dev/docs/security#networking](https://reactnative.dev/docs/security#networking).
 
 ### Leer el certificado de tu API
 
@@ -74,7 +74,7 @@ En Expo, el pinning necesita código nativo, así que **no funciona en Expo Go n
 }
 ```
 
-En Android, el equivalente es un archivo `res/xml/network_security_config.xml` referenciado desde el manifiesto (<https://developer.android.com/privacy-and-security/security-config>). Expo no lo genera por ti: hace falta un config plugin que escriba el archivo y modifique el manifiesto en `prebuild`.
+En Android, el equivalente es un archivo `res/xml/network_security_config.xml` referenciado desde el manifiesto ([https://developer.android.com/privacy-and-security/security-config](https://developer.android.com/privacy-and-security/security-config)). Expo no lo genera por ti: hace falta un config plugin que escriba el archivo y modifique el manifiesto en `prebuild`.
 
 ```xml
 <?xml version="1.0" encoding="utf-8"?>

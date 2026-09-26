@@ -1,0 +1,287 @@
+---
+id: "09-seguridad-movil/08-crash-reporting-sin-fugas"
+title: "Crash reporting sin fugas"
+stage: 9
+module: "Cadena y privacidad"
+order: 8
+minutes: 12
+prereqs: ["09-seguridad-movil/07-privacidad-y-permisos-minimos"]
+summary: "Configura el reporte de errores para que te diga qué falló sin enviar correos, tokens ni contenido de notas a un servicio externo."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás configurar `@sentry/react-native` en una app Expo con `beforeSend` y `beforeBreadcrumb` que eliminen datos personales y secretos antes de que salgan del dispositivo, y comprobar con un evento de prueba que la limpieza funciona.
+
+**Prerrequisitos:** `09-seguridad-movil/07-privacidad-y-permisos-minimos`
+
+## Concepto
+
+Esta lección cubre **MASVS-STORAGE-2** (evitar la fuga de datos sensibles, aquí hacia un servicio externo) y **MASVS-PRIVACY-1** (minimizar los datos que se comparten con terceros).
+
+### El informe del taller
+
+Cuando llevas el coche al taller, el mecánico necesita saber qué ruido hacía, cuándo y a qué velocidad. No necesita el contenido de tu guantera. Un reporte de fallo es lo mismo: pila de llamadas, versión de la app, modelo de dispositivo y los pasos previos. No necesita el correo del usuario, su token de sesión ni el texto de la nota que estaba escribiendo. El problema es que las herramientas de crash reporting, por defecto, recogen mucho contexto porque no saben qué parte es sensible. Decidirlo es tu trabajo.
+
+### Qué envía un reporte
+
+Un evento típico de Sentry incluye: el error y su pila, tags (versión, plataforma, entorno), `user` (lo que tú establezcas), `extra` (lo que tú adjuntes), `breadcrumbs` (una traza de lo que pasó antes: navegación, peticiones HTTP, mensajes de `console.log`) y, opcionalmente, información del dispositivo. Tres de esas partes son las que filtran datos con más frecuencia:
+
+- **`user`**: si llamas a `Sentry.setUser({ email })`, el correo viaja con cada evento.
+- **`breadcrumbs`**: cada `console.log` de tu app se convierte en una miga. Si en algún lugar registras el cuerpo de una petición o una nota, viaja.
+- **`extra` y mensajes de error**: `throw new Error("Failed to save note: " + note.body)` envía el contenido de la nota como parte del mensaje.
+
+### Instalar en Expo
+
+Expo recomienda `@sentry/react-native` con su config plugin; el antiguo paquete `sentry-expo` está descontinuado. La guía oficial usa el asistente: `npx @sentry/wizard@latest -i reactNative`, que instala el paquete, configura Metro y añade `@sentry/react-native/expo` a los plugins de `app.json` ([https://docs.expo.dev/guides/using-sentry/](https://docs.expo.dev/guides/using-sentry/)). La configuración del SDK va en el layout raíz de Expo Router, y ahí es donde aplicas la política de privacidad del reporte.
+
+### La configuración que no filtra
+
+```ts
+// app/_layout.tsx
+import * as Sentry from "@sentry/react-native";
+import { scrubEvent, dropSensitiveBreadcrumb } from "@/infrastructure/monitoring/scrub";
+
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  environment: process.env.EXPO_PUBLIC_ENVIRONMENT ?? "production",
+  enabled: !__DEV__,
+  sendDefaultPii: false,
+  beforeSend: scrubEvent,
+  beforeBreadcrumb: dropSensitiveBreadcrumb,
+});
+```
+
+`sendDefaultPii: false` evita que el SDK adjunte por su cuenta datos identificativos como la dirección IP. El DSN es configuración pública (solo permite enviar eventos a tu proyecto, no leerlos), así que puede ir en `EXPO_PUBLIC_`. `enabled: !__DEV__` evita ruido y fugas durante el desarrollo.
+
+`beforeSend` recibe cada evento justo antes de enviarlo: puedes modificarlo o devolver `null` para descartarlo. Es la última línea de defensa y debe cubrir tres cosas: eliminar el correo del usuario, enmascarar cualquier cadena que parezca token o correo, y vaciar los campos que tu app usa para contenido:
+
+```ts
+// src/infrastructure/monitoring/scrub.ts
+import type { Breadcrumb, ErrorEvent } from "@sentry/react-native";
+
+const EMAIL = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
+const BEARER = /Bearer\s+[A-Za-z0-9._-]+/g;
+const SENSITIVE_KEYS = new Set(["password", "token", "authorization", "body", "noteBody", "email"]);
+
+export function scrubText(text: string): string {
+  return text.replace(EMAIL, "[email]").replace(BEARER, "Bearer [token]");
+}
+
+export function scrubValue(value: unknown): unknown {
+  if (typeof value === "string") return scrubText(value);
+  if (Array.isArray(value)) return value.map(scrubValue);
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, inner] of Object.entries(value)) {
+      out[key] = SENSITIVE_KEYS.has(key) ? "[redacted]" : scrubValue(inner);
+    }
+    return out;
+  }
+  return value;
+}
+
+export function scrubEvent(event: ErrorEvent): ErrorEvent {
+  if (event.user) event.user = { id: event.user.id };
+  if (event.message) event.message = scrubText(event.message);
+  if (event.extra) event.extra = scrubValue(event.extra) as Record<string, unknown>;
+  if (event.request) delete event.request.cookies;
+  return event;
+}
+
+export function dropSensitiveBreadcrumb(crumb: Breadcrumb): Breadcrumb | null {
+  if (crumb.category === "console") return null;
+  if (crumb.data) crumb.data = scrubValue(crumb.data) as Record<string, unknown>;
+  return crumb;
+}
+```
+
+Descartar las migas de categoría `console` es una decisión deliberada: los `console.log` de desarrollo son la vía más frecuente de fuga y, en producción, no deberían existir. Si necesitas trazas, usa `Sentry.addBreadcrumb` con datos que tú controlas.
+
+### Identificar sin exponer
+
+Para agrupar errores por usuario basta con el identificador de cuenta: `Sentry.setUser({ id: account.id })`. Nunca el correo ni el nombre. Y cuando el usuario cierra sesión, `Sentry.setUser(null)`.
+
+### Lo que no debe entrar en un mensaje de error
+
+La regla más barata de todas: los mensajes de error describen **qué** falló, no **con qué datos**. `new Error("Failed to save note")` más un tag `noteId` es suficiente para depurar. El contenido de la nota nunca aporta nada al diagnóstico y siempre es una fuga.
+
+<Callout kind="warning">
+  Prueba la limpieza antes del release: lanza un error de prueba con un correo y un token falsos en el mensaje y en `extra`, y revisa el evento recibido en el panel del proveedor. Si aparece algo que no debería, `beforeSend` tiene un hueco.
+</Callout>
+
+## Práctica
+
+Este Snack reproduce la lógica de `beforeSend` sobre un evento de prueba, sin conectar con ningún servicio. Pulsa el botón y compara el evento original con el limpio.
+
+<Snack
+  platform="ios"
+  sdkVersion="52.0.0"
+  code={`import { useState } from "react";
+import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
+
+const EMAIL = /[\\w.+-]+@[\\w-]+\\.[\\w.-]+/g;
+const BEARER = /Bearer\\s+[A-Za-z0-9._-]+/g;
+const SENSITIVE_KEYS = new Set(["password", "token", "authorization", "body", "email"]);
+
+const scrubText = (text: string) => text.replace(EMAIL, "[email]").replace(BEARER, "Bearer [token]");
+
+function scrubValue(value: unknown): unknown {
+  if (typeof value === "string") return scrubText(value);
+  if (Array.isArray(value)) return value.map(scrubValue);
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, inner] of Object.entries(value as Record<string, unknown>)) {
+      out[key] = SENSITIVE_KEYS.has(key) ? "[redacted]" : scrubValue(inner);
+    }
+    return out;
+  }
+  return value;
+}
+
+function beforeSend(event: any) {
+  const clean = { ...event };
+  if (clean.user) clean.user = { id: clean.user.id };
+  if (clean.message) clean.message = scrubText(clean.message);
+  if (clean.extra) clean.extra = scrubValue(clean.extra);
+  return clean;
+}
+
+const sampleEvent = {
+  message: "Failed to save note for ana@example.com",
+  user: { id: "u_42", email: "ana@example.com" },
+  extra: {
+    request: { authorization: "Bearer demo.token.value", noteId: "n_7" },
+    note: { body: "Doctor appointment on Friday", title: "Health" },
+  },
+};
+
+export default function App() {
+  const [cleaned, setCleaned] = useState<string | null>(null);
+  return (
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.title}>Original event</Text>
+      <Text style={styles.mono}>{JSON.stringify(sampleEvent, null, 2)}</Text>
+      <Pressable style={styles.button} onPress={() => setCleaned(JSON.stringify(beforeSend(sampleEvent), null, 2))}>
+        <Text style={styles.buttonText}>Run beforeSend</Text>
+      </Pressable>
+      {cleaned && <Text style={styles.title}>What leaves the device</Text>}
+      {cleaned && <Text style={styles.mono}>{cleaned}</Text>}
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { padding: 24, paddingTop: 64, gap: 12 },
+  title: { fontSize: 18, fontWeight: "600" },
+  mono: { fontFamily: "Courier", fontSize: 11 },
+  button: { backgroundColor: "#1d6b6e", padding: 12, borderRadius: 8, alignItems: "center" },
+  buttonText: { color: "white", fontWeight: "600" }
+});`}
+/>
+
+Marca lo que ya cumple la configuración de tu app:
+
+<Checklist
+  id="09-seguridad-movil/08-crash-reporting"
+  items={[
+    "Uso @sentry/react-native con su config plugin; no uso sentry-expo",
+    "Sentry.init tiene sendDefaultPii: false y enabled: !__DEV__",
+    "beforeSend deja en user solo el id",
+    "beforeSend enmascara correos y tokens en message y extra",
+    "beforeBreadcrumb descarta las migas de categoría console",
+    "Ningún mensaje de error incluye contenido de notas, correos ni tokens",
+    "Sentry.setUser(null) se llama al cerrar sesión",
+    "Lancé un error de prueba con datos falsos y verifiqué en el panel que llegaron limpios",
+    "El proveedor de crash reporting está en el inventario de datos y en las declaraciones de las tiendas"
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Limpiar un evento anidado"
+  solution={
+    <Playground
+      lang="ts"
+      code={`const EMAIL = /[\\w.+-]+@[\\w-]+\\.[\\w.-]+/g;
+const BEARER = /Bearer\\s+[A-Za-z0-9._-]+/g;
+const SENSITIVE_KEYS = new Set(["password", "token", "authorization", "body"]);
+
+const scrubText = (text: string) => text.replace(EMAIL, "[email]").replace(BEARER, "Bearer [token]");
+
+function scrubValue(value: unknown): unknown {
+  if (typeof value === "string") return scrubText(value);
+  if (Array.isArray(value)) return value.map(scrubValue);
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, inner] of Object.entries(value as Record<string, unknown>)) {
+      out[key] = SENSITIVE_KEYS.has(key) ? "[redacted]" : scrubValue(inner);
+    }
+    return out;
+  }
+  return value;
+}
+
+const extra = {
+  request: { url: "/notes", authorization: "Bearer abc.def.ghi", retries: 2 },
+  notes: [{ title: "Health", body: "private text" }],
+  reporter: "ana@example.com",
+};
+
+console.log(JSON.stringify(scrubValue(extra)));`}
+      expected={`{"request":{"url":"/notes","authorization":"[redacted]","retries":2},"notes":[{"title":"Health","body":"[redacted]"}],"reporter":"[email]"}`}
+    />
+  }
+>
+  Escribe `scrubValue(value)` de forma recursiva: las cadenas pasan por una función que reemplaza correos por `[email]` y tokens `Bearer ...` por `Bearer [token]`; los arreglos se limpian elemento a elemento; en los objetos, las claves `password`, `token`, `authorization` y `body` se sustituyen por `[redacted]` y el resto se limpia recursivamente. Pruébala con un `extra` que tenga un objeto anidado, un arreglo de notas y un correo, e imprime el resultado con `JSON.stringify`.
+</Challenge>
+
+## Errores comunes
+
+**Establecer el usuario con su correo.** `Sentry.setUser({ email })` parece inofensivo y convierte cada evento en un dato personal exportado a un tercero. Ocurre porque el panel muestra el correo y resulta cómodo. Se detecta abriendo cualquier evento en el panel: si ves un correo, hay fuga.
+
+**Dejar las migas de consola activas.** Los `console.log` de depuración, incluidos los que imprimen respuestas de la API, viajan con cada evento. Ocurre porque la integración de consola está activa por defecto. Se detecta revisando las breadcrumbs de un evento: cualquier miga con categoría `console` y datos de la app es un hallazgo.
+
+**Poner datos en el mensaje del error.** `new Error("Cannot sync: " + JSON.stringify(note))` describe el fallo con el contenido completo. Ocurre por comodidad al depurar. Se detecta buscando concatenaciones dentro de `new Error(` en el proyecto.
+
+**Confiar solo en el enmascarado del servidor.** El proveedor ofrece reglas de limpieza en su lado, y se asume que basta. Ocurre porque es más fácil de configurar. Pero el dato ya salió del dispositivo y cruzó la red; la limpieza del servidor es complemento, no sustituto de `beforeSend`.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué hace beforeSend en Sentry?", back: "Recibe cada evento antes de enviarlo; permite modificarlo o devolver null para descartarlo. Es la última defensa contra fugas." },
+    { front: "¿Qué debe contener event.user en un reporte de fallo?", back: "Solo el id de cuenta. Nunca correo ni nombre." },
+    { front: "¿Por qué descartar las breadcrumbs de categoría console?", back: "Porque cada console.log de la app viaja con el evento y es la vía más frecuente de fuga de datos." },
+    { front: "¿Qué paquete recomienda Expo para Sentry hoy?", back: "@sentry/react-native con su config plugin; sentry-expo está descontinuado." },
+    { front: "¿El DSN de Sentry es un secreto?", back: "No. Solo permite enviar eventos al proyecto, no leerlos; puede ir en una variable EXPO_PUBLIC_." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Cuál de estas líneas provoca una fuga de datos personales al servicio de crash reporting?",
+      options: [
+        { text: "Sentry.setUser({ id: account.id })", correct: false, feedback: "Un id de cuenta opaco es aceptable para agrupar errores." },
+        { text: "Sentry.setUser({ email: account.email })", correct: true, feedback: "Correcto: el correo viaja con cada evento a un tercero." },
+        { text: "Sentry.setUser(null) al cerrar sesión", correct: false, feedback: "Eso es justamente lo recomendado." }
+      ]
+    },
+    {
+      prompt: "¿Qué opción de Sentry.init evita que el SDK adjunte por su cuenta datos como la dirección IP?",
+      options: [
+        { text: "enabled: false", correct: false, feedback: "Eso desactiva el SDK por completo." },
+        { text: "sendDefaultPii: false", correct: true, feedback: "Correcto: desactiva la recolección automática de datos identificativos." },
+        { text: "environment: 'production'", correct: false, feedback: "Solo etiqueta el entorno." }
+      ]
+    },
+    {
+      prompt: "Tu backend devuelve 500 al guardar una nota y quieres reportarlo. ¿Qué mensaje de error es correcto?",
+      options: [
+        { text: "\"Save failed: \" + JSON.stringify(note)", correct: false, feedback: "Incluye el contenido de la nota." },
+        { text: "\"Save failed for \" + user.email", correct: false, feedback: "Incluye un dato personal." },
+        { text: "\"Save failed\" con un tag noteId", correct: true, feedback: "Correcto: describe qué falló sin exponer datos." }
+      ]
+    }
+  ]}
+/>
