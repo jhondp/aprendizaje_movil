@@ -4,6 +4,7 @@ import { buildSrcdoc, type PlaygroundMessage } from './buildSrcdoc';
 import styles from './Playground.module.css';
 
 const TIMEOUT_MS = 5000;
+const LEVELS: readonly PlaygroundMessage['level'][] = ['log', 'info', 'warn', 'error', 'done'];
 
 interface OutputLine {
   level: PlaygroundMessage['level'];
@@ -13,10 +14,14 @@ interface OutputLine {
 type Verdict = 'idle' | 'running' | 'ok' | 'mismatch' | 'timeout';
 
 function isPlaygroundMessage(data: unknown): data is PlaygroundMessage {
+  if (typeof data !== 'object' || data === null) return false;
+  const candidate = data as Partial<PlaygroundMessage>;
   return (
-    typeof data === 'object' &&
-    data !== null &&
-    (data as { type?: string }).type === 'saber-playground'
+    candidate.type === 'saber-playground' &&
+    typeof candidate.id === 'string' &&
+    typeof candidate.level === 'string' &&
+    LEVELS.includes(candidate.level as PlaygroundMessage['level']) &&
+    Array.isArray(candidate.args)
   );
 }
 
@@ -30,9 +35,16 @@ export function Playground({
   expected?: string;
 }) {
   const instanceId = useId();
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const runCounter = useRef(0);
+  const activeRunId = useRef<string | null>(null);
+  const settled = useRef(true);
+  const expectedRef = useRef(expected);
+  expectedRef.current = expected;
+
   const [source, setSource] = useState(code);
   const [srcdoc, setSrcdoc] = useState<string | null>(null);
-  const [run, setRun] = useState(0);
+  const [renderRun, setRenderRun] = useState(0);
   const [lines, setLines] = useState<OutputLine[]>([]);
   const linesRef = useRef<OutputLine[]>([]);
   const [syntaxError, setSyntaxError] = useState<string | null>(null);
@@ -46,16 +58,24 @@ export function Playground({
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
-      if (!isPlaygroundMessage(event.data) || event.data.id !== instanceId) return;
+      if (event.source !== iframeRef.current?.contentWindow) return;
+      if (!isPlaygroundMessage(event.data)) return;
+      if (settled.current || event.data.id !== activeRunId.current) return;
       const { level, args } = event.data;
       if (level === 'done') {
+        settled.current = true;
         clearTimer();
         const output = linesRef.current
           .filter((l) => l.level !== 'error')
           .map((l) => l.text)
           .join('\n');
+        const expectedValue = expectedRef.current;
         setVerdict(
-          expected === undefined ? 'idle' : output.trim() === expected.trim() ? 'ok' : 'mismatch',
+          expectedValue === undefined
+            ? 'idle'
+            : output.trim() === expectedValue.trim()
+              ? 'ok'
+              : 'mismatch',
         );
         return;
       }
@@ -67,11 +87,13 @@ export function Playground({
       window.removeEventListener('message', onMessage);
       clearTimer();
     };
-  }, [instanceId, expected]);
+  }, [instanceId]);
 
   const execute = () => {
     const result = transpile(source, lang);
     if ('error' in result) {
+      settled.current = true;
+      activeRunId.current = null;
       setSyntaxError(result.error);
       setSrcdoc(null);
       return;
@@ -80,14 +102,27 @@ export function Playground({
     linesRef.current = [];
     setLines([]);
     setVerdict('running');
-    setSrcdoc(buildSrcdoc(result.code, instanceId));
-    setRun((r) => r + 1);
+    runCounter.current += 1;
+    const runId = `${instanceId}:${runCounter.current}`;
+    activeRunId.current = runId;
+    settled.current = false;
+    setSrcdoc(buildSrcdoc(result.code, runId));
+    setRenderRun(runCounter.current);
     clearTimer();
-    timer.current = setTimeout(() => setVerdict('timeout'), TIMEOUT_MS);
+    timer.current = setTimeout(() => {
+      settled.current = true;
+      setVerdict('timeout');
+      setSrcdoc(null);
+    }, TIMEOUT_MS);
   };
 
   return (
-    <div className={styles.root} data-testid="playground" data-playground-id={instanceId}>
+    <div
+      className={styles.root}
+      data-testid="playground"
+      data-playground-id={instanceId}
+      data-playground-run-id={renderRun > 0 ? `${instanceId}:${renderRun}` : ''}
+    >
       <div className={styles.head}>
         <span className={styles.lang}>{lang === 'ts' ? 'TypeScript' : 'JavaScript'}</span>
         <div className={styles.actions}>
@@ -110,7 +145,8 @@ export function Playground({
       {syntaxError && <div className={styles.error}>Error de sintaxis: {syntaxError}</div>}
       {srcdoc && (
         <iframe
-          key={run}
+          key={renderRun}
+          ref={iframeRef}
           title="Resultado del código"
           sandbox="allow-scripts"
           srcDoc={srcdoc}
