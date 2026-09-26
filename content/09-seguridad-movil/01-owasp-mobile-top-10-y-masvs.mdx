@@ -1,0 +1,258 @@
+---
+id: "09-seguridad-movil/01-owasp-mobile-top-10-y-masvs"
+title: "OWASP Mobile Top 10 y MASVS"
+stage: 9
+module: "Modelo"
+order: 1
+minutes: 15
+prereqs: ["09-seguridad-movil/00-modelo-de-amenazas-movil"]
+summary: "Conoce los diez riesgos móviles más frecuentes según OWASP y el estándar MASVS v2 que usarás como lista de verificación durante toda la etapa."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás ubicar cualquier debilidad de tu app en una categoría MASVS v2, explicar qué es un perfil MAS-L1 y relacionar cada riesgo del OWASP Mobile Top 10 con una lección de esta etapa.
+
+**Prerrequisitos:** `09-seguridad-movil/00-modelo-de-amenazas-movil`
+
+## Concepto
+
+Esta lección recorre las ocho categorías MASVS (STORAGE, CRYPTO, AUTH, NETWORK, PLATFORM, CODE, RESILIENCE y PRIVACY) para que el resto de la etapa tenga un mapa. Las lecciones siguientes profundizan en las categorías que más afectan a una app hecha con React Native y Expo.
+
+### Un código de edificación para apps
+
+Cuando se construye un edificio, nadie inventa desde cero cuánto debe resistir una viga: existe un código de edificación que lo fija, y un inspector que lo verifica. OWASP publica el equivalente para apps móviles. El **OWASP Mobile Top 10** es la lista de los fallos que más veces se encuentran en la práctica; **MASVS** (Mobile Application Security Verification Standard) es el código que dice qué debe cumplir la app; y **MASTG** (Mobile Application Security Testing Guide) es el manual del inspector, con los procedimientos para comprobar cada control. Los tres viven en <https://mas.owasp.org/>.
+
+### OWASP Mobile Top 10 (edición 2024)
+
+La lista se actualiza cada pocos años a partir de datos de auditorías reales. La edición 2024 es:
+
+| Id  | Riesgo                                       | Dónde lo trabajas en esta etapa                 |
+| --- | -------------------------------------------- | ----------------------------------------------- |
+| M1  | Improper Credential Usage                    | Secretos fuera del bundle (lección 02)          |
+| M2  | Inadequate Supply Chain Security             | Supply chain (lección 06)                       |
+| M3  | Insecure Authentication/Authorization        | Etapa 8 y auditoría final (lección 09)          |
+| M4  | Insufficient Input/Output Validation         | Validación de entrada (lección 05)              |
+| M5  | Insecure Communication                       | HTTPS y certificate pinning (lección 04)        |
+| M6  | Inadequate Privacy Controls                  | Privacidad y permisos mínimos (lección 07)      |
+| M7  | Insufficient Binary Protections              | Secretos fuera del bundle (lección 02) y 09     |
+| M8  | Security Misconfiguration                    | Transversal: checklists de cada lección         |
+| M9  | Insecure Data Storage                        | Almacenamiento seguro (lección 03)              |
+| M10 | Insufficient Cryptography                    | Almacenamiento seguro (lección 03) y 09         |
+
+La lista es útil para priorizar, pero no para verificar: "Insecure Data Storage" no te dice qué comprobar. Para eso está MASVS.
+
+### MASVS v2: ocho categorías y sus controles
+
+MASVS v2 agrupa los requisitos en ocho grupos de control. Cada control tiene un id con la forma `MASVS-<GRUPO>-<n>` y una frase que describe qué debe cumplir la app. Estos son los controles completos, tal como los publica OWASP:
+
+- **MASVS-STORAGE**: 1, la app guarda los datos sensibles de forma segura; 2, la app evita la fuga de datos sensibles (logs, backups, portapapeles).
+- **MASVS-CRYPTO**: 1, la app usa criptografía actual y fuerte según las buenas prácticas; 2, la app gestiona las claves según las buenas prácticas.
+- **MASVS-AUTH**: 1, la app usa protocolos seguros de autenticación y autorización; 2, la autenticación local (biometría, PIN) sigue las prácticas de la plataforma; 3, las operaciones sensibles piden autenticación adicional.
+- **MASVS-NETWORK**: 1, todo el tráfico de red está protegido según las prácticas actuales; 2, la app hace pinning de identidad para los endpoints bajo control del desarrollador.
+- **MASVS-PLATFORM**: 1, la app usa los mecanismos de IPC (deep links, intents) de forma segura; 2, usa WebViews de forma segura; 3, usa la interfaz de forma segura (capturas de pantalla, teclados, notificaciones).
+- **MASVS-CODE**: 1, la app exige una versión de plataforma actualizada; 2, tiene un mecanismo para forzar actualizaciones; 3, solo usa componentes sin vulnerabilidades conocidas; 4, valida y sanea toda entrada no confiable.
+- **MASVS-RESILIENCE**: 1, valida la integridad de la plataforma (root, jailbreak); 2, implementa anti-tampering; 3, dificulta el análisis estático; 4, dificulta el análisis dinámico.
+- **MASVS-PRIVACY**: 1, minimiza el acceso a datos y recursos; 2, evita la identificación del usuario; 3, es transparente sobre la recolección de datos; 4, da control al usuario sobre sus datos.
+
+Fíjate en que los ids son `MASVS-STORAGE-1`, no los antiguos `MSTG-STORAGE-1` de la versión 1. Si encuentras artículos con esos ids, están desactualizados.
+
+### Perfiles: no todas las apps necesitan todo
+
+MASVS define perfiles que combinan controles según el riesgo de la app:
+
+- **MAS-L1** (Essential Security): el mínimo razonable para cualquier app que maneje datos de usuario. Es el objetivo de esta etapa y de tu proyecto final.
+- **MAS-L2** (Advanced Security): para apps que manejan datos de salud, finanzas o similares; agrega controles como pinning obligatorio y autenticación adicional.
+- **MAS-R** (Resilient Security): controles de resistencia a ingeniería inversa, que se suman a L1 o L2 cuando el modelo de amenazas lo justifica.
+- **MAS-P** (Baseline Privacy): los controles de privacidad.
+
+Una app de notas con usuarios apunta a MAS-L1 más MAS-P. Los controles de RESILIENCE (detección de root, ofuscación) son defensa en profundidad: elevan el costo del ataque, pero un atacante con el dispositivo en la mano y tiempo suficiente los supera. Nunca los presentes como garantía.
+
+### Un ejemplo pequeño: logging
+
+Mira cómo un fallo cotidiano se ubica en el estándar. Este código aparece en muchas apps durante el desarrollo y se olvida antes del release:
+
+```ts
+async function login(email: string, password: string) {
+  console.log("login attempt", { email, password });
+  return api.post("/session", { email, password });
+}
+```
+
+En producción, `console.log` termina en el logcat de Android y en la consola del sistema de iOS, donde otras herramientas y, en algunos casos, otras apps con permisos de depuración pueden leerlo. Es una fuga de datos sensibles: **MASVS-STORAGE-2**. Corregirlo es sencillo: nunca registres credenciales ni tokens; si necesitas trazar el intento, registra un identificador enmascarado.
+
+```ts
+const redact = (value: string) => value.slice(0, 2) + "***";
+
+async function login(email: string, password: string) {
+  if (__DEV__) console.log("login attempt", redact(email));
+  return api.post("/session", { email, password });
+}
+```
+
+`__DEV__` es una constante global de React Native que vale `true` solo en desarrollo, así que el log desaparece del bundle de producción.
+
+<Callout kind="tip">
+  Guarda el enlace <https://mas.owasp.org/MASVS/> en tu repositorio. Cada vez que encuentres una debilidad, anota su id MASVS: en la lección 09 esa costumbre te ahorrará la mitad del trabajo de la auditoría.
+</Callout>
+
+## Práctica
+
+Primero, ubica cada riesgo del Top 10 en tu propia app. Marca cada punto cuando hayas anotado en `THREAT_MODEL.md` si aplica y en qué archivo o pantalla vive:
+
+<Checklist
+  id="09-seguridad-movil/01-top10-map"
+  items={[
+    "M1 Improper Credential Usage: sé dónde están mis claves de API y tokens",
+    "M2 Inadequate Supply Chain Security: sé cuántas dependencias directas tengo",
+    "M3 Insecure Authentication/Authorization: sé qué endpoint comprueba el dueño de cada nota",
+    "M4 Insufficient Input/Output Validation: sé qué entradas del usuario llegan a la base de datos",
+    "M5 Insecure Communication: confirmé que todas las URLs de la app empiezan por https://",
+    "M6 Inadequate Privacy Controls: sé qué datos personales recoge la app",
+    "M7 Insufficient Binary Protections: sé qué texto hay dentro de mi bundle",
+    "M8 Security Misconfiguration: revisé app.json en busca de flags de depuración",
+    "M9 Insecure Data Storage: sé qué API guarda el token de sesión",
+    "M10 Insufficient Cryptography: sé si alguna parte del código cifra algo por su cuenta"
+  ]}
+/>
+
+Ahora prueba el ejemplo de logging inseguro. Con el interruptor apagado, el "colector de logs" recibe la contraseña completa; enciéndelo y observa qué recibe cuando el log está enmascarado.
+
+<Snack
+  platform="ios"
+  sdkVersion="52.0.0"
+  code={`import { useState } from "react";
+import { View, Text, TextInput, Pressable, Switch, StyleSheet } from "react-native";
+
+const redact = (value: string) => (value.length <= 2 ? "**" : value.slice(0, 2) + "***");
+
+export default function App() {
+  const [email, setEmail] = useState("ana@example.com");
+  const [password, setPassword] = useState("demo-password");
+  const [safe, setSafe] = useState(false);
+  const [log, setLog] = useState<string[]>([]);
+
+  function onLogin() {
+    const line = safe
+      ? "login attempt user=" + redact(email)
+      : "login attempt email=" + email + " password=" + password;
+    console.log(line);
+    setLog((prev) => [line, ...prev].slice(0, 4));
+  }
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Login</Text>
+      <TextInput style={styles.input} value={email} onChangeText={setEmail} autoCapitalize="none" />
+      <TextInput style={styles.input} value={password} onChangeText={setPassword} secureTextEntry />
+      <View style={styles.row}>
+        <Text>Safe logging</Text>
+        <Switch value={safe} onValueChange={setSafe} />
+      </View>
+      <Pressable style={styles.button} onPress={onLogin}>
+        <Text style={styles.buttonText}>Sign in</Text>
+      </Pressable>
+      <Text style={styles.subtitle}>What the log collector receives:</Text>
+      {log.map((line, i) => (
+        <Text key={i} style={styles.log}>{line}</Text>
+      ))}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, padding: 24, paddingTop: 64, gap: 12 },
+  title: { fontSize: 24, fontWeight: "600" },
+  subtitle: { marginTop: 16, fontWeight: "600" },
+  input: { borderWidth: 1, borderColor: "#999", borderRadius: 8, padding: 10 },
+  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  button: { backgroundColor: "#1d6b6e", padding: 12, borderRadius: 8, alignItems: "center" },
+  buttonText: { color: "white", fontWeight: "600" },
+  log: { fontFamily: "Courier", fontSize: 12, color: "#b00020" }
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Clasificar hallazgos en MASVS"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type Finding = { text: string; masvs: string };
+
+const findings: Finding[] = [
+  { text: "Session token saved with AsyncStorage", masvs: "MASVS-STORAGE-1" },
+  { text: "Password printed with console.log in production", masvs: "MASVS-STORAGE-2" },
+  { text: "One endpoint uses http:// instead of https://", masvs: "MASVS-NETWORK-1" },
+  { text: "Deep link opens any note id without checking the session", masvs: "MASVS-PLATFORM-1" },
+  { text: "Dependency with a known critical vulnerability", masvs: "MASVS-CODE-3" },
+  { text: "Location permission requested at startup without using it", masvs: "MASVS-PRIVACY-1" },
+];
+
+const byGroup = new Map<string, number>();
+for (const f of findings) {
+  const group = f.masvs.split("-")[1];
+  byGroup.set(group, (byGroup.get(group) ?? 0) + 1);
+}
+
+for (const [group, count] of byGroup) {
+  console.log(group + ": " + count);
+}`}
+      expected={`STORAGE: 2
+NETWORK: 1
+PLATFORM: 1
+CODE: 1
+PRIVACY: 1`}
+    />
+  }
+>
+  Toma estos seis hallazgos de una auditoría y asigna a cada uno el control MASVS v2 que incumple: token de sesión guardado con AsyncStorage; contraseña impresa con `console.log` en producción; un endpoint usa `http://`; un deep link abre cualquier nota por id sin comprobar la sesión; una dependencia con vulnerabilidad crítica conocida; permiso de ubicación pedido al arrancar sin usarlo. Escribe un programa que cuente cuántos hallazgos hay por grupo (STORAGE, NETWORK, etc.) e imprima el resultado.
+</Challenge>
+
+## Errores comunes
+
+**Usar el Top 10 como lista de verificación.** Se marca "M9 revisado" sin haber comprobado ningún control concreto. Ocurre porque el Top 10 describe riesgos, no requisitos. Se detecta cuando la auditoría no puede citar qué archivo o configuración demuestra el cumplimiento; la solución es trabajar con los controles MASVS y su evidencia.
+
+**Citar ids MASVS v1.** Aparecen `MSTG-STORAGE-1` o "requisito 2.1" copiados de artículos antiguos. Ocurre porque muchos tutoriales no se han actualizado. Se detecta porque el id no existe en <https://mas.owasp.org/MASVS/>; corrige al formato `MASVS-STORAGE-1`.
+
+**Apuntar a MAS-L2 o MAS-R sin cumplir L1.** El equipo discute ofuscación y detección de root mientras el token sigue en AsyncStorage. Ocurre porque los controles de resistencia parecen más "de seguridad". Se detecta comparando el trabajo pendiente con el perfil: primero L1 completo, luego lo demás.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué diferencia hay entre OWASP Mobile Top 10, MASVS y MASTG?", back: "Top 10: riesgos más frecuentes. MASVS: estándar de requisitos verificables. MASTG: guía para comprobarlos." },
+    { front: "¿Cuáles son las ocho categorías de MASVS v2?", back: "STORAGE, CRYPTO, AUTH, NETWORK, PLATFORM, CODE, RESILIENCE y PRIVACY." },
+    { front: "¿Qué perfil MASVS es el objetivo mínimo para una app con datos de usuario?", back: "MAS-L1 (Essential Security), normalmente junto con MAS-P (privacidad)." },
+    { front: "¿Qué control MASVS incumple imprimir una contraseña con console.log?", back: "MASVS-STORAGE-2: la app debe evitar la fuga de datos sensibles, incluidos los logs." },
+    { front: "¿Los controles MASVS-RESILIENCE garantizan que la app no pueda ser modificada?", back: "No. Elevan el costo del ataque; son defensa en profundidad con límites." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Cuál es el formato correcto de un id de control en MASVS v2?",
+      options: [
+        { text: "MSTG-STORAGE-1", correct: false, feedback: "Ese formato es de MASVS v1 y ya no se usa." },
+        { text: "MASVS-STORAGE-1", correct: true, feedback: "Correcto: grupo en mayúsculas y número de control." },
+        { text: "M9-STORAGE", correct: false, feedback: "M9 es un id del Top 10, que describe riesgos, no controles." }
+      ]
+    },
+    {
+      prompt: "Una app de notas con cuentas de usuario quiere un objetivo de seguridad razonable. ¿Qué perfil MASVS elige?",
+      options: [
+        { text: "MAS-R, porque impide la ingeniería inversa", correct: false, feedback: "MAS-R se suma cuando el modelo de amenazas lo exige y no impide nada por sí solo." },
+        { text: "MAS-L1 más MAS-P", correct: true, feedback: "Correcto: seguridad esencial y privacidad básica." },
+        { text: "Ninguno, MASVS es solo para bancos", correct: false, feedback: "MAS-L1 está pensado para cualquier app que maneje datos de usuario." }
+      ]
+    },
+    {
+      prompt: "¿Qué hace la constante __DEV__ en React Native?",
+      options: [
+        { text: "Activa el modo de depuración remota", correct: false, feedback: "Es solo un valor booleano, no cambia el comportamiento del depurador." },
+        { text: "Vale true solo en desarrollo, así el código dentro de if (__DEV__) no llega a producción", correct: true, feedback: "Correcto: sirve para dejar logs de diagnóstico fuera del release." },
+        { text: "Oculta los console.log en el logcat de Android", correct: false, feedback: "No filtra logs; simplemente permite no ejecutarlos en producción." }
+      ]
+    }
+  ]}
+/>
