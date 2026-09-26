@@ -1,0 +1,213 @@
+---
+id: "08-autenticacion-backend/01-oauth2-oidc-y-jwt"
+title: "OAuth2, OIDC y JWT"
+stage: 8
+module: "Conceptos"
+order: 1
+minutes: 15
+prereqs: ["08-autenticacion-backend/00-auth-vs-authz"]
+summary: "Entiende qué resuelven OAuth2 y OpenID Connect, cómo está hecho un JWT y por qué decodificarlo no es lo mismo que verificarlo."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás describir el flujo Authorization Code con PKCE, diferenciar un access token, un refresh token y un ID token, y leer el payload de un JWT sabiendo que eso no prueba que sea auténtico.
+
+**Prerrequisitos:** `08-autenticacion-backend/00-auth-vs-authz`
+
+## Concepto
+
+Cuando pulsas "Continuar con Google" en una app, no le das tu contraseña de Google a esa app. Aun así, la app termina sabiendo tu email y pudiendo actuar en tu nombre. Eso lo hacen posible dos estándares, OAuth2 y OpenID Connect, y casi siempre viajan en un formato llamado JWT.
+
+### OAuth2: delegar sin compartir la contraseña
+
+Piensa en el aparcacoches de un restaurante. No le das la llave de casa, le das una llave de servicio que solo arranca el coche y no abre el maletero. OAuth2 hace lo mismo: en lugar de entregar tu contraseña, un servidor de confianza entrega a la app un **access token** con permisos limitados (los **scopes**) y fecha de caducidad.
+
+OAuth2 define cuatro papeles:
+
+- **Resource owner**: tú, dueño de los datos.
+- **Client**: la app que quiere acceder.
+- **Authorization server**: quien te autentica y emite los tokens (Google, Supabase Auth).
+- **Resource server**: la API que acepta el access token (la base de datos de notas).
+
+La especificación está resumida en https://oauth.net/2/.
+
+### El flujo correcto en móvil: Authorization Code con PKCE
+
+Una app móvil no puede guardar un secreto: cualquier texto que incluyas en el bundle se puede extraer. Por eso el flujo recomendado es **Authorization Code con PKCE** (Proof Key for Code Exchange):
+
+1. La app genera un valor aleatorio, el `code_verifier`, y calcula su hash, el `code_challenge`.
+2. Abre el navegador del sistema en la página de login del authorization server, enviando el `code_challenge`.
+3. Tras iniciar sesión, el servidor redirige a la app con un `code` de un solo uso.
+4. La app cambia ese `code` por los tokens enviando el `code_verifier` original. El servidor comprueba que su hash coincide con el `code_challenge`.
+
+Si otra app intercepta el `code` en la redirección, no le sirve: no conoce el `code_verifier`. El antiguo flujo implícito, que devolvía el token directamente en la URL, está desaconsejado y no lo vas a usar.
+
+### OpenID Connect: añadir identidad
+
+OAuth2 responde "¿qué puede hacer esta app?", pero no dice "¿quién es el usuario?". **OpenID Connect (OIDC)** es una capa sobre OAuth2 que añade un **ID token**: un documento firmado con datos de identidad como `sub` (identificador único del usuario), `email` y `name`. Cuando una app dice "iniciar sesión con Google", en realidad usa OIDC. Explicación oficial: https://openid.net/developers/how-connect-works/.
+
+| Token | Para qué sirve | Quién lo lee | Vida típica |
+| --- | --- | --- | --- |
+| Access token | Llamar a la API | El resource server | Minutos u horas |
+| Refresh token | Pedir un access token nuevo | Solo el authorization server | Días o semanas, rota en cada uso |
+| ID token | Saber quién inició sesión | La app cliente | Corta |
+
+### Anatomía de un JWT
+
+Un JSON Web Token son tres fragmentos en base64url separados por puntos: `header.payload.signature`.
+
+- **Header**: el algoritmo de firma, por ejemplo `{"alg":"HS256","typ":"JWT"}`.
+- **Payload**: los **claims**, datos como `sub`, `email`, `role` y `exp` (fecha de expiración en segundos desde 1970).
+- **Signature**: el resultado de firmar header y payload con una clave que solo conoce el servidor.
+
+```ts
+const token = "aaa.bbb.ccc"; // header.payload.signature
+const [header, payload, signature] = token.split(".");
+console.log(header, payload, signature);
+```
+
+Base64url no es cifrado: es solo una forma de escribir bytes con letras. Cualquiera que tenga el token puede leer su payload. Por eso un JWT nunca debe contener secretos, y por eso filtrar un access token en un log equivale a filtrar una sesión.
+
+### Decodificar no es verificar
+
+Aquí está la trampa más peligrosa de la lección. Leer el payload con `atob` te dice qué **afirma** el token, no si es auténtico. Cualquiera puede escribir un payload con `"role": "admin"` y pegarle una firma inventada. Solo quien tiene la clave (o la clave pública del emisor) puede comprobar la firma.
+
+Las buenas prácticas del RFC 8725 (https://datatracker.ietf.org/doc/html/rfc8725) resumen lo que hace un servidor al verificar:
+
+- Comprueba la firma con un algoritmo fijado de antemano y rechaza `alg: "none"`.
+- Valida `exp`, el emisor (`iss`) y la audiencia (`aud`).
+- Solo entonces confía en los claims.
+
+La app puede decodificar el payload para mostrar el email o anticipar que el token caducará pronto, pero **nunca toma decisiones de seguridad con claims que el servidor no ha verificado**.
+
+## Práctica
+
+El código construye un token de demostración (así no aparece ningún token real en la lección), lo decodifica y luego fabrica uno falso con `role: "admin"`. Observa que decodificar el falso funciona igual de bien: la decodificación no detecta la falsificación.
+
+<Playground
+  lang="ts"
+  code={`type JwtPayload = { sub: string; email: string; role: string; exp: number };
+
+function toBase64Url(text: string): string {
+  return btoa(text).split("+").join("-").split("/").join("_").split("=").join("");
+}
+
+function fromBase64Url(segment: string): string {
+  const base64 = segment.split("-").join("+").split("_").join("/");
+  const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+  return atob(padded);
+}
+
+// Build a demo token here so no real token appears in the lesson.
+const header = toBase64Url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+const claims = { sub: "user-123", email: "ana@example.com", role: "authenticated", exp: 1767225600 };
+const token = header + "." + toBase64Url(JSON.stringify(claims)) + ".demo-signature";
+
+function decodePayload(jwt: string): JwtPayload {
+  const parts = jwt.split(".");
+  if (parts.length !== 3) throw new Error("A JWT has exactly three parts");
+  return JSON.parse(fromBase64Url(parts[1])) as JwtPayload;
+}
+
+const payload = decodePayload(token);
+console.log(payload.sub);
+console.log(payload.email);
+console.log(new Date(payload.exp * 1000).toISOString());
+
+// Anyone can build a token with different claims. Decoding it still works.
+const forgedClaims = { ...payload, role: "admin" };
+const forged = header + "." + toBase64Url(JSON.stringify(forgedClaims)) + ".demo-signature";
+console.log(decodePayload(forged).role);`}
+  expected={`user-123
+ana@example.com
+2026-01-01T00:00:00.000Z
+admin`}
+/>
+
+Revisa tu propia app con esta lista de higiene de tokens:
+
+<Checklist
+  id="08-autenticacion-backend/01-oauth2-oidc-y-jwt-higiene"
+  items={[
+    "El login con proveedores externos usa Authorization Code con PKCE, nunca el flujo implícito",
+    "Ningún token aparece en logs, mensajes de error ni herramientas de analítica",
+    "La app no toma decisiones de permisos con claims decodificados en el cliente",
+    "Los tokens se guardan en almacenamiento cifrado del sistema, no en texto plano",
+    "El access token tiene vida corta y se renueva con el refresh token",
+    "Cerrar sesión borra los tokens del dispositivo e invalida el refresh token en el servidor"
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="¿Está caducado?"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type Claims = { exp: number };
+
+function isExpired(claims: Claims, nowSeconds: number, skewSeconds: number = 30): boolean {
+  return nowSeconds >= claims.exp - skewSeconds;
+}
+
+const claims: Claims = { exp: 1000 };
+console.log(isExpired(claims, 900));
+console.log(isExpired(claims, 980));
+console.log(isExpired(claims, 1200));`}
+      expected={`false
+true
+true`}
+    />
+  }
+>
+  Escribe `isExpired(claims, nowSeconds, skewSeconds = 30)` que devuelva `true` si el token ya caducó o caducará dentro del margen `skewSeconds`. Ese margen compensa pequeñas diferencias de reloj entre el teléfono y el servidor. Con `exp: 1000`, comprueba los instantes `900`, `980` y `1200`. Recuerda: esta función solo sirve para renovar a tiempo, no para decidir permisos.
+</Challenge>
+
+## Errores comunes
+
+**Tratar el payload decodificado como verdad.** La app muestra el panel de administración si el claim `role` vale `admin`. Ocurre porque decodificar parece "leer el token". Se detecta buscando en el código usos de `atob` o librerías de decodificación seguidos de condiciones sobre permisos; la decisión debe venir de una respuesta del servidor.
+
+**Guardar secretos dentro del JWT.** El servidor mete en el payload datos sensibles pensando que el token está cifrado. Ocurre por confundir base64url con cifrado. Se detecta decodificando un token real en un entorno de desarrollo y revisando cada claim: si algo no debería verlo el usuario, no pertenece al payload.
+
+**Usar el flujo implícito en móvil.** El token llega en la URL de redirección, donde otras apps o el historial pueden capturarlo. Ocurre al copiar tutoriales antiguos. Se detecta buscando `response_type=token` en la configuración de OAuth; debería ser `response_type=code` con PKCE.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué añade OpenID Connect a OAuth2?", back: "Una capa de identidad: el ID token con datos del usuario como sub y email." },
+    { front: "¿Qué protege PKCE en el flujo Authorization Code?", back: "Que un code interceptado no sirva sin el code_verifier secreto que solo conoce la app." },
+    { front: "¿Cuáles son las tres partes de un JWT?", back: "Header, payload y signature, en base64url separados por puntos." },
+    { front: "¿Decodificar un JWT prueba que es auténtico?", back: "No. Solo la verificación de la firma en el servidor lo prueba; decodificar solo lee lo que afirma." },
+    { front: "¿Para qué sirve un refresh token?", back: "Para pedir al authorization server un access token nuevo sin volver a pedir la contraseña." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué flujo de OAuth2 debe usar una app móvil para iniciar sesión con un proveedor externo?",
+      options: [
+        { text: "Authorization Code con PKCE", correct: true, feedback: "Correcto: no requiere un secreto en la app y protege el code interceptado." },
+        { text: "Flujo implícito", correct: false, feedback: "Está desaconsejado: expone el token en la URL de redirección." },
+        { text: "Enviar la contraseña de Google a tu backend", correct: false, feedback: "Eso es justo lo que OAuth2 evita." }
+      ]
+    },
+    {
+      prompt: "Decodificas un JWT con atob y el claim role vale admin. ¿Qué puedes concluir?",
+      options: [
+        { text: "Que el usuario es administrador", correct: false, feedback: "Cualquiera puede fabricar un payload así; sin verificar la firma no significa nada." },
+        { text: "Solo lo que el token afirma; el servidor debe verificarlo", correct: true, feedback: "Correcto: decodificar no es verificar." },
+        { text: "Que la firma es válida", correct: false, feedback: "atob no mira la firma en absoluto." }
+      ]
+    },
+    {
+      prompt: "¿Por qué un JWT nunca debe contener secretos?",
+      options: [
+        { text: "Porque el payload solo está codificado en base64url, no cifrado", correct: true, feedback: "Correcto: cualquiera que tenga el token puede leerlo." },
+        { text: "Porque los JWT tienen un límite de 10 caracteres", correct: false, feedback: "No existe ese límite." },
+        { text: "Porque la firma borra los secretos", correct: false, feedback: "La firma protege la integridad, no oculta el contenido." }
+      ]
+    }
+  ]}
+/>

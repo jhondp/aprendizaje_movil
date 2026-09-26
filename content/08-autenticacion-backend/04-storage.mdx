@@ -1,0 +1,245 @@
+---
+id: "08-autenticacion-backend/04-storage"
+title: "Storage de archivos"
+stage: 8
+module: "Supabase"
+order: 4
+minutes: 12
+prereqs: ["08-autenticacion-backend/03-base-de-datos-y-rls"]
+summary: "Sube fotos a un bucket privado de Supabase Storage, protégelas con políticas por carpeta de usuario y muéstralas con URLs firmadas."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás crear un bucket privado en Supabase Storage, escribir políticas que limitan cada usuario a su propia carpeta y subir y mostrar una foto desde la app con una URL firmada.
+
+**Prerrequisitos:** `08-autenticacion-backend/03-base-de-datos-y-rls`
+
+## Concepto
+
+La base de datos guarda texto y números; las fotos de las notas necesitan otro lugar. Supabase Storage guarda archivos organizados en **buckets** (contenedores) y aplica las mismas ideas de autorización que acabas de aprender: las reglas son políticas RLS sobre una tabla interna, `storage.objects`, donde cada fila es un archivo.
+
+### La analogía del guardarropa
+
+En el guardarropa de un teatro dejas tu abrigo y te dan un número. El abrigo no está expuesto en la calle; para recuperarlo presentas tu número y el encargado comprueba que coincide. Un **bucket privado** es ese guardarropa: los archivos no tienen una dirección pública permanente. Una **URL firmada** es el número del guardarropa, pero con caducidad: sirve para recoger ese archivo concreto durante unos minutos.
+
+### Buckets públicos y privados
+
+- **Público**: cualquiera con la URL puede descargar el archivo, sin sesión. Adecuado para logotipos o imágenes de marketing.
+- **Privado**: cada descarga pasa por las políticas. Es lo correcto para fotos de usuarios, que pueden contener datos personales.
+
+Crea el bucket desde **Storage, New bucket** con el nombre `photos` y la opción pública desactivada. Puedes limitar también el tamaño máximo y los tipos MIME permitidos (por ejemplo `image/jpeg` e `image/png`).
+
+### Políticas por carpeta
+
+La convención recomendada es guardar cada archivo bajo una carpeta con el id del usuario: `user-id/nombre.jpg`. La función `storage.foldername(name)` devuelve las carpetas de la ruta como un array, así que su primer elemento es el dueño.
+
+```sql
+create policy "Users can upload their own photos"
+on storage.objects for insert
+to authenticated
+with check (
+  bucket_id = 'photos'
+  and (storage.foldername(name))[1] = (select auth.uid()::text)
+);
+
+create policy "Users can read their own photos"
+on storage.objects for select
+to authenticated
+using (
+  bucket_id = 'photos'
+  and (storage.foldername(name))[1] = (select auth.uid()::text)
+);
+
+create policy "Users can delete their own photos"
+on storage.objects for delete
+to authenticated
+using (
+  bucket_id = 'photos'
+  and (storage.foldername(name))[1] = (select auth.uid()::text)
+);
+```
+
+En SQL los índices de arrays empiezan en 1, por eso `[1]`. `auth.uid()` devuelve un `uuid` y el nombre de carpeta es texto, de ahí el `::text`. Documentación: https://supabase.com/docs/guides/storage y https://supabase.com/docs/guides/storage/security/access-control.
+
+### Subir desde React Native
+
+En React Native no hay objetos `File` como en el navegador. La forma más fiable es leer la imagen local como `ArrayBuffer` y enviarla con su tipo de contenido:
+
+```ts
+const response = await fetch(asset.uri);
+const body = await response.arrayBuffer();
+const path = userId + "/" + Date.now() + ".jpg";
+
+const { error } = await supabase.storage
+  .from("photos")
+  .upload(path, body, { contentType: "image/jpeg", upsert: false });
+```
+
+`upsert: false` hace que la subida falle si ya existe un archivo con esa ruta, en lugar de sobrescribirlo sin avisar. Para elegir la imagen se usa `expo-image-picker`, que abre la galería del sistema y devuelve la ruta local (`uri`) y el tipo MIME de cada imagen elegida. Documentación: https://docs.expo.dev/versions/latest/sdk/imagepicker/
+
+### Mostrar con URL firmada
+
+```ts
+const { data, error } = await supabase.storage.from("photos").createSignedUrl(path, 60);
+// data.signedUrl works for 60 seconds, then the server rejects it.
+```
+
+Guarda en la base de datos la **ruta** (`path`), nunca la URL firmada: la URL caduca y la ruta no. Cuando necesites mostrar la foto, pide una URL firmada nueva. Así, si alguien copia una URL de un log o una captura, deja de servir en pocos segundos.
+
+## Práctica
+
+La Snack inicia sesión, elige una foto de la galería, la sube a `photos/<tu id>/` y la muestra con una URL firmada de 60 segundos. Necesitas el bucket y las políticas de esta lección en tu proyecto; con los marcadores verás un error de red.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  dependencies={{ "@supabase/supabase-js": "*", "expo-image-picker": "*" }}
+  code={`import { useState } from "react";
+import { View, Text, TextInput, Pressable, Image, StyleSheet } from "react-native";
+import * as ImagePicker from "expo-image-picker";
+import { createClient } from "@supabase/supabase-js";
+
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "https://YOUR_PROJECT_REF.supabase.co";
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "YOUR_SUPABASE_ANON_KEY";
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: false, detectSessionInUrl: false },
+});
+
+export default function App() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [userId, setUserId] = useState<string | null>(null);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
+
+  const signIn = async () => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) setMessage(error.message);
+    else setUserId(data.user.id);
+  };
+
+  const pickAndUpload = async () => {
+    if (!userId) return;
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.7 });
+    if (result.canceled) return;
+    const asset = result.assets[0];
+    const body = await fetch(asset.uri).then((r) => r.arrayBuffer());
+    const path = userId + "/" + Date.now() + ".jpg";
+    const upload = await supabase.storage.from("photos").upload(path, body, { contentType: asset.mimeType ?? "image/jpeg", upsert: false });
+    if (upload.error) return setMessage(upload.error.message);
+    const signed = await supabase.storage.from("photos").createSignedUrl(path, 60);
+    if (signed.error) return setMessage(signed.error.message);
+    setPhotoUrl(signed.data.signedUrl);
+    setMessage("Subida a " + path);
+  };
+
+  return (
+    <View style={styles.container}>
+      {userId ? (
+        <Pressable style={styles.button} onPress={pickAndUpload}><Text style={styles.buttonText}>Elegir y subir foto</Text></Pressable>
+      ) : (
+        <>
+          <TextInput style={styles.input} placeholder="Email" autoCapitalize="none" value={email} onChangeText={setEmail} />
+          <TextInput style={styles.input} placeholder="Contraseña" secureTextEntry value={password} onChangeText={setPassword} />
+          <Pressable style={styles.button} onPress={signIn}><Text style={styles.buttonText}>Entrar</Text></Pressable>
+        </>
+      )}
+      {photoUrl ? <Image source={{ uri: photoUrl }} style={styles.photo} /> : null}
+      <Text>{message}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", padding: 24, gap: 12 },
+  input: { borderWidth: 1, borderColor: "#999", borderRadius: 8, padding: 10 },
+  button: { backgroundColor: "#10484a", padding: 12, borderRadius: 8, alignItems: "center" },
+  buttonText: { color: "#fff", fontWeight: "600" },
+  photo: { width: "100%", height: 240, borderRadius: 8 },
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Rutas de fotos seguras"
+  solution={
+    <Playground
+      lang="ts"
+      code={`const ALLOWED_EXTENSIONS = ["jpg", "jpeg", "png", "heic"];
+
+function buildPhotoPath(userId: string, fileName: string, now: number): string {
+  const extension = (fileName.split(".").pop() ?? "").toLowerCase();
+  if (!ALLOWED_EXTENSIONS.includes(extension)) {
+    throw new Error("Unsupported image type: " + extension);
+  }
+  return userId + "/" + now + "." + extension;
+}
+
+function ownerOf(path: string): string {
+  return path.split("/")[0];
+}
+
+const path = buildPhotoPath("user-123", "Beach Day.JPG", 1700000000000);
+console.log(path);
+console.log(ownerOf(path) === "user-123");
+try {
+  buildPhotoPath("user-123", "notes.pdf", 1700000000000);
+} catch (error) {
+  console.log((error as Error).message);
+}`}
+      expected={`user-123/1700000000000.jpg
+true
+Unsupported image type: pdf`}
+    />
+  }
+>
+  Escribe `buildPhotoPath(userId, fileName, now)` que devuelva `userId/now.extensión`, con la extensión en minúsculas y solo si es `jpg`, `jpeg`, `png` o `heic`; en otro caso lanza un error. El nombre original del archivo no debe aparecer en la ruta (puede contener espacios o datos personales). Escribe también `ownerOf(path)`, que devuelva la primera carpeta, igual que `storage.foldername(name)[1]` en la política.
+</Challenge>
+
+## Errores comunes
+
+**Crear el bucket como público "para probar".** Las fotos se ven sin problemas, pero cualquiera que adivine o copie una URL puede descargarlas sin sesión, y las políticas de `select` no se aplican a las descargas públicas. Se detecta en **Storage**, donde el bucket aparece marcado como público, o abriendo una URL de archivo en una ventana privada del navegador.
+
+**Guardar la URL firmada en la base de datos.** Las fotos funcionan un minuto y luego aparecen rotas. Ocurre porque la URL firmada caduca. Se detecta porque las imágenes fallan con un error 400 tras recargar. Guarda la ruta y firma en el momento de mostrar.
+
+**Subir fuera de la carpeta del usuario.** La subida falla con `new row violates row-level security policy`. Ocurre porque la ruta no empieza por el id del usuario (por ejemplo `photos/imagen.jpg`). Se detecta comparando la ruta con la política: el primer segmento debe ser exactamente `auth.uid()`.
+
+<Flashcards
+  cards={[
+    { front: "¿Sobre qué tabla se escriben las políticas de Supabase Storage?", back: "Sobre storage.objects, donde cada fila representa un archivo." },
+    { front: "¿Qué devuelve storage.foldername(name) en una política de Storage?", back: "Un array con las carpetas de la ruta; el elemento [1] es la primera carpeta." },
+    { front: "¿Qué se guarda en la base de datos para una foto privada: la ruta o la URL firmada?", back: "La ruta, porque la URL firmada caduca; se firma de nuevo al mostrarla." },
+    { front: "¿Cuándo conviene un bucket público en Supabase Storage?", back: "Solo para archivos que cualquiera puede ver, como logotipos; nunca para fotos de usuarios." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué ruta permite subir la política de insert de esta lección al usuario con id abc?",
+      options: [
+        { text: "abc/1700000000000.jpg", correct: true, feedback: "Correcto: la primera carpeta coincide con auth.uid()." },
+        { text: "photos/abc.jpg", correct: false, feedback: "La primera carpeta sería photos, no el id del usuario." },
+        { text: "public/abc/foto.jpg", correct: false, feedback: "La primera carpeta es public; la política la rechaza." }
+      ]
+    },
+    {
+      prompt: "¿Qué ventaja tiene una URL firmada de 60 segundos?",
+      options: [
+        { text: "Que si se filtra deja de servir enseguida", correct: true, feedback: "Correcto: limita el daño de una URL copiada." },
+        { text: "Que hace pública la foto para siempre", correct: false, feedback: "Es justo lo contrario: caduca." },
+        { text: "Que evita tener que escribir políticas", correct: false, feedback: "Crear la URL firmada también pasa por la política de select." }
+      ]
+    },
+    {
+      prompt: "¿Por qué la subida se hace con un ArrayBuffer en React Native?",
+      options: [
+        { text: "Porque React Native no tiene objetos File como el navegador", correct: true, feedback: "Correcto: se lee la imagen local con fetch y arrayBuffer." },
+        { text: "Porque Supabase solo acepta texto", correct: false, feedback: "Storage guarda archivos binarios." },
+        { text: "Porque cifra la imagen", correct: false, feedback: "Un ArrayBuffer son bytes sin cifrar." }
+      ]
+    }
+  ]}
+/>

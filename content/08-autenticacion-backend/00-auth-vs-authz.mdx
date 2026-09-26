@@ -1,0 +1,252 @@
+---
+id: "08-autenticacion-backend/00-auth-vs-authz"
+title: "Autenticación vs autorización"
+stage: 8
+module: "Conceptos"
+order: 0
+minutes: 10
+prereqs: ["07-nativo-ux-avanzada/11-proyecto-modulo-nativo"]
+summary: "Distingue entre comprobar quién es un usuario y decidir qué puede hacer, y aprende por qué esa decisión vive en el servidor."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás explicar la diferencia entre autenticación y autorización, reconocer cuál falla en cada error (401 o 403) y decidir en qué capa de tu app debe vivir cada una.
+
+**Prerrequisitos:** `07-nativo-ux-avanzada/11-proyecto-modulo-nativo`
+
+## Concepto
+
+Hasta ahora la app de notas vive en un solo teléfono: quien tiene el dispositivo en la mano ve todas las notas. En cuanto las notas se guardan en un servidor compartido aparecen dos preguntas distintas que se suelen mezclar: ¿quién eres? y ¿qué puedes hacer?
+
+### La analogía del hotel
+
+Piensa en la recepción de un hotel. Cuando llegas, muestras tu documento de identidad y el recepcionista comprueba que eres la persona de la reserva. Eso es **autenticación**: verificar una identidad. Después te entrega una tarjeta que abre la puerta de la habitación 305 y el gimnasio, pero no la 306 ni la oficina del gerente. Eso es **autorización**: decidir qué recursos puede usar una identidad ya verificada.
+
+Fíjate en dos detalles de la analogía:
+
+- La tarjeta no dice tu nombre en cada puerta; la puerta solo comprueba si la tarjeta tiene permiso. Una vez autenticado, llevas una credencial que representa tu identidad.
+- Cada puerta decide por sí misma. Si el hotel confiara en que tú no intentarás abrir la 306, no necesitaría cerraduras.
+
+### Autenticación (authentication, AuthN)
+
+Autenticar es demostrar que eres quien dices ser. Los factores clásicos son:
+
+- **Algo que sabes**: una contraseña o un PIN.
+- **Algo que tienes**: el teléfono que recibe un código, una llave física.
+- **Algo que eres**: una huella o tu cara.
+
+Combinar dos factores distintos se llama autenticación multifactor (MFA). El resultado de una autenticación correcta es una **sesión**: una credencial temporal (normalmente un token) que la app envía en cada petición para no pedir la contraseña otra vez.
+
+### Autorización (authorization, AuthZ)
+
+Autorizar es decidir si una identidad concreta puede hacer una acción concreta sobre un recurso concreto. La pregunta siempre tiene tres partes: quién, qué acción, sobre qué.
+
+```ts
+type Role = "reader" | "editor";
+type User = { id: string; role: Role };
+type Note = { id: string; ownerId: string };
+
+function canEditNote(user: User, note: Note): boolean {
+  // Editors may edit any note; everyone else only their own notes.
+  return user.role === "editor" || note.ownerId === user.id;
+}
+```
+
+Hay dos estilos que verás a menudo:
+
+- **Por rol (RBAC)**: los permisos dependen del rol del usuario (`editor`, `reader`, `admin`).
+- **Por propiedad o atributos**: los permisos dependen de datos del recurso, como "solo el dueño puede ver su nota". Es el modelo que usarás con la app de notas.
+
+### 401 frente a 403
+
+HTTP tiene un código para cada fallo, y distinguirlos te ahorra horas de depuración:
+
+| Código | Nombre | Significado real |
+| --- | --- | --- |
+| 401 | Unauthorized | No sé quién eres: falta el token, expiró o es inválido. Es un fallo de autenticación, a pesar del nombre. |
+| 403 | Forbidden | Sé quién eres, pero no tienes permiso para esto. Es un fallo de autorización. |
+
+Ante un 401 la app debe intentar renovar la sesión o volver al login. Ante un 403, volver a iniciar sesión no sirve de nada: el usuario simplemente no tiene permiso.
+
+### Dónde vive cada decisión
+
+Esta es la idea más importante de la etapa: **el cliente nunca es la última palabra en autorización**. Tu app puede ocultar el botón "Editar" a un lector, y está bien hacerlo por usabilidad, pero cualquier persona puede descompilar la app, modificarla o llamar directamente a tu API con herramientas como `curl`. Si el servidor no comprueba el permiso, ocultar el botón no protege nada.
+
+```ts
+// UI layer: hides the button for a better experience.
+const showEditButton = canEditNote(currentUser, note);
+
+// Server layer: the real check. It must run again on every request,
+// using the identity proven by the token, never an id sent by the client.
+```
+
+En las próximas lecciones verás cómo Supabase implementa esa comprobación en el servidor con Row Level Security, de modo que la base de datos rechaza las filas que no te pertenecen aunque la app tenga un error.
+
+Para profundizar, la guía de Supabase explica cómo separa identidad y permisos: https://supabase.com/docs/guides/auth. La referencia de los códigos 401 y 403 está en MDN: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401 y https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403.
+
+## Práctica
+
+La Snack simula un login con un directorio de usuarios en memoria (solo para aprender; nunca guardes credenciales en el código). Entra con `ana@example.com` (editora) y luego con `luis@example.com` (lector), ambos con la contraseña `demo-1234`. Observa que los dos se autentican, pero solo uno está autorizado a editar. Prueba también una contraseña incorrecta.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  code={`import { useState } from "react";
+import { View, Text, TextInput, Pressable, StyleSheet } from "react-native";
+
+type Role = "reader" | "editor";
+type User = { email: string; role: Role };
+
+// Demo-only directory. Real apps never ship credentials in the bundle.
+const DEMO_USERS: Record<string, Role> = {
+  "ana@example.com": "editor",
+  "luis@example.com": "reader",
+};
+const DEMO_PASSWORD = "demo-1234";
+
+function authenticate(email: string, password: string): User | null {
+  const key = email.trim().toLowerCase();
+  const role = DEMO_USERS[key];
+  if (!role || password !== DEMO_PASSWORD) return null;
+  return { email: key, role };
+}
+
+function canEdit(user: User): boolean {
+  return user.role === "editor";
+}
+
+export default function App() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [user, setUser] = useState<User | null>(null);
+  const [message, setMessage] = useState("");
+
+  const signIn = () => {
+    const found = authenticate(email, password);
+    setUser(found);
+    setMessage(found ? "" : "401: no sé quién eres");
+  };
+
+  const tryEdit = () => {
+    if (!user) return;
+    setMessage(canEdit(user) ? "Nota editada" : "403: sin permiso para editar");
+  };
+
+  if (!user) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>Iniciar sesión</Text>
+        <TextInput style={styles.input} placeholder="Email" autoCapitalize="none" value={email} onChangeText={setEmail} />
+        <TextInput style={styles.input} placeholder="Contraseña" secureTextEntry value={password} onChangeText={setPassword} />
+        <Pressable style={styles.button} onPress={signIn}>
+          <Text style={styles.buttonText}>Entrar</Text>
+        </Pressable>
+        <Text style={styles.message}>{message}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Hola, {user.email}</Text>
+      <Text>Rol: {user.role}</Text>
+      <Pressable style={styles.button} onPress={tryEdit}>
+        <Text style={styles.buttonText}>Editar nota</Text>
+      </Pressable>
+      <Pressable style={styles.link} onPress={() => { setUser(null); setMessage(""); }}>
+        <Text>Cerrar sesión</Text>
+      </Pressable>
+      <Text style={styles.message}>{message}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", padding: 24, gap: 12 },
+  title: { fontSize: 22, fontWeight: "600" },
+  input: { borderWidth: 1, borderColor: "#999", borderRadius: 8, padding: 10 },
+  button: { backgroundColor: "#10484a", padding: 12, borderRadius: 8, alignItems: "center" },
+  buttonText: { color: "#fff", fontWeight: "600" },
+  link: { alignItems: "center", padding: 8 },
+  message: { color: "#b00020" },
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Permiso por propiedad"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type Role = "reader" | "editor";
+type User = { id: string; role: Role };
+type Note = { id: string; ownerId: string };
+
+function canEditNote(user: User, note: Note): boolean {
+  return user.role === "editor" || note.ownerId === user.id;
+}
+
+const ana: User = { id: "u1", role: "editor" };
+const luis: User = { id: "u2", role: "reader" };
+const luisNote: Note = { id: "n1", ownerId: "u2" };
+const anaNote: Note = { id: "n2", ownerId: "u1" };
+
+console.log(canEditNote(luis, luisNote));
+console.log(canEditNote(luis, anaNote));
+console.log(canEditNote(ana, luisNote));`}
+      expected={`true
+false
+true`}
+    />
+  }
+>
+  Escribe una función `canEditNote(user, note)` que devuelva `true` si el usuario tiene rol `editor` o si es el dueño de la nota (`note.ownerId === user.id`). Comprueba que un lector puede editar su propia nota, que no puede editar la de otra persona y que una editora puede editar cualquiera.
+</Challenge>
+
+## Errores comunes
+
+**Confiar en la UI como control de acceso.** Parece seguro porque el botón "Borrar" no aparece para los lectores, pero la API acepta la petición de cualquiera. Ocurre porque se prueba solo desde la app. Se detecta llamando a la API directamente (con `curl` o un cliente HTTP) con el token de un usuario sin permiso: si responde 200, la autorización no existe en el servidor.
+
+**Confundir 401 con 403.** La app devuelve al usuario al login cuando recibe un 403, y el usuario entra en un bucle: inicia sesión, intenta la acción, vuelve al login. Ocurre porque el nombre "Unauthorized" del 401 confunde. Se detecta revisando el código de estado en los logs de red: un 403 con un token válido no se arregla con otra sesión.
+
+**Enviar el identificador del usuario desde el cliente.** El cuerpo de la petición incluye `userId: "u2"` y el servidor lo usa para filtrar. Cualquiera puede cambiar ese valor y leer datos ajenos. Se detecta buscando en el servidor filtros que usen datos del cuerpo o de la URL en lugar de la identidad extraída del token verificado.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué diferencia hay entre autenticación y autorización?", back: "Autenticación verifica quién eres; autorización decide qué puedes hacer con esa identidad." },
+    { front: "¿Qué significa un error HTTP 401?", back: "Falta la identidad o no es válida (token ausente, expirado o inválido): es un fallo de autenticación." },
+    { front: "¿Qué significa un error HTTP 403?", back: "La identidad es válida, pero no tiene permiso para esa acción: es un fallo de autorización." },
+    { front: "¿Por qué ocultar un botón en la app no es un control de acceso?", back: "Porque cualquiera puede llamar a la API sin la app; la comprobación real debe ocurrir en el servidor." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Un usuario inicia sesión correctamente, pero al borrar la nota de otra persona el servidor la rechaza. ¿Qué falló?",
+      options: [
+        { text: "La autenticación", correct: false, feedback: "La identidad se verificó bien: el usuario inició sesión." },
+        { text: "La autorización", correct: true, feedback: "Correcto: el servidor sabe quién es, pero no le permite esa acción." },
+        { text: "Ninguna, es un error de red", correct: false, feedback: "El servidor respondió y rechazó la acción por permisos." }
+      ]
+    },
+    {
+      prompt: "¿Qué código HTTP corresponde a un token expirado?",
+      options: [
+        { text: "401", correct: true, feedback: "Correcto: sin un token válido el servidor no sabe quién eres." },
+        { text: "403", correct: false, feedback: "403 indica que la identidad es válida pero no tiene permiso." },
+        { text: "404", correct: false, feedback: "404 indica que el recurso no existe." }
+      ]
+    },
+    {
+      prompt: "¿Dónde debe comprobarse de forma definitiva que un usuario puede editar una nota?",
+      options: [
+        { text: "En la app, ocultando el botón", correct: false, feedback: "Ocultar el botón mejora la experiencia, pero no impide llamar a la API." },
+        { text: "En el servidor, con la identidad del token", correct: true, feedback: "Correcto: el servidor decide con una identidad que el cliente no puede falsificar." },
+        { text: "En AsyncStorage, guardando el rol", correct: false, feedback: "Cualquier dato del dispositivo puede modificarse; no sirve como control de acceso." }
+      ]
+    }
+  ]}
+/>

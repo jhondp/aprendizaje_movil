@@ -1,0 +1,309 @@
+---
+id: "08-autenticacion-backend/03-base-de-datos-y-rls"
+title: "Base de datos y Row Level Security"
+stage: 8
+module: "Supabase"
+order: 3
+minutes: 15
+prereqs: ["08-autenticacion-backend/02-supabase-setup-y-auth"]
+summary: "Crea la tabla de notas en Supabase y protégela con políticas Row Level Security para que cada usuario solo vea y modifique sus propias filas."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás crear una tabla en Supabase, activar Row Level Security y escribir políticas que usan `auth.uid()` para que cada usuario solo acceda a sus propias notas.
+
+**Prerrequisitos:** `08-autenticacion-backend/02-supabase-setup-y-auth`
+
+## Concepto
+
+Supabase expone cada tabla de tu base de datos como una API accesible con la anon key. Como esa clave es pública, cualquiera puede enviar consultas a tu proyecto. Lo único que separa "mis notas" de "todas las notas" es **Row Level Security (RLS)**: reglas que PostgreSQL evalúa en el servidor para cada fila, en cada consulta.
+
+### La analogía de los buzones
+
+Piensa en los buzones de un edificio. Todos están en el mismo mueble del portal y todos los vecinos tienen acceso al portal. Pero cada buzón tiene su cerradura, y tu llave solo abre el tuyo. La tabla `notes` es el mueble de buzones, la anon key te deja entrar al portal y las políticas RLS son las cerraduras: comparan tu identidad con el dueño de cada fila.
+
+### Crear la tabla
+
+En el panel de Supabase, abre **SQL Editor** y ejecuta:
+
+```sql
+create table public.notes (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  title text not null check (char_length(title) between 1 and 200),
+  created_at timestamptz not null default now()
+);
+```
+
+Fíjate en `user_id uuid not null default auth.uid()`. La función `auth.uid()` devuelve el identificador del usuario del token que acompaña la petición, ya verificado por Supabase. Al usarla como valor por defecto, la app ni siquiera necesita enviar `user_id` al insertar. `on delete cascade` borra las notas si se elimina la cuenta.
+
+### Activar RLS
+
+```sql
+alter table public.notes enable row level security;
+```
+
+Con RLS activo y **ninguna política**, la tabla queda cerrada: toda consulta con la anon key devuelve cero filas. Es un punto de partida seguro. A partir de ahí abres, con políticas, exactamente lo que cada usuario necesita.
+
+Las tablas creadas desde el editor visual (Table Editor) activan RLS por defecto, pero las creadas con SQL no. Por eso la lista de comprobación de esta lección insiste en revisarlo en cada tabla.
+
+### Escribir políticas
+
+Una política responde a la pregunta de la autorización: quién (`to`), qué acción (`for`) y sobre qué filas (`using` y `with check`).
+
+```sql
+create policy "Users can read their own notes"
+on public.notes for select
+to authenticated
+using ((select auth.uid()) = user_id);
+
+create policy "Users can create their own notes"
+on public.notes for insert
+to authenticated
+with check ((select auth.uid()) = user_id);
+```
+
+- `to authenticated`: la política solo se aplica a peticiones con una sesión válida. Las peticiones anónimas no ven nada.
+- `using (...)`: filtra las filas **existentes** que la consulta puede ver o tocar. Se usa en `select`, `update` y `delete`.
+- `with check (...)`: valida las filas **nuevas o modificadas**. Se usa en `insert` y `update`. Sin ella, un usuario podría insertar una nota con el `user_id` de otra persona.
+- `(select auth.uid())` en lugar de `auth.uid()`: el resultado es el mismo, pero PostgreSQL lo calcula una sola vez por consulta en vez de una vez por fila. La documentación lo recomienda por rendimiento.
+
+Guía oficial: https://supabase.com/docs/guides/database/postgres/row-level-security.
+
+### Consultar desde la app
+
+Con las políticas en su sitio, la app pide notas sin filtrar por usuario, y aun así solo recibe las suyas:
+
+```ts
+const { data, error } = await supabase
+  .from("notes")
+  .select("id, title, created_at")
+  .order("created_at", { ascending: false });
+
+const { error: insertError } = await supabase.from("notes").insert({ title: "Comprar pan" });
+```
+
+Puedes añadir `.eq("user_id", userId)` para que la consulta use un índice, pero entiende que eso es una optimización, no seguridad: aunque borres esa línea, o alguien la cambie en una app modificada, RLS sigue filtrando en el servidor.
+
+### Cómo probar tus políticas
+
+No confíes en que "la app funciona". Prueba el caso negativo:
+
+1. Crea dos usuarios de prueba, A y B.
+2. Inicia sesión como A y crea una nota.
+3. Inicia sesión como B y consulta `notes`: debe devolver una lista vacía, no un error.
+4. Como B, intenta insertar una nota con `user_id` de A: debe fallar con un error de política (`new row violates row-level security policy`).
+
+El panel de Supabase también muestra una advertencia en **Advisors, Security** para cada tabla pública sin RLS.
+
+## Práctica
+
+La Snack inicia sesión y lee la tabla `notes`. Con los marcadores verás un error de red. Para verla funcionar, ejecuta el SQL de esta lección en tu proyecto, pon tu URL y tu anon key, e inicia sesión con dos usuarios distintos: cada uno verá solo sus notas.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  dependencies={{ "@supabase/supabase-js": "*" }}
+  code={`import { useState } from "react";
+import { View, Text, TextInput, Pressable, FlatList, StyleSheet } from "react-native";
+import { createClient } from "@supabase/supabase-js";
+
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "https://YOUR_PROJECT_REF.supabase.co";
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "YOUR_SUPABASE_ANON_KEY";
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: false, detectSessionInUrl: false },
+});
+
+type Note = { id: string; title: string };
+
+export default function App() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [title, setTitle] = useState("");
+  const [notes, setNotes] = useState<Note[] | null>(null);
+  const [message, setMessage] = useState("");
+
+  const loadNotes = async () => {
+    // No user filter here: RLS returns only rows where auth.uid() = user_id.
+    const { data, error } = await supabase.from("notes").select("id, title").order("created_at", { ascending: false });
+    if (error) setMessage(error.message);
+    else setNotes(data);
+  };
+
+  const signIn = async () => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) setMessage(error.message);
+    else await loadNotes();
+  };
+
+  const addNote = async () => {
+    const { error } = await supabase.from("notes").insert({ title });
+    if (error) setMessage(error.message);
+    else { setTitle(""); await loadNotes(); }
+  };
+
+  if (!notes) {
+    return (
+      <View style={styles.container}>
+        <TextInput style={styles.input} placeholder="Email" autoCapitalize="none" value={email} onChangeText={setEmail} />
+        <TextInput style={styles.input} placeholder="Contraseña" secureTextEntry value={password} onChangeText={setPassword} />
+        <Pressable style={styles.button} onPress={signIn}><Text style={styles.buttonText}>Entrar</Text></Pressable>
+        <Text style={styles.message}>{message}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <TextInput style={styles.input} placeholder="Nueva nota" value={title} onChangeText={setTitle} />
+      <Pressable style={styles.button} onPress={addNote}><Text style={styles.buttonText}>Añadir</Text></Pressable>
+      <FlatList data={notes} keyExtractor={(n) => n.id} renderItem={({ item }) => <Text style={styles.note}>{item.title}</Text>} />
+      <Text style={styles.message}>{message}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, paddingTop: 80, padding: 24, gap: 12 },
+  input: { borderWidth: 1, borderColor: "#999", borderRadius: 8, padding: 10 },
+  button: { backgroundColor: "#10484a", padding: 12, borderRadius: 8, alignItems: "center" },
+  buttonText: { color: "#fff", fontWeight: "600" },
+  note: { paddingVertical: 8, borderBottomWidth: 1, borderColor: "#ddd" },
+  message: { color: "#b00020" },
+});`}
+/>
+
+Antes de dar por terminada una tabla, repasa esta lista:
+
+<Checklist
+  id="08-autenticacion-backend/03-base-de-datos-y-rls-tablas"
+  items={[
+    "Cada tabla del esquema public tiene RLS activo (enable row level security)",
+    "Cada tabla tiene políticas explícitas para select, insert, update y delete, o la acción queda cerrada a propósito",
+    "Las políticas de insert y update incluyen with check",
+    "Las políticas usan (select auth.uid()) y no un identificador enviado por el cliente",
+    "Probé con un segundo usuario que no ve ni modifica las filas del primero",
+    "Advisors, Security no muestra advertencias de RLS"
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Editar y borrar solo lo propio"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="55.0.0"
+      dependencies={{ "@supabase/supabase-js": "*" }}
+      code={`/*
+Run in the Supabase SQL Editor:
+
+create policy "Users can update their own notes"
+on public.notes for update
+to authenticated
+using ((select auth.uid()) = user_id)
+with check ((select auth.uid()) = user_id);
+
+create policy "Users can delete their own notes"
+on public.notes for delete
+to authenticated
+using ((select auth.uid()) = user_id);
+*/
+import { useState } from "react";
+import { View, Text, Pressable, StyleSheet } from "react-native";
+import { createClient } from "@supabase/supabase-js";
+
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "https://YOUR_PROJECT_REF.supabase.co";
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "YOUR_SUPABASE_ANON_KEY";
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: false, detectSessionInUrl: false },
+});
+
+async function renameNote(id: string, title: string) {
+  // RLS decides; .select() returns the rows actually changed.
+  const { data, error } = await supabase.from("notes").update({ title }).eq("id", id).select();
+  if (error) return error.message;
+  return data.length === 0 ? "Sin cambios: la nota no existe o no es tuya" : "Nota actualizada";
+}
+
+async function deleteNote(id: string) {
+  const { error, count } = await supabase.from("notes").delete({ count: "exact" }).eq("id", id);
+  if (error) return error.message;
+  return count === 0 ? "Sin cambios: la nota no existe o no es tuya" : "Nota borrada";
+}
+
+export default function App() {
+  const [message, setMessage] = useState("");
+  const noteId = "00000000-0000-0000-0000-000000000000";
+  return (
+    <View style={styles.container}>
+      <Pressable onPress={async () => setMessage(await renameNote(noteId, "Nuevo título"))}>
+        <Text style={styles.link}>Renombrar nota</Text>
+      </Pressable>
+      <Pressable onPress={async () => setMessage(await deleteNote(noteId))}>
+        <Text style={styles.link}>Borrar nota</Text>
+      </Pressable>
+      <Text>{message}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", padding: 24, gap: 16 },
+  link: { color: "#10484a", fontWeight: "600" },
+});`}
+    />
+  }
+>
+  Escribe las políticas de `update` y `delete` para la tabla `notes`, de modo que cada usuario solo pueda modificar o borrar sus propias notas y no pueda "regalar" una nota cambiando su `user_id`. Después escribe en la app `renameNote(id, title)` y `deleteNote(id)`. Ten en cuenta que, cuando RLS oculta una fila, la operación no falla: simplemente afecta a cero filas. Tu código debe distinguir ese caso.
+</Challenge>
+
+## Errores comunes
+
+**Crear la tabla con SQL y olvidar activar RLS.** La app funciona perfectamente, pero cualquiera con la anon key puede leer y borrar todas las notas. Ocurre porque las tablas creadas con SQL no activan RLS solas. Se detecta en **Advisors, Security** o con la consulta `select tablename, rowsecurity from pg_tables where schemaname = 'public';`, que debe mostrar `true` en cada fila.
+
+**Activar RLS sin políticas y pensar que la app está rota.** Todas las consultas devuelven una lista vacía, sin error. Ocurre porque RLS sin políticas deniega todo en silencio. Se detecta porque la tabla tiene filas en el panel (que usa privilegios de administrador) pero la app no ve ninguna.
+
+**Olvidar `with check` en insert o update.** Un usuario puede insertar notas a nombre de otro o transferir las suyas. Ocurre porque `using` solo filtra filas existentes. Se detecta intentando, como usuario B, insertar una fila con el `user_id` de A: si funciona, falta `with check`.
+
+**Filtrar en la app y confiar en ese filtro.** La consulta lleva `.eq("user_id", userId)` y no hay políticas. Se detecta quitando el filtro en una prueba: si aparecen notas ajenas, la seguridad dependía del cliente.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué devuelve auth.uid() dentro de una política de Supabase?", back: "El id del usuario del token de la petición, ya verificado por Supabase." },
+    { front: "¿Qué ocurre si activas RLS en una tabla sin crear políticas?", back: "Todas las consultas con la anon key devuelven cero filas: la tabla queda cerrada." },
+    { front: "¿Qué diferencia hay entre using y with check en una política RLS?", back: "using filtra filas existentes; with check valida filas nuevas o modificadas." },
+    { front: "¿Por qué escribir (select auth.uid()) en lugar de auth.uid() en una política?", back: "Porque PostgreSQL lo evalúa una vez por consulta y no una vez por fila, lo que mejora el rendimiento." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "La app no filtra por usuario en la consulta a notes, pero cada usuario solo ve sus notas. ¿Por qué?",
+      options: [
+        { text: "Porque la política RLS de select compara auth.uid() con user_id", correct: true, feedback: "Correcto: el servidor filtra cada fila." },
+        { text: "Porque la anon key incluye el id del usuario", correct: false, feedback: "La anon key es la misma para todos; la identidad viene del token de sesión." },
+        { text: "Porque Supabase ordena las filas por usuario", correct: false, feedback: "Ordenar no oculta filas." }
+      ]
+    },
+    {
+      prompt: "¿Qué cláusula impide que un usuario inserte una nota con el user_id de otra persona?",
+      options: [
+        { text: "using", correct: false, feedback: "using filtra filas existentes, no las nuevas." },
+        { text: "with check", correct: true, feedback: "Correcto: valida la fila que se va a escribir." },
+        { text: "order by", correct: false, feedback: "order by solo ordena resultados." }
+      ]
+    },
+    {
+      prompt: "Un usuario intenta borrar una nota ajena y la API responde sin error. ¿Qué pasó?",
+      options: [
+        { text: "La nota se borró", correct: false, feedback: "Con la política de delete correcta, RLS oculta la fila ajena." },
+        { text: "RLS ocultó la fila y la operación afectó a cero filas", correct: true, feedback: "Correcto: por eso conviene comprobar cuántas filas cambiaron." },
+        { text: "Supabase ignoró la petición por la anon key", correct: false, feedback: "La anon key no decide permisos por fila." }
+      ]
+    }
+  ]}
+/>
