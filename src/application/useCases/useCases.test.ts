@@ -32,6 +32,32 @@ describe('use cases', () => {
     expect(dueCardsUseCase(r).map((c) => c.key)).toEqual(['a/b#0']);
   });
 
+  it('refreshes card text from the lesson while preserving review state', () => {
+    const r = repos();
+    registerCardsUseCase(r, 'a/b', [{ front: 'q', back: 'a' }]);
+    gradeCardUseCase(r, 'a/b#0', 'good');
+    const before = r.srs.get()['a/b#0'];
+    registerCardsUseCase(r, 'a/b', [{ front: 'q2', back: 'a2' }]);
+    expect(r.srs.get()['a/b#0']).toEqual({ ...before, front: 'q2', back: 'a2' });
+  });
+
+  it('drops cards that no longer exist in the lesson and keeps other lessons', () => {
+    const r = repos();
+    const five = [0, 1, 2, 3, 4].map((i) => ({ front: `q${i}`, back: `a${i}` }));
+    registerCardsUseCase(r, 'a/b', five);
+    registerCardsUseCase(r, 'x/y', [{ front: 'o', back: 'p' }]);
+    registerCardsUseCase(r, 'a/b', five.slice(0, 3));
+    expect(Object.keys(r.srs.get()).sort()).toEqual(['a/b#0', 'a/b#1', 'a/b#2', 'x/y#0']);
+  });
+
+  it('does not write the store when nothing changes', () => {
+    const r = repos();
+    registerCardsUseCase(r, 'a/b', [{ front: 'q', back: 'a' }]);
+    const set = vi.spyOn(r.srs, 'set');
+    registerCardsUseCase(r, 'a/b', [{ front: 'q', back: 'a' }]);
+    expect(set).not.toHaveBeenCalled();
+  });
+
   it('grading marks the card as graded and reschedules it', () => {
     const r = repos();
     registerCardsUseCase(r, 'a/b', [{ front: 'q', back: 'a' }]);
