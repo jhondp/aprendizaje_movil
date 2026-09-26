@@ -81,35 +81,43 @@ function blankKeepingNewlines(text: string): string {
   return text.replace(/[^\n]/g, ' ');
 }
 
+/** A backtick-fence opener's info string may not itself contain a backtick (CommonMark rule);
+ *  a tilde-fence opener's info string may contain anything. Up to 3 leading spaces are allowed. */
+const BACKTICK_FENCE_OPEN = /^\s{0,3}(`{3,})([^`]*)$/;
+const TILDE_FENCE_OPEN = /^\s{0,3}(~{3,}).*$/;
+
 /**
- * Blanks out fenced code blocks (``` or ~~~, any language, closing fence at least as long as the
- * opening one) so headings and component tags written inside example code are not matched.
+ * Blanks out fenced code blocks (``` or ~~~, opener detected CommonMark-style so an inline span
+ * like `` ```x``` more text `` never starts one) so headings and component tags written inside
+ * example code are not matched. A fence that is opened but never closed is masked to end of file
+ * and its 1-indexed opening line number is returned so the caller can report it.
  */
-function maskFencedBlocks(text: string): string {
+function maskFencedBlocks(text: string): { masked: string; unterminatedLine: number | null } {
   let fenceChar: string | null = null;
   let fenceLen = 0;
-  const lines = text.split('\n').map((line) => {
-    const trimmed = line.trim();
-    const fenceMatch = /^([`~]{3,})/.exec(trimmed);
+  let openedAtLine: number | null = null;
+  const lines = text.split('\n').map((line, index) => {
     if (fenceChar) {
-      if (
-        fenceMatch &&
-        fenceMatch[1]!.startsWith(fenceChar) &&
-        fenceMatch[1]!.length >= fenceLen &&
-        trimmed === fenceMatch[1]
-      ) {
+      const closeRegex =
+        fenceChar === '`'
+          ? new RegExp(`^\\s{0,3}\`{${fenceLen},}\\s*$`)
+          : new RegExp(`^\\s{0,3}~{${fenceLen},}\\s*$`);
+      if (closeRegex.test(line)) {
         fenceChar = null;
+        openedAtLine = null;
       }
       return blankKeepingNewlines(line);
     }
-    if (fenceMatch) {
-      fenceChar = fenceMatch[1]![0]!;
-      fenceLen = fenceMatch[1]!.length;
+    const open = BACKTICK_FENCE_OPEN.exec(line) ?? TILDE_FENCE_OPEN.exec(line);
+    if (open) {
+      fenceChar = open[1]![0]!;
+      fenceLen = open[1]!.length;
+      openedAtLine = index + 1;
       return blankKeepingNewlines(line);
     }
     return line;
   });
-  return lines.join('\n');
+  return { masked: lines.join('\n'), unterminatedLine: fenceChar ? openedAtLine : null };
 }
 
 /** Blanks out MDX comment blocks, i.e. `{/` + `* ... *` + `/}`, which may span several lines. */
@@ -117,9 +125,29 @@ function maskComments(text: string): string {
   return text.replace(/\{\/\*[\s\S]*?\*\/\}/g, (m) => blankKeepingNewlines(m));
 }
 
-/** Blanks fenced code blocks and MDX comments so headings/components/links inside them are ignored. */
+/** Blanks out single-line inline code spans (`` `...` ``) so a component mentioned in prose, e.g.
+ *  `` `<Sandpack />` ``, is not mistaken for real usage. Multi-line backtick-quoted content (JSX
+ *  template-literal props) is left untouched. */
+function maskInlineCodeSpans(text: string): string {
+  return text.replace(/`[^`\n]*`/g, (m) => blankKeepingNewlines(m));
+}
+
+/**
+ * Blanks fenced code blocks, MDX comments and inline code spans so headings, components and links
+ * written inside them are ignored. Comments are masked before fences, so a fence-like line inside a
+ * comment is never treated as a real fence.
+ */
 function maskNonContent(text: string): string {
-  return maskComments(maskFencedBlocks(text));
+  return maskNonContentWithDiagnostics(text).masked;
+}
+
+function maskNonContentWithDiagnostics(text: string): {
+  masked: string;
+  unterminatedFenceLine: number | null;
+} {
+  const withoutComments = maskComments(text);
+  const { masked, unterminatedLine } = maskFencedBlocks(withoutComments);
+  return { masked: maskInlineCodeSpans(masked), unterminatedFenceLine: unterminatedLine };
 }
 
 function countMatches(text: string, regex: RegExp): number {
@@ -158,9 +186,9 @@ function skipBraceGroup(source: string, from: number): number {
 /**
  * Returns the source slice of a self-closing JSX block starting at `<Tag` (word-boundary matched,
  * so `<Quiz` never matches `<QuizIntro`), balancing `{}` braces. The tag's start position is
- * located on a masked copy of `source` (fenced code and MDX comments blanked out) so an example
- * `<Tag ... />` written inside a code fence or comment is skipped, but the returned text is sliced
- * from the real, unmasked `source`.
+ * located on a masked copy of `source` (fenced code, MDX comments and inline code spans blanked
+ * out) so an example `<Tag ... />` written inside a code fence, comment or inline code span is
+ * skipped, but the returned text is sliced from the real, unmasked `source`.
  */
 export function extractBlock(
   source: string,
@@ -328,7 +356,10 @@ export function validateLesson(
   }
 
   const hidden = data.hidden === true;
-  const maskedBody = maskNonContent(body);
+  const { masked: maskedBody, unterminatedFenceLine } = maskNonContentWithDiagnostics(body);
+  if (unterminatedFenceLine !== null) {
+    err(`unterminated code fence opened at line ${unterminatedFenceLine}`);
+  }
 
   if (!hidden) {
     const positions = SECTION_MARKERS.map(({ regex }) => regex.exec(maskedBody)?.index ?? -1);

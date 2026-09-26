@@ -202,6 +202,56 @@ describe('validateLesson', () => {
     expect(errors).toEqual([]);
   });
 
+  it('does not treat a line with inline triple backticks as a fence opener', () => {
+    const src = good.replace(
+      '## Errores comunes',
+      '```x``` es inline en el texto.\n\n## Errores comunes',
+    );
+    const { errors } = validateLesson(src, '01-javascript/00-variables.mdx', stages);
+    expect(errors).toEqual([]);
+  });
+
+  it('reports an unterminated code fence on both visible and hidden lessons', () => {
+    const withOpenFence = good.replace('## Errores comunes', '```md\n## Errores comunes');
+
+    const visibleErrors = validateLesson(
+      withOpenFence,
+      '01-javascript/00-variables.mdx',
+      stages,
+    ).errors;
+    expect(visibleErrors.some((e) => /unterminated code fence opened at line \d+/.test(e))).toBe(
+      true,
+    );
+
+    const hiddenSrc = withOpenFence.replace(
+      'summary: "Resumen."',
+      'summary: "Resumen."\nhidden: true',
+    );
+    const hiddenErrors = validateLesson(hiddenSrc, '01-javascript/00-variables.mdx', stages).errors;
+    expect(hiddenErrors).toHaveLength(1);
+    expect(hiddenErrors[0]).toMatch(
+      /^01-javascript\/00-variables\.mdx: unterminated code fence opened at line \d+$/,
+    );
+  });
+
+  it('does not enforce stage limits for a component mentioned as inline code', () => {
+    const src = good.replace(
+      '<Playground lang="js" code={`console.log(1)`} />',
+      '<Playground lang="js" code={`console.log(1)`} />\n\nMenciona `<Sandpack />` en el texto.',
+    );
+    const { errors } = validateLesson(src, '01-javascript/00-variables.mdx', stages);
+    expect(errors.some((e) => e.includes('is not allowed in stage'))).toBe(false);
+  });
+
+  it('does not treat a fence-like line inside an MDX comment as a real fence', () => {
+    const src = good.replace(
+      '<Flashcards',
+      '{/*\n```\nfalso marcador de fence dentro de un comentario\n```\n*/}\n\n<Flashcards',
+    );
+    const { errors } = validateLesson(src, '01-javascript/00-variables.mdx', stages);
+    expect(errors).toEqual([]);
+  });
+
   it('counts quiz questions and flashcards', () => {
     const src = good.replace(
       '  { prompt: "3", options: [{ text: "x", correct: true, feedback: "ok" }, { text: "y", correct: false, feedback: "no" }] },\n',
