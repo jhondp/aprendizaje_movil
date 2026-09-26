@@ -40,14 +40,14 @@ Este es el flujo completo, de principio a fin, para un proyecto nuevo llamado `m
 <Terminal
   steps={[
     { cmd: "mkdir mi-primer-proyecto && cd mi-primer-proyecto", out: "" },
-    { cmd: "git init", out: "Initialized empty Git repository in /home/ana/mi-primer-proyecto/.git/" },
+    { cmd: "git init -b main", out: "Initialized empty Git repository in /home/ana/mi-primer-proyecto/.git/" },
     { cmd: "touch README.md .gitignore", out: "" },
     { cmd: "git add README.md .gitignore", out: "" },
     { cmd: 'git commit -m "Add README and gitignore"', out: "[main (root-commit) 1a2b3c4] Add README and gitignore\n 2 files changed, 0 insertions(+)" },
     { cmd: "git remote add origin https://github.com/ana/mi-primer-proyecto.git", out: "" },
     { cmd: "git push -u origin main", out: "Branch 'main' set up to track remote branch 'main' from 'origin'." },
     { cmd: 'git commit -am "Describe project idea in README"', out: "[main 5d6e7f8] Describe project idea in README\n 1 file changed, 8 insertions(+)" },
-    { cmd: "git push", out: "Everything up-to-date" },
+    { cmd: "git push", out: "To https://github.com/ana/mi-primer-proyecto.git\n   1a2b3c4..5d6e7f8  main -> main" },
   ]}
 />
 
@@ -56,7 +56,7 @@ Usa esta lista para confirmar que tu propio repositorio está completo:
 <Checklist
   id="00-aprender-a-programar/07-proyecto-tu-primer-repo-entrega"
   items={[
-    "Creé un repositorio nuevo con git init",
+    "Creé un repositorio nuevo con git init -b main, así que mi rama se llama main",
     "Escribí un README.md en español que describe qué quiero construir",
     "Agregué un archivo .gitignore con al menos una línea",
     "Hice al menos dos commits, cada uno con un mensaje claro",
@@ -72,7 +72,7 @@ Usa esta lista para confirmar que tu propio repositorio está completo:
     <Terminal
       steps={[
         { cmd: "mkdir lista-de-tareas && cd lista-de-tareas", out: "" },
-        { cmd: "git init", out: "Initialized empty Git repository in /home/ana/lista-de-tareas/.git/" },
+        { cmd: "git init -b main", out: "Initialized empty Git repository in /home/ana/lista-de-tareas/.git/" },
         { cmd: "touch README.md .gitignore", out: "" },
         { cmd: "git add README.md .gitignore", out: "" },
         { cmd: 'git commit -m "Add README and gitignore"', out: "[main (root-commit) 9f8e7d6] Add README and gitignore\n 2 files changed, 0 insertions(+)" },
@@ -87,8 +87,9 @@ Usa esta lista para confirmar que tu propio repositorio está completo:
 
 ## Errores comunes
 
-- **Crear el repositorio en GitHub antes que el local, y no saber cómo conectarlos.** El flujo de esta lección crea primero el repositorio local con `git init` y recién después lo conecta con `git remote add origin`. Cómo detectarlo: si ya creaste el repositorio vacío en GitHub, la página te muestra exactamente el comando `git remote add origin` con tu URL; cópialo desde ahí.
-- **Agregar `.gitignore` después de haber subido los archivos que quería ignorar.** Un `.gitignore` solo afecta a archivos que Git todavía no está rastreando; si `node_modules` ya fue subida en un commit anterior, agregar la línea no la elimina del historial. Cómo detectarlo: ejecuta `git status` después de crear el `.gitignore`; si un archivo que debería ignorarse sigue apareciendo, ya estaba rastreado antes.
+- **Crear el repositorio en GitHub antes que el local, y no saber cómo conectarlos.** El flujo de esta lección crea primero el repositorio local con `git init -b main` y recién después lo conecta con `git remote add origin`. Cómo detectarlo: si ya creaste el repositorio vacío en GitHub, la página te muestra exactamente el comando `git remote add origin` con tu URL; cópialo desde ahí.
+- **Agregar `.gitignore` después de haber subido los archivos que quería ignorar.** Un `.gitignore` solo afecta a archivos que Git todavía no está rastreando; si `node_modules` ya fue subida en un commit anterior, agregar la línea no la elimina del historial. Cómo detectarlo: ejecuta `git ls-files node_modules` después de crear el `.gitignore`; si lista archivos, Git los sigue rastreando y tienes que dejar de rastrearlos con `git rm -r --cached node_modules` y un nuevo commit.
+- **Ejecutar `git init` sin `-b main`.** Git crea la rama `master` y el primer `git push -u origin main` falla con "src refspec main does not match any". Cómo detectarlo: `git branch` muestra `* master`; ejecuta `git branch -M main` antes del push.
 - **Escribir el README en inglés o dejarlo vacío.** El objetivo de esta lección es practicar documentar tu propia idea, no copiar una plantilla. Cómo detectarlo: si el README no menciona qué construye el proyecto ni por qué, todavía no cumple el objetivo de la lección.
 
 <Flashcards
@@ -114,7 +115,7 @@ Usa esta lista para confirmar que tu propio repositorio está completo:
       prompt: "Ya subiste la carpeta node_modules en un commit anterior y ahora agregas node_modules/ a .gitignore. ¿Qué ocurre?",
       options: [
         { text: "Git la elimina automáticamente del historial", correct: false, feedback: ".gitignore no borra archivos que ya estaban rastreados." },
-        { text: "Sigue apareciendo en git status porque ya estaba rastreada", correct: true, feedback: "Correcto: .gitignore solo afecta a archivos que todavía no fueron agregados." },
+        { text: "Git la sigue rastreando: .gitignore no afecta a archivos ya versionados", correct: true, feedback: "Correcto: hay que dejar de rastrearla con git rm -r --cached node_modules y hacer un commit." },
         { text: "El repositorio deja de funcionar", correct: false, feedback: "No rompe el repositorio, solo no ignora lo que ya estaba rastreado." },
       ],
     },

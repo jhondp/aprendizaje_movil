@@ -61,7 +61,7 @@ Node.js necesita saber que un proyecto usa módulos ES (la sintaxis `export`/`im
 }
 ```
 
-Con esa línea, cualquier archivo `.js` del proyecto puede usar `export` e `import`. Sin ella, Node.js interpreta `import` como un error de sintaxis.
+Con esa línea, cualquier archivo `.js` del proyecto puede usar `export` e `import` sin sorpresas. Sin ella, las versiones LTS actuales de Node.js (22.12 o posterior) detectan la sintaxis de módulos, vuelven a leer el archivo como módulo ES y muestran una advertencia `MODULE_TYPELESS_PACKAGE_JSON` que avisa del costo extra de rendimiento; versiones más antiguas de Node.js directamente lanzan `SyntaxError: Cannot use import statement outside a module`. En ambos casos la solución es la misma: declarar `"type": "module"`.
 
 Puedes revisar la referencia completa de módulos ES en Node.js: https://nodejs.org/api/esm.html, y la guía de módulos de JavaScript en MDN: https://developer.mozilla.org/es/docs/Web/JavaScript/Guide/Modules.
 
@@ -148,11 +148,11 @@ console.log(farewell("Ana"));`}
 
 ## Errores comunes
 
-**Olvidar `"type": "module"` en `package.json`.** Sin esa línea, Node.js lanza `SyntaxError: Cannot use import statement outside a module` al encontrar la primera línea `import`. Se detecta por ese mensaje exacto; la solución es agregar `"type": "module"` al `package.json`, o usar la extensión `.mjs` en los archivos.
+**Olvidar `"type": "module"` en `package.json`.** En Node.js 22 LTS el programa se ejecuta, pero antes aparece la advertencia `[MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of ... is not specified and it doesn't parse as CommonJS`, seguida de "To eliminate this warning, add \"type\": \"module\""; en versiones antiguas de Node.js el mismo archivo falla con `SyntaxError: Cannot use import statement outside a module`. Se detecta por cualquiera de esos dos mensajes; la solución es agregar `"type": "module"` al `package.json`, o usar la extensión `.mjs` en los archivos.
 
 **Omitir la extensión del archivo en la ruta de import.** `import { add } from "./math"` (sin `.js`) falla en Node.js con un error de tipo "Cannot find module", porque Node.js, a diferencia de otras herramientas, no adivina la extensión. Se detecta por ese mensaje; la solución es escribir la ruta completa, `"./math.js"`.
 
-**Importar sin llaves algo que se exportó con nombre.** `import add from "./math.js"` (sin llaves) busca una exportación por defecto que no existe en `math.js`, así que `add` termina siendo `undefined`. Se detecta porque la función "existe" pero llamarla lanza `TypeError: add is not a function`. Solución: usar llaves con el nombre exacto exportado, `import { add } from "./math.js"`.
+**Importar sin llaves algo que se exportó con nombre.** `import add from "./math.js"` (sin llaves) busca una exportación por defecto que no existe en `math.js`. Node.js lo detecta antes de ejecutar una sola línea del programa y lanza `SyntaxError: The requested module './math.js' does not provide an export named 'default'`. Se detecta por ese mensaje, que señala la línea del `import`. Solución: usar llaves con el nombre exacto exportado, `import { add } from "./math.js"`.
 
 <Flashcards
   cards={[
@@ -166,11 +166,11 @@ console.log(farewell("Ana"));`}
 <Quiz
   questions={[
     {
-      prompt: "¿Qué mensaje lanza Node.js si usas import en un archivo sin \"type\": \"module\" en el package.json?",
+      prompt: "Node.js 22 muestra la advertencia MODULE_TYPELESS_PACKAGE_JSON al ejecutar un archivo con import. ¿Cuál es la solución recomendada?",
       options: [
-        { text: "Ningún mensaje, funciona igual", correct: false, feedback: "Sin esa configuración, import provoca un error de sintaxis." },
-        { text: "SyntaxError: Cannot use import statement outside a module", correct: true, feedback: "Correcto: ese es el error exacto que lanza Node.js." },
-        { text: "ReferenceError: import is not defined", correct: false, feedback: "El problema es de sintaxis del módulo, no una referencia indefinida." },
+        { text: "Ignorarla: el programa funciona igual", correct: false, feedback: "Funciona, pero Node.js tiene que leer el archivo dos veces y versiones más antiguas lo rechazan con un SyntaxError." },
+        { text: "Agregar \"type\": \"module\" al package.json", correct: true, feedback: "Correcto: así Node.js sabe desde el principio que el proyecto usa módulos ES." },
+        { text: "Cambiar import por export", correct: false, feedback: "import y export cumplen funciones distintas; el problema es que falta declarar el tipo de módulo." },
       ],
     },
     {

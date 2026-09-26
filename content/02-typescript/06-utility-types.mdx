@@ -40,7 +40,7 @@ const task: Task = { id: 1, title: "Comprar leche", done: false };
 const updated = updateTask(task, { done: true });
 ```
 
-`Partial<Task>` es igual a `Task`, pero con cada propiedad marcada como opcional (`id?`, `title?`, `done?`). Es el tipo natural para un objeto de "cambios parciales": quien llama a `updateTask` solo necesita pasar las propiedades que quiere modificar.
+`Partial<Task>` es igual a `Task`, pero con cada propiedad marcada como opcional (`id?`, `title?`, `done?`). Es el tipo natural para un objeto de "cambios parciales": quien llama a `updateTask` solo necesita pasar las propiedades que quiere modificar. El cuerpo usa el spread que viste en `01-javascript/07-metodos-de-array`: `{ ...task, ...changes }` crea un objeto nuevo copiando primero todos los campos de `task` y después los de `changes`; como gana el campo que está más a la derecha, cada propiedad presente en `changes` reemplaza a la original y el resto queda igual. En el ejemplo, `updated` vale `{ id: 1, title: "Comprar leche", done: true }` y `task` no cambia.
 
 ### `Pick<T, K>`: quedarse con algunas propiedades
 

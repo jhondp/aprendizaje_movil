@@ -63,6 +63,21 @@ while (count < 3) {
 
 Si olvidas actualizar la variable de control dentro del cuerpo del bucle, la condición nunca se vuelve falsa y el bucle no termina nunca: eso se llama bucle infinito.
 
+### Texto con valores: template literals
+
+En el ejemplo anterior aparece una forma nueva de escribir texto: `` `iteration ${count}` ``. Piensa en un formulario impreso con espacios en blanco, como "Turno número \_\_\_": el texto fijo ya está escrito y solo rellenas el hueco. Un **template literal** funciona igual: es un texto entre comillas invertidas (`` ` ``, la tecla que suele estar junto al 1 o al Enter) donde cada `${...}` es un hueco que JavaScript rellena con el valor de la expresión que pongas dentro.
+
+```js
+const name = "Ana";
+const tasks = 3;
+
+console.log("Hola, " + name + ". Tienes " + tasks + " tareas.");
+console.log(`Hola, ${name}. Tienes ${tasks} tareas.`);
+// Las dos líneas imprimen: Hola, Ana. Tienes 3 tareas.
+```
+
+Las dos líneas producen el mismo texto, pero la segunda se lee de corrido y no te obliga a cuidar los espacios alrededor de cada `+`. Dentro de `${...}` puede ir cualquier expresión, por ejemplo `${tasks + 1}`. Con comillas normales (`"` o `'`) el `${...}` no se rellena: se imprime tal cual. Referencia: https://developer.mozilla.org/es/docs/Web/JavaScript/Reference/Template_literals.
+
 ### for...of
 
 `for...of` recorre directamente los valores de un array, sin manejar un índice a mano. Es la forma más clara de recorrer un array cuando no necesitas la posición de cada elemento.
@@ -118,6 +133,21 @@ iteration 1
 iteration 2`}
 />
 
+Ahora prueba los template literals por separado: cambia `name` y `tasks`, y observa que solo la versión con comillas invertidas rellena `${...}`.
+
+<Playground
+  lang="js"
+  code={`const name = "Ana";
+const tasks = 3;
+
+console.log(\`Hola, \${name}. Tienes \${tasks} tareas.\`);
+console.log(\`Mañana tendrás \${tasks + 1} tareas.\`);
+console.log("Con comillas normales: \${tasks}");`}
+  expected={`Hola, Ana. Tienes 3 tareas.
+Mañana tendrás 4 tareas.
+Con comillas normales: \${tasks}`}
+/>
+
 ## Ejercicio
 
 <Challenge
@@ -154,6 +184,7 @@ console.log(longWords);`}
     { front: "¿Cuáles son las tres partes de un for clásico?", back: "Inicialización, condición y actualización, separadas por punto y coma." },
     { front: "¿Qué pasa si la condición de un while nunca se vuelve falsa?", back: "El bucle se convierte en un bucle infinito y nunca termina." },
     { front: "¿Qué recorre for...of en un array?", back: "Los valores del array directamente, sin necesidad de manejar un índice." },
+    { front: "¿Qué hace \${...} dentro de un texto entre comillas invertidas (template literal)?", back: "Inserta en el texto el valor de la expresión que va dentro de las llaves." },
     { front: "¿Dónde debe declararse la variable acumuladora de un bucle que suma un total?", back: "Antes del bucle, para que conserve su valor entre una vuelta y otra." },
   ]}
 />

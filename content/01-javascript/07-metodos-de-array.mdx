@@ -87,6 +87,23 @@ const completedCount = tasks.reduce((count, task) => (task.done ? count + 1 : co
 console.log(completedCount); // 1
 ```
 
+### Copiar y cambiar: spread (`...`)
+
+Como estos métodos devuelven valores nuevos, a menudo quieres un objeto "igual a este, pero con un campo distinto". Piensa en fotocopiar un formulario ya lleno y corregir solo una casilla en la copia: el original queda intacto. Eso hace el operador **spread**, tres puntos (`...`) delante de un objeto o array: copia todo su contenido dentro de uno nuevo.
+
+```js
+const product = { name: "mouse", price: 20 };
+
+const onSale = { ...product, price: 18 };
+console.log(onSale);  // {"name":"mouse","price":18}
+console.log(product); // {"name":"mouse","price":20}
+
+const numbersCopy = [...numbers, 5];
+console.log(numbersCopy); // [1, 2, 3, 4, 5]
+```
+
+`{ ...product, price: 18 }` copia primero todos los campos de `product` y después escribe `price`. Si un campo aparece dos veces, gana el que está más a la derecha: por eso `price` vale `18` en la copia. Con arrays, `[...numbers, 5]` crea un array nuevo con los elementos de `numbers` y agrega `5` al final, sin modificar `numbers`. Combinado con `map`, spread permite transformar una lista de objetos sin tocar la original: `products.map((p) => ({ ...p, price: p.price * 0.9 }))`. Los paréntesis alrededor de `{ ... }` le indican a la función flecha que devuelve un objeto, no un bloque de código. Referencia: https://developer.mozilla.org/es/docs/Web/JavaScript/Reference/Operators/Spread_syntax.
+
 Puedes revisar la referencia completa de estos métodos en MDN: https://developer.mozilla.org/es/docs/Web/JavaScript/Reference/Global_Objects/Array.
 
 <Callout kind="tip">
@@ -122,6 +139,26 @@ console.log(found);`}
 {"id":2,"title":"Clean house","done":true}`}
 />
 
+Ahora prueba spread: cambia el precio en `onSale` y confirma que `product` no cambia.
+
+<Playground
+  lang="js"
+  code={`const product = { name: "mouse", price: 20 };
+
+const onSale = { ...product, price: 18 };
+console.log(onSale);
+console.log(product);
+
+const prices = [20, 45];
+const morePrices = [...prices, 150];
+console.log(morePrices);
+console.log(prices);`}
+  expected={`{"name":"mouse","price":18}
+{"name":"mouse","price":20}
+[20,45,150]
+[20,45]`}
+/>
+
 ## Ejercicio
 
 <Challenge
@@ -146,7 +183,7 @@ console.log(total);`}
     />
   }
 >
-  Declara un array `products` con tres objetos `{ name, price }`. Usa `map` para crear un array `discounted` con cada precio multiplicado por `0.9`. Usa `filter` para crear un array `expensive` solo con los productos de más de `30`. Usa `reduce` para calcular `total`, la suma de todos los precios originales.
+  Declara un array `products` con tres objetos `{ name, price }`. Usa `map` y spread para crear un array `discounted` con copias de cada producto cuyo precio esté multiplicado por `0.9`. Usa `filter` para crear un array `expensive` solo con los productos de más de `30`. Usa `reduce` para calcular `total`, la suma de todos los precios originales.
 </Challenge>
 
 ## Errores comunes

@@ -173,7 +173,7 @@ export default function App() {
 
 ## Errores comunes
 
-**Escribir `class` en lugar de `className`.** JSX se compila a propiedades de un objeto JavaScript, y `class` es una palabra reservada del lenguaje, así que React usa `className`. Se detecta porque React muestra una advertencia en la consola: "Warning: Invalid DOM property `class`. Did you mean `className`?" y el estilo asociado a esa clase no se aplica.
+**Escribir `class` en lugar de `className`.** JSX se compila a propiedades de un objeto JavaScript, y `class` es una palabra reservada del lenguaje, así que React usa `className`. Se detecta porque React muestra una advertencia en la consola: "Invalid DOM property `class`. Did you mean `className`?". El atributo puede llegar al HTML y el estilo aplicarse por accidente, pero `className` es la propiedad soportada y la única que React garantiza.
 
 **Poner una sentencia dentro de las llaves.** Escribir `{if (isOnline) { ... }}` dentro de JSX falla en tiempo de compilación, porque `if` es una sentencia, no una expresión, y no produce un valor que JSX pueda insertar. Se detecta porque el compilador marca un error de sintaxis en esa línea; la solución es reemplazarlo por un ternario o por `&&`.
 

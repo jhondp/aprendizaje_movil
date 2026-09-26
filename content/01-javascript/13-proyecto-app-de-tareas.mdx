@@ -47,7 +47,7 @@ function createTaskStore() {
     const task = { id: nextId, title, done: false };
     tasks.push(task);
     nextId += 1;
-    return task;
+    return { ...task };
   }
 
   function completeTask(id) {
@@ -56,22 +56,22 @@ function createTaskStore() {
       throw new Error(`Task ${id} not found`);
     }
     task.done = true;
-    return task;
+    return { ...task };
   }
 
   function listTasks() {
-    return tasks;
+    return tasks.map((t) => ({ ...t }));
   }
 
   function pendingTasks() {
-    return tasks.filter((t) => !t.done);
+    return tasks.filter((t) => !t.done).map((t) => ({ ...t }));
   }
 
   return { addTask, completeTask, listTasks, pendingTasks };
 }
 ```
 
-`tasks` y `nextId` no aparecen en el objeto que `createTaskStore` devuelve: son privados, igual que la variable `count` del closure contador. La única forma de leerlos o modificarlos es a través de `addTask`, `completeTask`, `listTasks` y `pendingTasks`.
+`tasks` y `nextId` no aparecen en el objeto que `createTaskStore` devuelve: son privados, igual que la variable `count` del closure contador. La única forma de leerlos o modificarlos es a través de `addTask`, `completeTask`, `listTasks` y `pendingTasks`. Para que esa privacidad sea real, las funciones devuelven copias (`{ ...t }`, el spread que viste en la lección de métodos de array) y nunca el array `tasks` ni sus objetos originales: si `listTasks` devolviera `tasks` tal cual, `store.listTasks().push(...)` modificaría el estado privado desde afuera.
 
 ### Qué significa terminado
 
@@ -91,7 +91,7 @@ Ejecuta el código: crea un almacén de tareas, agrega tres tareas, completa una
     const task = { id: nextId, title, done: false };
     tasks.push(task);
     nextId += 1;
-    return task;
+    return { ...task };
   }
 
   function completeTask(id) {
@@ -100,15 +100,15 @@ Ejecuta el código: crea un almacén de tareas, agrega tres tareas, completa una
       throw new Error(\`Task \${id} not found\`);
     }
     task.done = true;
-    return task;
+    return { ...task };
   }
 
   function listTasks() {
-    return tasks;
+    return tasks.map((t) => ({ ...t }));
   }
 
   function pendingTasks() {
-    return tasks.filter((t) => !t.done);
+    return tasks.filter((t) => !t.done).map((t) => ({ ...t }));
   }
 
   return { addTask, completeTask, listTasks, pendingTasks };
@@ -162,7 +162,7 @@ Antes de dar por terminado el proyecto, revisa esta lista:
     const task = { id: nextId, title, done: false };
     tasks.push(task);
     nextId += 1;
-    return task;
+    return { ...task };
   }
 
   function completeTask(id) {
@@ -171,7 +171,7 @@ Antes de dar por terminado el proyecto, revisa esta lista:
       throw new Error(\`Task \${id} not found\`);
     }
     task.done = true;
-    return task;
+    return { ...task };
   }
 
   function removeTask(id) {
@@ -179,11 +179,11 @@ Antes de dar por terminado el proyecto, revisa esta lista:
   }
 
   function listTasks() {
-    return tasks;
+    return tasks.map((t) => ({ ...t }));
   }
 
   function pendingTasks() {
-    return tasks.filter((t) => !t.done);
+    return tasks.filter((t) => !t.done).map((t) => ({ ...t }));
   }
 
   return { addTask, completeTask, removeTask, listTasks, pendingTasks };

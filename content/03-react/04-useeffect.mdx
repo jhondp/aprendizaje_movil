@@ -71,7 +71,7 @@ function Clock() {
 React llama a la función de limpieza antes de volver a ejecutar el efecto (si las dependencias cambiaron) y también cuando el componente se desmonta. Sin ese `clearInterval`, cada vez que el componente se montara de nuevo quedaría un intervalo corriendo en segundo plano sin que nadie lo detenga, aunque ya nadie lo necesite.
 
 <Callout kind="tip">
-  En desarrollo, con `StrictMode` activado, React 18 monta, desmonta y vuelve a montar cada componente una vez para ayudarte a detectar efectos sin limpieza. Vas a ver el efecto ejecutarse dos veces al cargar la página: es intencional y solo ocurre en desarrollo, no en producción.
+  En desarrollo, con `StrictMode` activado, React (desde la versión 18, también en React 19) monta, desmonta y vuelve a montar cada componente una vez para ayudarte a detectar efectos sin limpieza. Vas a ver el efecto ejecutarse dos veces al cargar la página: es intencional y solo ocurre en desarrollo, no en producción.
 </Callout>
 
 Documentación oficial: [react.dev/reference/react/useEffect](https://react.dev/reference/react/useEffect) y [react.dev/learn/synchronizing-with-effects](https://react.dev/learn/synchronizing-with-effects).

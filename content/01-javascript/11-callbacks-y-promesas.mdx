@@ -70,7 +70,7 @@ const fetchUser = new Promise((resolve, reject) => {
 });
 ```
 
-Nada dentro de la función se ejecuta al crear la `Promise`: la operación asíncrona (aquí, el `setTimeout`) empieza en cuanto se llama a `new Promise(...)`, pero el resultado llega después.
+La función que recibe `new Promise(...)` (llamada executor) se ejecuta de inmediato y de forma síncrona, en el mismo momento en que creas la `Promise`: arranca la operación asíncrona (aquí, programa el `setTimeout`) y termina. El resultado llega después, cuando esa operación llama a `resolve` o a `reject`.
 
 ### then y catch
 

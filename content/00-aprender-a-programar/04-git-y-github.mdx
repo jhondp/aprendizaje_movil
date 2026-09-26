@@ -23,12 +23,12 @@ Cuatro palabras que vas a usar todo el curso:
 
 - **Repositorio**: una carpeta cuyos cambios Git está rastreando. Se crea con `git init`.
 - **Commit**: una fotografía del proyecto en un momento dado, con un mensaje que explica qué cambió. Los commits son la unidad básica de historia en Git.
-- **Rama (branch)**: una línea de historia dentro del repositorio. La rama por defecto se llama `main`, y en este curso vas a trabajar siempre sobre ella salvo que se indique lo contrario.
+- **Rama (branch)**: una línea de historia dentro del repositorio. En este curso la rama principal se llama `main` y vas a trabajar siempre sobre ella salvo que se indique lo contrario. Ojo: `git init` a secas todavía crea una rama llamada `master` salvo que configures otra cosa, por eso vas a pedir el nombre `main` de forma explícita.
 - **Remoto (remote)**: una copia del repositorio alojada en otro lugar, normalmente en un servidor. **GitHub** es el sitio donde vas a alojar tus remotos: además de guardar una copia de respaldo en internet, te permite mostrar tu trabajo y, más adelante en el curso, colaborar con otras personas.
 
 ### El flujo básico
 
-1. `git init` crea un repositorio Git nuevo en la carpeta actual.
+1. `git init -b main` crea un repositorio Git nuevo en la carpeta actual y llama `main` a su primera rama. Si prefieres no escribir `-b main` cada vez, ejecuta una sola vez `git config --global init.defaultBranch main` y desde entonces `git init` usará `main`. Si ya creaste el repositorio con `master`, `git branch -M main` renombra la rama antes del primer push.
 2. `git add <archivo>` marca los cambios de ese archivo para que entren en el próximo commit (a esto se lo llama "staging", preparar los cambios).
 3. `git commit -m "mensaje"` guarda esos cambios preparados como un commit, con el mensaje que describe qué hiciste.
 4. `git remote add origin <url>` conecta tu repositorio local con uno remoto en GitHub, y lo llama `origin` (el nombre por convención del remoto principal).
@@ -48,7 +48,7 @@ Sigue esta secuencia dentro de una carpeta que ya tenga al menos un archivo:
 
 <Terminal
   steps={[
-    { cmd: "git init", out: "Initialized empty Git repository in /home/ana/proyecto/.git/" },
+    { cmd: "git init -b main", out: "Initialized empty Git repository in /home/ana/proyecto/.git/" },
     { cmd: "git add .", out: "" },
     { cmd: 'git commit -m "Initial commit"', out: "[main (root-commit) a1b2c3d] Initial commit\n 1 file changed, 2 insertions(+)" },
     { cmd: "git remote add origin https://github.com/ana/proyecto.git", out: "" },
@@ -61,7 +61,7 @@ Marca cada paso a medida que lo completes en tu propio proyecto:
 <Checklist
   id="00-aprender-a-programar/04-git-y-github-primer-commit"
   items={[
-    "Inicialicé el repositorio con git init",
+    "Inicialicé el repositorio con git init -b main (o configuré init.defaultBranch main)",
     "Preparé mis cambios con git add",
     "Escribí un mensaje de commit claro y en inglés",
     "Conecté el repositorio remoto con git remote add origin",
@@ -77,7 +77,7 @@ Marca cada paso a medida que lo completes en tu propio proyecto:
     <Terminal
       steps={[
         { cmd: "mkdir mi-repo && cd mi-repo", out: "" },
-        { cmd: "git init", out: "Initialized empty Git repository in /home/ana/mi-repo/.git/" },
+        { cmd: "git init -b main", out: "Initialized empty Git repository in /home/ana/mi-repo/.git/" },
         { cmd: "echo hola > archivo.txt", out: "" },
         { cmd: "git add .", out: "" },
         { cmd: 'git commit -m "Add archivo.txt"', out: "[main (root-commit) f9e8d7c] Add archivo.txt\n 1 file changed, 1 insertion(+)" },
@@ -93,6 +93,7 @@ Marca cada paso a medida que lo completes en tu propio proyecto:
 - **Hacer `git commit` sin haber hecho `git add` antes.** Git responde algo como "nothing to commit, working tree clean" aunque hayas editado archivos. Cómo detectarlo: ejecuta `git status` antes del commit para ver qué está preparado (en verde) y qué no (en rojo).
 - **Configurar un remoto SSH sin tener una clave SSH generada.** El push falla con un error de permisos ("Permission denied (publickey)"). Cómo detectarlo: si tu URL remota empieza con `git@github.com:`, es SSH; cámbiala por la versión HTTPS (`https://github.com/...`).
 - **Escribir mensajes de commit que no dicen nada, como "cambios" o "fix".** Dentro de unas semanas no vas a recordar qué se corrigió. Cómo detectarlo: si el mensaje no te permite adivinar qué cambió sin mirar el código, reescríbelo.
+- **Hacer `git push -u origin main` en un repositorio creado con `git init` a secas.** Git creó la rama `master`, así que el push falla con "src refspec main does not match any". Cómo detectarlo: `git branch` muestra `* master`; renómbrala con `git branch -M main` y vuelve a hacer push.
 - **Olvidar `-u` en el primer push.** Los próximos `git push` fallan pidiendo que especifiques la rama remota. Cómo detectarlo: el mensaje sugiere ejecutar `git push --set-upstream origin main`; hazlo una vez y los próximos push funcionan sin el flag.
 
 <Flashcards
@@ -100,7 +101,7 @@ Marca cada paso a medida que lo completes en tu propio proyecto:
     { front: "¿Qué comando crea un repositorio Git en la carpeta actual?", back: "git init" },
     { front: "¿Qué es un commit?", back: "Una fotografía del proyecto en un momento dado, guardada con un mensaje que explica el cambio." },
     { front: "¿Qué usas para autenticarte por HTTPS al hacer push a GitHub, en lugar de tu contraseña?", back: "Un token de acceso personal." },
-    { front: "¿Cómo se llama la rama principal por defecto?", back: "main" },
+    { front: "¿Cómo creas un repositorio Git cuya primera rama se llame main?", back: "Con git init -b main, o configurando una vez git config --global init.defaultBranch main." },
     { front: "¿Qué hace git remote add origin <url>?", back: "Conecta el repositorio local con un repositorio remoto llamado origin." },
   ]}
 />

@@ -160,11 +160,11 @@ Hecha`}
 
 ## Errores comunes
 
-**Comprobar `typeof` con un valor incorrecto.** `typeof id === "String"` (con mayúscula) o `typeof id === "text"` nunca es verdadero, porque `typeof` siempre devuelve minúsculas exactas: `"string"`, `"number"`, `"boolean"`, `"undefined"`, `"object"`, `"function"`. Cómo detectarlo: la rama comprobada nunca reduce el tipo como esperas, y el compilador sigue tratando la variable como la unión completa dentro de esa rama.
+**Comprobar `typeof` con un valor incorrecto.** `typeof id === "String"` (con mayúscula) o `typeof id === "text"` nunca es verdadero, porque `typeof` siempre devuelve minúsculas exactas: `"string"`, `"number"`, `"boolean"`, `"undefined"`, `"object"`, `"function"`. Cómo detectarlo: el compilador marca la comparación con `TS2367: This comparison appears to be unintentional because the types '"string" | "number" | ...' and '"String"' have no overlap.`; corrige el texto a minúsculas exactas.
 
 **Usar `in` sobre una propiedad que ambos tipos comparten.** Si `Circle` y `Rectangle` tuvieran ambas una propiedad `color`, comprobar `"color" in shape` no distingue nada, porque es verdadero para las dos formas. Cómo detectarlo: dentro del `if`, TypeScript no reduce la unión a un solo tipo, porque la propiedad no es exclusiva de una forma.
 
-**Olvidar el caso `default` con `never` y perder la verificación de exhaustividad.** Un `switch` sin ese `default` compila igual, pero si se agrega un nuevo valor a la unión y no se actualiza el `switch`, el compilador no avisa: la función simplemente devuelve `undefined` para el caso nuevo. Cómo detectarlo: sin el patrón `never`, agregar un valor a la unión no produce ningún error, aunque el `switch` haya quedado incompleto.
+**Olvidar el caso `default` con `never` y perder la verificación de exhaustividad.** Si la función declara un tipo de retorno como `string`, `tsc --strict` ya avisa cuando falta un caso, pero con un mensaje genérico: `TS2366: Function lacks ending return statement and return type does not include 'undefined'.` El patrón `never` importa sobre todo en funciones que devuelven `void` (por ejemplo, un `switch` que solo imprime o actualiza estado), donde un caso olvidado no produce ningún error, y además nombra el valor que falta: `Type '"archived"' is not assignable to type 'never'.` Cómo detectarlo: agrega un valor nuevo a la unión y revisa si el compilador señala cada `switch` incompleto; si alguno no aparece, le falta el `default` con `never`.
 
 <Flashcards
   cards={[

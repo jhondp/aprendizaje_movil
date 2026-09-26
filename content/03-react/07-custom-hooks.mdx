@@ -31,6 +31,8 @@ function useToggle(initialValue = false) {
 }
 ```
 
+`initialValue = false` es un **parámetro con valor por defecto**: el `=` dentro de la lista de parámetros no asigna ni compara, sino que indica qué valor usar si nadie pasa ese argumento, así que `useToggle()` sin argumento empieza en `false`.
+
 `useToggle` encapsula el patrón "un booleano y una función para invertirlo" que ya escribiste a mano en la lección de "State y eventos" para el componente `Toggle`. Cualquier componente que necesite ese patrón ahora puede escribir una sola línea:
 
 ```tsx

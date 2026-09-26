@@ -17,7 +17,7 @@ Al terminar esta lección vas a poder instalar TypeScript en un proyecto, genera
 
 ## Concepto
 
-Piensa en las reglas de seguridad de una obra de construcción. En una obra sin supervisión, cada trabajador decide si usa casco. En una obra con inspección estricta, el casco es obligatorio y un inspector lo revisa antes de dejar entrar a nadie. `strict: true` en TypeScript es esa inspección: activa, de una sola vez, un conjunto de reglas que por defecto están apagadas, y que en conjunto atrapan la mayoría de los errores de tipos que este curso viene mostrando.
+Piensa en las reglas de seguridad de una obra de construcción. En una obra sin supervisión, cada trabajador decide si usa casco. En una obra con inspección estricta, el casco es obligatorio y un inspector lo revisa antes de dejar entrar a nadie. `strict: true` en TypeScript es esa inspección: activa, de una sola vez, un conjunto de reglas que en conjunto atrapan la mayoría de los errores de tipos que este curso viene mostrando. Desde TypeScript 6.0, `strict` ya viene activado por defecto; aun así, este curso lo escribe de forma explícita en `tsconfig.json`, porque muchos proyectos y herramientas todavía usan versiones anteriores, donde esas reglas estaban apagadas si no las pedías.
 
 ### El archivo `tsconfig.json`
 
@@ -27,19 +27,21 @@ Piensa en las reglas de seguridad de una obra de construcción. En una obra sin 
 npx tsc --init
 ```
 
-Esto crea un `tsconfig.json` con decenas de opciones comentadas. Las que importan para este curso son pocas:
+Esto crea un `tsconfig.json` con opciones activas y otras comentadas. Con la versión actual de TypeScript, las que importan para este curso son pocas:
 
 ```json
 {
   "compilerOptions": {
-    "target": "ES2020",
-    "module": "commonjs",
+    "module": "nodenext",
+    "target": "esnext",
     "strict": true,
-    "esModuleInterop": true,
+    "verbatimModuleSyntax": true,
     "skipLibCheck": true
   }
 }
 ```
+
+`module: "nodenext"` y `target: "esnext"` generan JavaScript moderno con módulos ES, como los que usaste en la etapa 1; `verbatimModuleSyntax` exige que los imports que solo traen tipos se marquen con `import type`. El archivo generado incluye además otras reglas extra de seguridad (por ejemplo `noUncheckedIndexedAccess`) que puedes dejar activas.
 
 ### Qué activa `strict: true`
 
@@ -57,7 +59,7 @@ Sin `strict`, TypeScript revisa mucho menos de lo que parece: acepta código que
 npx tsc
 ```
 
-Sin argumentos, `tsc` lee `tsconfig.json`, compila todos los archivos `.ts` incluidos, y termina sin imprimir nada si no hay errores. Si hay errores de tipos, los lista con archivo, línea y columna, y no genera el JavaScript de salida (a menos que se desactive esa protección con `noEmitOnError: false`, algo que este curso no recomienda).
+Sin argumentos, `tsc` lee `tsconfig.json`, compila todos los archivos `.ts` incluidos, y termina sin imprimir nada si no hay errores. Si hay errores de tipos, los lista con archivo, línea y columna. Por defecto igual genera el JavaScript de salida; si quieres que no lo haga mientras haya errores, activa `noEmitOnError: true`.
 
 ## Práctica
 
@@ -67,7 +69,8 @@ Sigue los pasos para crear un proyecto TypeScript desde cero, generar su configu
   steps={[
     { cmd: "npm init -y", out: "Wrote to package.json:\n\n{\n  \"name\": \"todo-ts\",\n  \"version\": \"1.0.0\"\n}" },
     { cmd: "npm i -D typescript", out: "added 1 package in 2s" },
-    { cmd: "npx tsc --init", out: "Created a new tsconfig.json with:\n  target: es2016\n  module: commonjs\n  strict: true\n  esModuleInterop: true\n  skipLibCheck: true\n  forceConsistentCasingInFileNames: true\n\nYou can learn more at https://aka.ms/tsconfig" },
+    { cmd: "npx tsc --init", out: "Created a new tsconfig.json\n\nYou can learn more at https://aka.ms/tsconfig" },
+    { cmd: "grep -E \"module|target|strict\" tsconfig.json", out: "    \"module\": \"nodenext\",\n    \"target\": \"esnext\",\n    \"strict\": true," },
     { cmd: "npx tsc", out: "" },
   ]}
 />

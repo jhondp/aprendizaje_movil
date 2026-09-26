@@ -142,7 +142,7 @@ Hola Luis`}
 
 **Crear un objeto sin todas las propiedades obligatorias.** Si `Task` exige `id`, `title` y `done`, y el objeto solo trae dos, el compilador lo rechaza con un mensaje del tipo "Property 'done' is missing". Cómo detectarlo: el error nombra exactamente la propiedad faltante.
 
-**Usar un campo opcional sin comprobar si está presente.** `task.notes.toUpperCase()` falla en tiempo de ejecución cuando `notes` es `undefined`, aunque compile si el tipo aún no fue acotado. Cómo detectarlo: el compilador exige, antes de esa línea, algo como `if (task.notes)` o `task.notes?.toUpperCase()`; si no lo pusiste, el editor marca el acceso como inseguro.
+**Usar un campo opcional sin comprobar si está presente.** `task.notes.toUpperCase()` fallaría en tiempo de ejecución cuando `notes` es `undefined`, y por eso con `strictNullChecks` (activado por `strict`, la configuración de este curso) ni siquiera compila. Cómo detectarlo: el compilador marca la línea con `TS18048: 'task.notes' is possibly 'undefined'.`; la solución es comprobar antes con `if (task.notes)` o usar `task.notes?.toUpperCase()`.
 
 **Mezclar `interface` y `type` sin criterio dentro del mismo equipo.** No es un error de compilación, pero un archivo con `interface Task` en una línea y `type User = {...}` en la siguiente, sin ninguna razón para la diferencia, dificulta la lectura. Cómo detectarlo: revisa si el equipo tiene una convención documentada; si no la tiene, es momento de acordarla.
 

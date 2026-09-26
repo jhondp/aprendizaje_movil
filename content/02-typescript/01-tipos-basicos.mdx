@@ -76,7 +76,7 @@ La última línea es un error en tiempo de ejecución esperando a suceder: `42.t
 ```ts
 let data: unknown = "hola";
 data = 42;
-data.toString(); // error: Object is of type 'unknown'.
+data.toString(); // error TS18046: 'data' is of type 'unknown'.
 
 if (typeof data === "number") {
   data.toString(); // ahora sí: TypeScript sabe que aquí data es number
@@ -141,7 +141,7 @@ console.log(distance(origin, destination));`}
 
 **Usar `any` para "que compile rápido".** `any` desactiva toda revisión sobre esa variable, incluyendo errores reales como llamar a un método que no existe. Cómo detectarlo: revisa el código en busca de la palabra `any`; cada aparición es una zona donde TypeScript no te protege.
 
-**Tratar `unknown` como si fuera `any`.** Asignar un valor a una variable `unknown` es libre, pero usarlo (llamar a un método, sumarlo) sin antes comprobar su tipo con `typeof` o similar produce un error de compilación. Cómo detectarlo: el compilador dice algo como "Object is of type 'unknown'" en la línea donde intentas operar sin comprobar antes.
+**Tratar `unknown` como si fuera `any`.** Asignar un valor a una variable `unknown` es libre, pero usarlo (llamar a un método, sumarlo) sin antes comprobar su tipo con `typeof` o similar produce un error de compilación. Cómo detectarlo: el compilador dice algo como "TS18046: 'data' is of type 'unknown'" (con el nombre de tu variable) en la línea donde intentas operar sin comprobar antes.
 
 **Confundir un array con una tupla.** `number[]` acepta cualquier cantidad de números; `[number, number]` exige exactamente dos. Si necesitas un par con significado fijo (como una coordenada) y usas `number[]`, pierdes la garantía de longitud. Cómo detectarlo: si accedes a `point[2]` y el tipo lo permite sin protestar, es un array, no una tupla.
 
