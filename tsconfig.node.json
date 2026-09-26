@@ -9,5 +9,5 @@
     "allowSyntheticDefaultImports": true,
     "outDir": "./node_modules/.tsc-node-out"
   },
-  "include": ["vite.config.ts", "eslint.config.js"]
+  "include": ["vite.config.ts", "eslint.config.js", "scripts/vite/**/*.ts"]
 }

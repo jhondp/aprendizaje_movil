@@ -5,6 +5,7 @@ import remarkFrontmatter from 'remark-frontmatter';
 import remarkMdxFrontmatter from 'remark-mdx-frontmatter';
 import remarkGfm from 'remark-gfm';
 import path from 'node:path';
+import { lessonIndexPlugin } from './scripts/vite/lessonIndexPlugin';
 
 export default defineConfig({
   base: process.env.VITE_BASE ?? '/',
@@ -20,6 +21,7 @@ export default defineConfig({
         ],
       }),
     },
+    lessonIndexPlugin(),
     react({ include: /\.(jsx|js|mdx|md|tsx|ts)$/ }),
   ],
   resolve: {

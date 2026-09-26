@@ -1,6 +1,6 @@
 import type { MDXComponents } from 'mdx/types';
 import { Playground } from './Playground';
-import { Sandpack } from './Sandpack';
+import { LazySandpack } from './LazySandpack';
 import { Snack } from './Snack';
 import { Quiz } from './Quiz';
 import { Flashcards } from './Flashcards';
@@ -11,7 +11,7 @@ import { Callout } from './Callout';
 
 export const mdxComponents: MDXComponents = {
   Playground,
-  Sandpack,
+  Sandpack: LazySandpack,
   Snack,
   Quiz,
   Flashcards,

@@ -30,7 +30,7 @@ describe('demo lesson', () => {
     );
     expect(screen.getAllByRole('note')).toHaveLength(3); // Callout
     expect(screen.getAllByRole('button', { name: 'Ejecutar' })).toHaveLength(2); // Playground
-    expect(screen.getByTestId('sandpack')).toHaveTextContent('/App.tsx'); // Sandpack
+    expect(await screen.findByTestId('sandpack')).toHaveTextContent('/App.tsx'); // Sandpack
     expect(screen.getByTitle('Expo Snack')).toBeInTheDocument(); // Snack
     expect(screen.getByRole('button', { name: 'Siguiente paso' })).toBeInTheDocument(); // Terminal
     expect(screen.getByLabelText('Instalé Node.js')).toBeInTheDocument(); // Checklist

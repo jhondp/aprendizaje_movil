@@ -1,9 +1,9 @@
+import lessonIndex from 'virtual:lesson-index';
 import type { LessonComponent, LessonMeta } from '@/domain/course';
 
-export const lessonFrontmatter = import.meta.glob<LessonMeta>('/content/**/*.mdx', {
-  eager: true,
-  import: 'frontmatter',
-});
+/** Frontmatter of every lesson, built by `scripts/vite/lessonIndexPlugin.ts` without importing
+ *  the MDX modules, so each lesson body stays in its own lazily loaded chunk. */
+export const lessonFrontmatter: Record<string, LessonMeta> = lessonIndex;
 
 export const lessonComponents = import.meta.glob<LessonComponent>('/content/**/*.mdx', {
   import: 'default',
