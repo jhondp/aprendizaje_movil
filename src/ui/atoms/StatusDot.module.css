@@ -1,0 +1,21 @@
+.root {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  color: var(--color-ink);
+  border: 1.5px solid var(--ink-25);
+}
+
+.root[data-state='done'] {
+  background: var(--color-lime);
+  border-color: transparent;
+}
+
+.root[data-state='active'] {
+  background: var(--color-accent);
+  border-color: transparent;
+}

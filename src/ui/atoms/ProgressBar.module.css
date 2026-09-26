@@ -1,0 +1,24 @@
+.track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--ink-10);
+  overflow: hidden;
+}
+
+.track[data-on-dark='true'] {
+  background: var(--sand-15);
+}
+
+.fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s;
+}
+
+.fill[data-tone='lime'] {
+  background: var(--color-lime);
+}
+
+.fill[data-tone='teal'] {
+  background: var(--color-teal);
+}

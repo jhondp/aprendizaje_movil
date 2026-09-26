@@ -1,0 +1,13 @@
+.root {
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-ink);
+}
+
+.root[data-active='true'] {
+  background: var(--color-white);
+  font-weight: 500;
+  box-shadow: var(--shadow-chip);
+}
