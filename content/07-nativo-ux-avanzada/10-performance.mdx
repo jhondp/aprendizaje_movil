@@ -54,7 +54,7 @@ En la configuración del Profiler activa "Record why each component rendered". A
 
 ### Por qué se renderiza de más
 
-Cuando un componente cambia de estado, React vuelve a ejecutar ese componente **y todos sus hijos**, aunque las props de los hijos no hayan cambiado. En la etapa 3 viste `memo`, `useMemo` y `useCallback`; aquí es donde se vuelven importantes.
+Cuando un componente cambia de estado, React vuelve a ejecutar ese componente **y todos sus hijos**, aunque las props de los hijos no hayan cambiado. En la etapa 3 viste `useMemo` y `useCallback`; aquí se suma `memo`: una función que envuelve un componente (`const NoteRow = memo(function NoteRow(props) { ... })`) para que React se salte volver a renderizarlo cuando sus props son las mismas que en el render anterior. Las tres herramientas trabajan juntas y aquí es donde se vuelven importantes.
 
 ```tsx
 function NotesScreen() {

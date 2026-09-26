@@ -56,9 +56,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: false,
+    flowType: "pkce",
   },
 });
 ```
+
+`flowType: "pkce"` todavía no cambia nada en el inicio de sesión con email y contraseña, pero déjalo desde ahora: supabase-js solo usa PKCE si se lo pides, y el inicio de sesión con Google del proyecto de esta etapa lo necesita para canjear el código con `exchangeCodeForSession`. Sin esta opción, los tokens llegarían en el fragmento de la URL de retorno y el canje falla.
 
 Con esto, al abrir la app el cliente lee la sesión guardada y emite el evento `INITIAL_SESSION` con ella, sin pedir la contraseña.
 
@@ -168,7 +171,7 @@ const storage = {
 const supabase = createClient(
   process.env.EXPO_PUBLIC_SUPABASE_URL ?? "https://YOUR_PROJECT_REF.supabase.co",
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "YOUR_SUPABASE_ANON_KEY",
-  { auth: { storage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } }
+  { auth: { storage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, flowType: "pkce" } }
 );
 
 export default function App() {

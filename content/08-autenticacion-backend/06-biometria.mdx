@@ -31,6 +31,10 @@ La biometría en una app móvil es una **comprobación local**:
 - El servidor de Supabase no se entera de nada: no es una autenticación contra el backend, sino una puerta delante de una sesión que ya existe.
 - Protege frente a alguien que usa el teléfono desbloqueado. No protege frente a un atacante que ya extrajo el refresh token, porque ese atacante no usa tu app.
 
+Hay un límite más. Si el bloqueo solo depende de que `authenticateAsync` devuelva `success: true` y tu código llame a `setLocked(false)`, ningún secreto depende del resultado biométrico: en un dispositivo con root o jailbreak, un atacante con herramientas de instrumentación puede forzar esa rama y saltarse el diálogo. Es un control de experiencia de usuario y de defensa en profundidad, no una garantía en dispositivos comprometidos (OWASP lo trata en MASVS-AUTH-2: https://mas.owasp.org/MASVS/controls/MASVS-AUTH-2/).
+
+Si necesitas más, puedes atar el secreto a la biometría: `SecureStore.setItemAsync(key, value, { requireAuthentication: true })` guarda el valor de forma que el sistema operativo exige huella o cara para leerlo (https://docs.expo.dev/versions/latest/sdk/securestore/). El costo: en iOS necesitas `NSFaceIDUsageDescription`, el usuario debe tener una biometría registrada, la lectura falla en dispositivos sin ella y, si el usuario cambia sus huellas, el valor queda inaccesible y hay que volver a iniciar sesión. Para la app de notas, el bloqueo de interfaz es suficiente; para datos más sensibles, evalúa atar la sesión.
+
 Por eso la biometría se suma a lo que ya tienes (sesión en SecureStore, RLS en el servidor), nunca lo reemplaza.
 
 ### La API de `expo-local-authentication`
@@ -239,7 +243,8 @@ false`}
     { front: "¿Qué recibe la app cuando el usuario se autentica con huella mediante expo-local-authentication?", back: "Solo si tuvo éxito o no; nunca la huella ni datos biométricos." },
     { front: "¿Por qué no se debe bloquear la app en el estado inactive de AppState?", back: "Porque el diálogo de Face ID pasa la app a inactive y provocaría un bucle de bloqueos." },
     { front: "¿Qué comprueban hasHardwareAsync e isEnrolledAsync?", back: "Si el dispositivo tiene sensor biométrico y si el usuario registró al menos una huella o cara." },
-    { front: "¿La biometría sustituye a la sesión de Supabase?", back: "No. Es una comprobación local delante de una sesión existente; la identidad ante el servidor sigue siendo el token." }
+    { front: "¿La biometría sustituye a la sesión de Supabase?", back: "No. Es una comprobación local delante de una sesión existente; la identidad ante el servidor sigue siendo el token." },
+    { front: "¿Qué garantiza un bloqueo biométrico que solo comprueba el resultado de authenticateAsync?", back: "Es defensa en profundidad, no autenticación contra el servidor ni garantía en dispositivos comprometidos: con root o jailbreak se puede forzar la rama de desbloqueo." }
   ]}
 />
 

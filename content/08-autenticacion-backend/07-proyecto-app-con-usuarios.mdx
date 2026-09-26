@@ -6,7 +6,7 @@ module: "Login seguro"
 order: 7
 minutes: 35
 prereqs: ["08-autenticacion-backend/06-biometria"]
-summary: "Convierte la app de notas en una app multiusuario con Supabase: registro e inicio de sesión, notas por usuario con RLS, fotos privadas, sesión en SecureStore y bloqueo biométrico."
+summary: "Convierte la app de notas en multiusuario con Supabase: registro, inicio de sesión, Google con PKCE, RLS, sesión en SecureStore y bloqueo biométrico."
 ---
 
 ## Objetivo
@@ -30,7 +30,7 @@ Hasta ahora la app era una casa unifamiliar: quien entraba lo veía todo. Ahora 
    - RLS activo y cuatro políticas (`select`, `insert`, `update`, `delete`) con `(select auth.uid()) = user_id`, usando `with check` en `insert` y `update`.
    - Bucket privado `photos` con políticas de `insert`, `select` y `delete` limitadas a la carpeta `<user id>/`.
 2. **Cliente**
-   - Un único módulo `src/lib/supabase.ts` que lee `EXPO_PUBLIC_SUPABASE_URL` y `EXPO_PUBLIC_SUPABASE_ANON_KEY` y pasa a `createClient` el adaptador troceado de SecureStore en `auth.storage`.
+   - Un único módulo `src/lib/supabase.ts` que lee `EXPO_PUBLIC_SUPABASE_URL` y `EXPO_PUBLIC_SUPABASE_ANON_KEY` y pasa a `createClient` el adaptador troceado de SecureStore en `auth.storage` y `auth.flowType: "pkce"`, necesario para canjear el código de Google con `exchangeCodeForSession`.
    - Listener de `AppState` que llama a `startAutoRefresh` y `stopAutoRefresh`.
 3. **Pantallas y flujo**
    - Registro con email y contraseña que avisa cuando hay que confirmar el correo.
@@ -63,7 +63,7 @@ Para Google necesitas activar el proveedor en **Authentication, Providers**, cre
 ```ts
 import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
-import { supabase } from "./supabase"; // createClient(..., { auth: { flowType: "pkce", storage, ... } })
+import { supabase } from "./supabase"; // createClient(url, anonKey, { auth: { storage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, flowType: "pkce" } })
 
 const redirectTo = makeRedirectUri({ scheme: "notesapp", path: "auth/callback" });
 
@@ -114,6 +114,7 @@ Marca cada punto cuando lo hayas comprobado en tu app, no cuando lo hayas escrit
     "Las fotos se suben a un bucket privado bajo la carpeta del id del usuario",
     "La base de datos guarda la ruta de la foto y la app pide una URL firmada al mostrarla",
     "La sesión se guarda con un adaptador de SecureStore en auth.storage, nunca en AsyncStorage",
+    "El cliente de Supabase tiene auth.flowType: pkce",
     "La renovación automática se activa y desactiva con AppState",
     "La app se bloquea tras 30 segundos en segundo plano y se desbloquea con biometría o código del dispositivo",
     "La service role key no aparece en ningún archivo de la app ni en el .env"
