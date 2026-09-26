@@ -1,0 +1,178 @@
+---
+id: "01-javascript/09-errores-y-debugging"
+title: "Errores y debugging"
+stage: 1
+module: "Profundizando"
+order: 9
+minutes: 12
+prereqs: ["01-javascript/08-scope-y-closures"]
+summary: "Atrapa errores con try/catch, lanza tus propios errores con throw y lee un stack trace para encontrar la causa."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás atrapar errores con `try`/`catch`, lanzar un error propio con `throw new Error`, y leer un stack trace para encontrar dónde ocurrió el problema.
+
+**Prerrequisitos:** `01-javascript/08-scope-y-closures`
+
+## Concepto
+
+Hasta ahora, cuando algo salía mal en tus ejemplos, JavaScript detenía el programa por completo. Un error sin control es como una alarma de incendio que corta la electricidad de todo el edificio: nadie puede seguir trabajando, aunque el problema esté en una sola oficina. `try`/`catch` es el equivalente a contener el problema en esa oficina, sin apagar el resto del edificio.
+
+### try y catch
+
+`try` envuelve un bloque de código que podría fallar. Si algo dentro de `try` lanza un error, la ejecución salta inmediatamente al bloque `catch`, que recibe el error como parámetro, en lugar de detener todo el programa.
+
+```js
+try {
+  const result = 10 / 0;
+  console.log(result); // Infinity, no es un error en JavaScript
+
+  JSON.parse("esto no es JSON válido");
+  console.log("esto nunca se imprime");
+} catch (error) {
+  console.log("Algo falló:", error.message);
+}
+
+console.log("El programa sigue ejecutándose");
+```
+
+`10 / 0` no lanza un error en JavaScript, produce `Infinity`. `JSON.parse` con un texto inválido sí lanza un error, así que la ejecución salta al `catch` y la línea siguiente dentro del `try` nunca se alcanza. Después del `catch`, el programa continúa con normalidad.
+
+### throw: lanzar tus propios errores
+
+A veces tú decides que una situación es un error, aunque JavaScript no lo detecte solo. `throw new Error("mensaje")` crea y lanza un error con un mensaje descriptivo.
+
+```js
+function divide(a, b) {
+  if (b === 0) {
+    throw new Error("No se puede dividir entre cero");
+  }
+  return a / b;
+}
+
+try {
+  console.log(divide(10, 2)); // 5
+  console.log(divide(10, 0)); // nunca se imprime
+} catch (error) {
+  console.log("Error capturado:", error.message);
+}
+```
+
+`throw` detiene inmediatamente la función donde se ejecuta, igual que `return`, pero en lugar de entregar un valor, propaga un error hacia arriba hasta que algún `catch` lo atrape.
+
+### Leer un stack trace
+
+Cuando un error no se atrapa, la consola muestra un stack trace: el mensaje del error, seguido de la lista de funciones que estaban activas en el momento del error, de la más reciente a la más antigua. Por ejemplo:
+
+```
+Error: No se puede dividir entre cero
+    at divide (app.js:3)
+    at main (app.js:10)
+```
+
+La primera línea es el mensaje. La segunda dice que el error ocurrió dentro de la función `divide`, en la línea 3. La tercera dice que `divide` fue llamada desde `main`, en la línea 10. Leer un stack trace de arriba hacia abajo te lleva del síntoma (dónde se lanzó el error) hasta la causa (quién lo provocó).
+
+Puedes revisar la referencia completa de `try...catch` y de `Error` en MDN: https://developer.mozilla.org/es/docs/Web/JavaScript/Reference/Statements/try...catch.
+
+<Callout kind="tip">
+  No uses try/catch para controlar el flujo normal de un programa, solo para casos verdaderamente excepcionales. Si algo puede evitarse con un if (como validar que b no sea 0 antes de dividir), un if es más claro que un try/catch.
+</Callout>
+
+## Práctica
+
+Ejecuta el código y observa qué mensaje imprime cada `catch`. Luego cambia el segundo argumento de `divide` por un número distinto de `0` y vuelve a ejecutar.
+
+<Playground
+  lang="js"
+  code={`function divide(a, b) {
+  if (b === 0) {
+    throw new Error("No se puede dividir entre cero");
+  }
+  return a / b;
+}
+
+try {
+  console.log(divide(10, 2));
+  console.log(divide(10, 0));
+} catch (error) {
+  console.log("Error capturado:", error.message);
+}
+
+console.log("El programa sigue ejecutándose");`}
+  expected={`5
+Error capturado: No se puede dividir entre cero
+El programa sigue ejecutándose`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Validar edad"
+  solution={
+    <Playground
+      lang="js"
+      code={`function checkAge(age) {
+  if (age < 0) {
+    throw new Error("La edad no puede ser negativa");
+  }
+  return age >= 18;
+}
+
+try {
+  console.log(checkAge(20));
+  console.log(checkAge(-5));
+} catch (error) {
+  console.log("Error capturado:", error.message);
+}`}
+    />
+  }
+>
+  Escribe una función `checkAge` que reciba `age`. Si `age` es negativa, lanza un error con el mensaje `"La edad no puede ser negativa"`. Si no, devuelve `true` cuando `age` es 18 o más, y `false` en caso contrario. Prueba llamándola dentro de un `try`/`catch` con `20` y luego con `-5`.
+</Challenge>
+
+## Errores comunes
+
+**Usar try/catch para evitar leer el mensaje del error.** Escribir `catch (error) { console.log("algo falló"); }` sin mirar `error.message` esconde información valiosa para encontrar la causa real. Se detecta porque el problema tarda mucho en resolverse aunque el error ya esté "atrapado". Solución: siempre registrar `error.message`, al menos mientras depuras.
+
+**Poner demasiado código dentro de un solo try.** Si el `try` envuelve diez líneas, el `catch` no sabe cuál de las diez falló. Se detecta porque el stack trace señala una línea, pero el bloque `try` es tan grande que no ayuda a entender el contexto. Solución: envolver solo la operación que realmente puede fallar.
+
+**Leer el stack trace de abajo hacia arriba.** El stack trace muestra primero dónde se lanzó el error (la causa más inmediata) y después la cadena de llamadas que llevó hasta ahí. Empezar a leer desde la última línea en vez de la primera hace perder tiempo buscando el mensaje del error. Se detecta si, al depurar, no encuentras rápido qué línea del propio código provocó el problema.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué hace throw new Error(mensaje)?", back: "Crea y lanza un error con ese mensaje, deteniendo la función actual y propagando el error hacia arriba." },
+    { front: "¿Qué recibe el bloque catch(error)?", back: "El objeto de error que se lanzó dentro del try correspondiente." },
+    { front: "¿Qué información da la primera línea de un stack trace?", back: "El mensaje del error." },
+    { front: "¿Se debe usar try/catch para controlar el flujo normal de un programa?", back: "No: solo para casos verdaderamente excepcionales; un if es preferible cuando el caso se puede evitar." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Dentro de un try, ¿qué ocurre inmediatamente después de que una línea lanza un error?",
+      options: [
+        { text: "Las líneas siguientes del try se siguen ejecutando normalmente", correct: false, feedback: "La ejecución salta al catch en cuanto ocurre el error." },
+        { text: "La ejecución salta al bloque catch", correct: true, feedback: "Correcto: el resto del try se omite y el control pasa al catch." },
+        { text: "El programa se detiene por completo, incluso con catch presente", correct: false, feedback: "Justo lo contrario: catch evita que el programa se detenga." },
+      ],
+    },
+    {
+      prompt: "¿Qué hace throw new Error(\"mensaje\") dentro de una función?",
+      options: [
+        { text: "Imprime el mensaje en la consola y sigue ejecutando la función", correct: false, feedback: "throw no imprime nada por sí mismo; detiene la función." },
+        { text: "Detiene la función y propaga el error hacia arriba", correct: true, feedback: "Correcto: throw actúa parecido a return, pero propagando un error." },
+        { text: "No hace nada si nadie tiene un catch", correct: false, feedback: "Si nadie lo atrapa, el programa termina mostrando el error." },
+      ],
+    },
+    {
+      prompt: "¿Cuál es el orden correcto para leer un stack trace y encontrar la causa de un error?",
+      options: [
+        { text: "De la última línea hacia la primera", correct: false, feedback: "Ese orden retrasa encontrar el mensaje y el punto exacto del error." },
+        { text: "De la primera línea (el mensaje) hacia abajo, siguiendo la cadena de llamadas", correct: true, feedback: "Correcto: el mensaje y la línea donde se lanzó el error van primero." },
+        { text: "El orden no importa, toda la información está en la última línea", correct: false, feedback: "La información relevante está distribuida en todo el stack trace, empezando por arriba." },
+      ],
+    },
+  ]}
+/>

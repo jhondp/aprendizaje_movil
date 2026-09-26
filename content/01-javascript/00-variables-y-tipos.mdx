@@ -1,0 +1,168 @@
+---
+id: "01-javascript/00-variables-y-tipos"
+title: "Variables y tipos"
+stage: 1
+module: "Fundamentos"
+order: 0
+minutes: 12
+prereqs: ["00-aprender-a-programar/07-proyecto-tu-primer-repo"]
+summary: "Declara variables con let y const, y usa typeof para identificar los tipos primitivos de JavaScript."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás declarar variables con `let` y `const`, y usar `typeof` para identificar si un valor es string, number, boolean, undefined o null.
+
+**Prerrequisitos:** `00-aprender-a-programar/07-proyecto-tu-primer-repo`
+
+## Concepto
+
+Una variable es una caja con una etiqueta. Guardas algo dentro (un texto, un número) y le pones un nombre a la caja para volver a encontrarla después. En JavaScript, esa caja se declara con `let` o con `const`.
+
+### const y let
+
+`const` declara una caja que no puedes volver a llenar con otra cosa: el contenido queda fijo desde que lo asignas. `let` declara una caja que sí puedes vaciar y volver a llenar cuantas veces quieras.
+
+```js
+const name = "Ana";
+let score = 10;
+
+score = 20; // válido: score se declaró con let
+```
+
+Si intentas reasignar una variable declarada con `const`, JavaScript lanza un error: `TypeError: Assignment to constant variable`.
+
+La regla práctica de este curso es simple: usa `const` por defecto. Cambia a `let` solo cuando sabes de antemano que vas a reasignar esa variable, por ejemplo un contador o un total que se actualiza dentro de un bucle. Existe una tercera palabra clave, `var`, que este curso no usa: es la forma antigua de declarar variables y tiene reglas de alcance más confusas que `let` y `const`.
+
+### Nombrar variables
+
+Un nombre de variable en JavaScript empieza con una letra, `$` o `_`, y puede contener letras, números, `$` y `_`, pero no espacios. Por convención, los nombres de variables y funciones se escriben en camelCase: `firstName`, `totalPrice`. Elige nombres que describan el contenido; `x` no dice nada, `age` sí.
+
+### Los cinco tipos primitivos que vas a usar primero
+
+JavaScript tiene varios tipos de valores. Estos cinco aparecen desde el primer día:
+
+- **string**: texto, siempre entre comillas. `"Hola"`, `'Ana'`.
+- **number**: cualquier número, entero o decimal. `10`, `3.5`, `-2`.
+- **boolean**: solo dos valores posibles, `true` o `false`.
+- **undefined**: una variable que existe pero todavía no tiene un valor asignado.
+- **null**: un valor vacío puesto a propósito, para decir "aquí no hay nada".
+
+```js
+let city; // declarada, sin valor: su contenido es undefined
+let selectedCity = null; // vacía a propósito
+```
+
+La diferencia entre `undefined` y `null` es la intención: `undefined` suele significar "todavía no se asignó nada"; `null` significa "se asignó explícitamente la ausencia de valor". Vas a ver ambos en el resto del curso.
+
+### El operador typeof
+
+`typeof` es un operador que responde a la pregunta "¿qué tipo de valor es esto?". Devuelve siempre un texto con el nombre del tipo.
+
+```js
+console.log(typeof "Ana"); // string
+console.log(typeof 10); // number
+console.log(typeof true); // boolean
+console.log(typeof undefined); // undefined
+```
+
+Puedes consultar la referencia completa de tipos y del operador `typeof` en la documentación de MDN: https://developer.mozilla.org/es/docs/Web/JavaScript/Reference/Operators/typeof y https://developer.mozilla.org/es/docs/Web/JavaScript/Data_structures.
+
+<Callout kind="tip">
+  Todavía no sabes si un valor es igual a otro (eso lo ves en la próxima lección, Operadores). Por ahora, `typeof` solo te dice el tipo, no compara valores.
+</Callout>
+
+## Práctica
+
+Ejecuta el código y observa cómo `typeof` describe cada valor. Luego cambia el valor de `score` por un texto entre comillas y vuelve a ejecutar: observa cómo cambia el tipo.
+
+<Playground
+  lang="js"
+  code={`let score = 10;
+const name = "Ana";
+
+console.log(typeof name);
+console.log(typeof score);
+console.log(typeof true);
+console.log(typeof undefined);
+console.log(typeof null);
+
+score = 20;
+console.log(score);`}
+  expected={`string
+number
+boolean
+undefined
+object
+20`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Caja de variables"
+  solution={
+    <Playground
+      lang="js"
+      code={`const city = "Lima";
+let temperature = 18;
+let forecast = null;
+
+console.log(typeof city);
+console.log(typeof temperature);
+console.log(typeof forecast);
+
+temperature = 21;
+console.log(temperature);`}
+    />
+  }
+>
+  Declara una constante `city` con un texto, una variable `temperature` con un número y una variable `forecast` con el valor `null`. Imprime el tipo de cada una con `typeof`. Luego reasigna `temperature` a un nuevo número e imprime su nuevo valor.
+</Challenge>
+
+## Errores comunes
+
+**Pensar que `typeof null` es `"null"`.** Es una particularidad histórica de JavaScript: `typeof null` devuelve `"object"`, no `"null"`. Se detecta comparando el resultado real contra lo esperado; si tu lógica depende de distinguir `null` de un objeto, compara el valor directamente (`valor === null`), nunca con `typeof`.
+
+**Reasignar una constante.** `const total = 10; total = 20;` lanza `TypeError: Assignment to constant variable`. Se detecta porque el programa se detiene con ese mensaje exacto. Solución: si vas a reasignar, declara la variable con `let` desde el principio.
+
+**Olvidar inicializar y esperar un valor.** `let city; console.log(city);` imprime nada útil porque el valor es `undefined`, no un error. Se detecta revisando que cada variable tenga un valor asignado antes de usarla en una operación real.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué diferencia hay entre let y const?", back: "const no permite reasignar el valor después de declararlo; let sí." },
+    { front: "¿Qué devuelve typeof null?", back: "\"object\", por una particularidad histórica del lenguaje." },
+    { front: "¿Qué valor tiene una variable declarada con let que no se inicializó?", back: "undefined." },
+    { front: "¿Cuándo se usa null en lugar de undefined?", back: "Cuando se asigna explícitamente la ausencia de valor, a propósito." },
+    { front: "¿Qué palabra clave para declarar variables no se usa en este curso?", back: "var." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué ocurre si ejecutas const total = 10; total = 20;?",
+      options: [
+        { text: "total pasa a valer 20 sin problema", correct: false, feedback: "const no permite reasignar el valor." },
+        { text: "Se lanza un TypeError", correct: true, feedback: "Correcto: reasignar una const lanza TypeError: Assignment to constant variable." },
+        { text: "total queda en undefined", correct: false, feedback: "No hay reasignación silenciosa: el programa lanza un error." },
+      ],
+    },
+    {
+      prompt: "¿Qué devuelve typeof cuando se aplica a una variable declarada pero sin valor asignado?",
+      options: [
+        { text: "\"null\"", correct: false, feedback: "null y undefined son valores distintos en JavaScript." },
+        { text: "\"undefined\"", correct: true, feedback: "Correcto: una variable sin valor asignado es de tipo undefined." },
+        { text: "\"empty\"", correct: false, feedback: "\"empty\" no es un tipo de JavaScript." },
+      ],
+    },
+    {
+      prompt: "¿Cuál es la recomendación de este curso para declarar variables?",
+      options: [
+        { text: "Usar var siempre, por compatibilidad", correct: false, feedback: "var no se usa en este curso; tiene reglas de alcance confusas." },
+        { text: "Usar const por defecto y let solo cuando se necesita reasignar", correct: true, feedback: "Correcto: esa es la convención de este curso." },
+        { text: "Usar let siempre y const nunca", correct: false, feedback: "Al revés: const es la opción por defecto." },
+      ],
+    },
+  ]}
+/>

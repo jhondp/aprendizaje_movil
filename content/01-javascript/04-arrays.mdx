@@ -1,0 +1,164 @@
+---
+id: "01-javascript/04-arrays"
+title: "Arrays"
+stage: 1
+module: "Estructuras"
+order: 4
+minutes: 12
+prereqs: ["01-javascript/03-funciones"]
+summary: "Guarda listas de valores en arrays y accede, agrega o quita elementos con sus métodos básicos."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás crear un array, acceder a sus elementos por índice, y agregar, quitar o recortar elementos con `push`, `pop` y `slice`.
+
+**Prerrequisitos:** `01-javascript/03-funciones`
+
+## Concepto
+
+Hasta ahora cada variable guarda un solo valor. Un array es una estantería numerada: guarda varios valores, uno al lado del otro, y cada espacio tiene un número de posición llamado **índice**. El primer espacio de la estantería es el índice `0`, no el `1`.
+
+### Crear un array y acceder por índice
+
+Un array se escribe entre corchetes, con los valores separados por comas.
+
+```js
+const fruits = ["apple", "banana", "cherry"];
+
+console.log(fruits[0]); // apple, el primer elemento
+console.log(fruits[2]); // cherry, el tercer elemento
+console.log(fruits.length); // 3, la cantidad de elementos
+```
+
+`fruits.length` te dice cuántos elementos hay. Como los índices empiezan en `0`, el último elemento válido siempre está en `fruits.length - 1`. Pedir `fruits[3]` en un array de 3 elementos no lanza un error: devuelve `undefined`, porque esa posición no existe.
+
+### Agregar y quitar elementos
+
+`push` agrega un elemento al final del array y devuelve la nueva longitud. `pop` quita el último elemento y lo devuelve.
+
+```js
+const numbers = [1, 2, 3];
+
+numbers.push(4);
+console.log(numbers); // [1, 2, 3, 4]
+
+numbers.pop();
+console.log(numbers); // [1, 2, 3]
+```
+
+Ambos métodos modifican el array original: no crean uno nuevo. Esto es importante porque otros métodos que verás en la lección de métodos de array, como `map` y `filter`, sí devuelven un array nuevo sin tocar el original.
+
+### Recortar con slice
+
+`slice(inicio, fin)` devuelve un array nuevo con una copia de los elementos entre las posiciones `inicio` (incluida) y `fin` (excluida), sin modificar el array original.
+
+```js
+const letters = ["a", "b", "c", "d"];
+const firstTwo = letters.slice(0, 2);
+
+console.log(firstTwo); // ["a", "b"]
+console.log(letters); // ["a", "b", "c", "d"], sin cambios
+```
+
+Piensa en `slice` como fotocopiar un tramo de la estantería: te llevas la fotocopia, la estantería original queda intacta.
+
+Puedes revisar la referencia completa de arrays en MDN, con todos sus métodos: https://developer.mozilla.org/es/docs/Web/JavaScript/Reference/Global_Objects/Array.
+
+<Callout kind="tip">
+  Un array puede guardar cualquier tipo de valor, incluso objetos. En la lección de objetos vas a combinar ambos: un array de objetos es la forma más común de representar una lista de datos, como tareas o usuarios.
+</Callout>
+
+## Práctica
+
+Ejecuta el código y observa cómo cambia el array después de cada operación. Luego agrega un elemento distinto con `push` y vuelve a ejecutar.
+
+<Playground
+  lang="js"
+  code={`const fruits = ["apple", "banana", "cherry"];
+console.log(fruits[0]);
+console.log(fruits.length);
+
+fruits.push("date");
+console.log(fruits);
+
+fruits.pop();
+console.log(fruits);
+
+const firstTwo = fruits.slice(0, 2);
+console.log(firstTwo);`}
+  expected={`apple
+3
+["apple","banana","cherry","date"]
+["apple","banana","cherry"]
+["apple","banana"]`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Lista de compras"
+  solution={
+    <Playground
+      lang="js"
+      code={`const shoppingList = ["milk", "bread"];
+
+shoppingList.push("eggs");
+console.log(shoppingList);
+
+console.log(shoppingList[shoppingList.length - 1]);
+
+const firstTwoItems = shoppingList.slice(0, 2);
+console.log(firstTwoItems);`}
+    />
+  }
+>
+  Declara un array `shoppingList` con `"milk"` y `"bread"`. Agrega `"eggs"` con `push` e imprime el array completo. Luego imprime el último elemento usando `shoppingList.length - 1` como índice. Por último, imprime una copia con los dos primeros elementos usando `slice`.
+</Challenge>
+
+## Errores comunes
+
+**Pensar que el primer elemento está en el índice 1.** `fruits[1]` es el segundo elemento, no el primero; el primero es `fruits[0]`. Se detecta comparando el valor obtenido contra el elemento esperado en esa posición.
+
+**Acceder a un índice que no existe y esperar un error.** `fruits[10]` en un array de 3 elementos no lanza ningún error: devuelve `undefined` silenciosamente. Se detecta revisando si el valor obtenido es `undefined` cuando debería haber un dato real; conviene comparar contra `fruits.length` antes de acceder.
+
+**Esperar que slice modifique el array original.** A diferencia de `push` y `pop`, `slice` no cambia el array sobre el que se llama: siempre devuelve uno nuevo. Se detecta porque, después de `const copy = list.slice(0, 2)`, `list` sigue teniendo la misma longitud que antes.
+
+<Flashcards
+  cards={[
+    { front: "¿En qué índice está el primer elemento de un array?", back: "0" },
+    { front: "¿Qué hace push?", back: "Agrega un elemento al final del array y modifica el array original." },
+    { front: "¿Qué hace pop?", back: "Quita y devuelve el último elemento del array, modificando el array original." },
+    { front: "¿slice modifica el array original?", back: "No: siempre devuelve un array nuevo, sin tocar el original." },
+    { front: "¿Qué devuelve acceder a un índice fuera de rango, como fruits[10] en un array de 3 elementos?", back: "undefined, sin lanzar ningún error." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Con const items = [\"a\", \"b\", \"c\"], ¿qué imprime console.log(items[2])?",
+      options: [
+        { text: "\"a\"", correct: false, feedback: "\"a\" está en el índice 0." },
+        { text: "\"c\"", correct: true, feedback: "Correcto: el índice 2 es el tercer elemento, \"c\"." },
+        { text: "undefined", correct: false, feedback: "El índice 2 sí existe en un array de 3 elementos." },
+      ],
+    },
+    {
+      prompt: "¿Qué método agrega un elemento al final de un array y modifica el array original?",
+      options: [
+        { text: "slice", correct: false, feedback: "slice devuelve un array nuevo, sin modificar el original." },
+        { text: "push", correct: true, feedback: "Correcto: push agrega al final y modifica el array original." },
+        { text: "length", correct: false, feedback: "length no es un método, es una propiedad con la cantidad de elementos." },
+      ],
+    },
+    {
+      prompt: "Después de const copy = list.slice(0, 2), ¿qué le pasó a list?",
+      options: [
+        { text: "Perdió los elementos que no están en copy", correct: false, feedback: "slice no modifica el array original." },
+        { text: "No cambió: slice no modifica el array original", correct: true, feedback: "Correcto: slice siempre devuelve una copia nueva." },
+        { text: "Quedó vacío", correct: false, feedback: "slice no vacía ni modifica list." },
+      ],
+    },
+  ]}
+/>

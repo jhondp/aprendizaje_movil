@@ -1,0 +1,193 @@
+---
+id: "01-javascript/10-modulos"
+title: "Módulos"
+stage: 1
+module: "Profundizando"
+order: 10
+minutes: 10
+prereqs: ["01-javascript/09-errores-y-debugging"]
+summary: "Divide tu código en varios archivos con export e import, usando módulos ES de Node.js."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás dividir código en varios archivos usando `export` e `import`, y ejecutar esos archivos con Node.js.
+
+**Prerrequisitos:** `01-javascript/09-errores-y-debugging`
+
+## Concepto
+
+Hasta ahora todo tu código vivió en un solo archivo. A medida que un programa crece, un solo archivo se vuelve difícil de leer: es como guardar toda la ropa de la casa en una sola caja, sin separar por habitación. Un módulo es un archivo que expone solo una parte de su contenido a los demás archivos, con `export`, y que puede tomar lo que otros archivos exponen, con `import`. El resto de su contenido queda privado, visible solo dentro de ese archivo.
+
+### export: exponer una función
+
+`export` delante de una declaración la hace disponible para otros archivos.
+
+```js
+// math.js
+export function add(a, b) {
+  return a + b;
+}
+
+export function multiply(a, b) {
+  return a * b;
+}
+```
+
+Cualquier función, constante o variable sin `export` delante permanece privada de ese archivo: ningún otro archivo puede acceder a ella directamente.
+
+### import: usar lo que otro archivo exportó
+
+`import` trae al archivo actual las funciones o valores que otro archivo exportó, usando llaves con los nombres exactos y una ruta relativa al archivo de origen.
+
+```js
+// main.js
+import { add, multiply } from "./math.js";
+
+console.log(add(2, 3)); // 5
+console.log(multiply(2, 3)); // 6
+```
+
+La ruta `"./math.js"` es relativa al archivo `main.js`: `./` significa "en esta misma carpeta". En Node.js, a diferencia de otras herramientas, la extensión `.js` en la ruta es obligatoria.
+
+### Habilitar módulos ES en Node.js
+
+Node.js necesita saber que un proyecto usa módulos ES (la sintaxis `export`/`import` de este curso), en lugar del sistema más antiguo `require`. La forma más común es agregar `"type": "module"` al `package.json` del proyecto.
+
+```json
+{
+  "name": "todo-app",
+  "type": "module"
+}
+```
+
+Con esa línea, cualquier archivo `.js` del proyecto puede usar `export` e `import`. Sin ella, Node.js interpreta `import` como un error de sintaxis.
+
+Puedes revisar la referencia completa de módulos ES en Node.js: https://nodejs.org/api/esm.html, y la guía de módulos de JavaScript en MDN: https://developer.mozilla.org/es/docs/Web/JavaScript/Guide/Modules.
+
+<Callout kind="tip">
+  El proyecto de cierre de esta etapa, la app de tareas, puede vivir en un solo archivo por simplicidad. Vas a dividir código en varios archivos con export/import en proyectos más grandes, a partir de la etapa 3.
+</Callout>
+
+## Práctica
+
+El editor de código de esta plataforma ejecuta un solo archivo, así que no puede importar entre archivos reales. El siguiente ejemplo simula dos archivos con comentarios: primero verías cómo se vería `math.js` y `main.js` por separado, y después el mismo comportamiento escrito en un solo archivo para poder ejecutarlo aquí.
+
+<Playground
+  lang="js"
+  code={`// Así se vería math.js:
+// export function add(a, b) {
+//   return a + b;
+// }
+// export function multiply(a, b) {
+//   return a * b;
+// }
+
+// Así se vería main.js:
+// import { add, multiply } from "./math.js";
+// console.log(add(2, 3));
+// console.log(multiply(2, 3));
+
+// El mismo comportamiento, en un solo archivo, para poder ejecutarlo aquí:
+function add(a, b) {
+  return a + b;
+}
+
+function multiply(a, b) {
+  return a * b;
+}
+
+console.log(add(2, 3));
+console.log(multiply(2, 3));`}
+  expected={`5
+6`}
+/>
+
+Ahora observa el mismo código como dos archivos reales, ejecutados con Node.js:
+
+<Terminal
+  steps={[
+    { cmd: "cat package.json", out: '{\n  "name": "todo-app",\n  "type": "module"\n}' },
+    { cmd: "cat math.js", out: "export function add(a, b) {\n  return a + b;\n}\n\nexport function multiply(a, b) {\n  return a * b;\n}" },
+    { cmd: "cat main.js", out: 'import { add, multiply } from "./math.js";\n\nconsole.log(add(2, 3));\nconsole.log(multiply(2, 3));' },
+    { cmd: "node main.js", out: "5\n6" },
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Simular un módulo de saludos"
+  solution={
+    <Playground
+      lang="js"
+      code={`// Así se vería greetings.js:
+// export function greet(name) {
+//   return \`Hello, \${name}\`;
+// }
+// export function farewell(name) {
+//   return \`Goodbye, \${name}\`;
+// }
+
+// Simulado en un solo archivo:
+function greet(name) {
+  return \`Hello, \${name}\`;
+}
+
+function farewell(name) {
+  return \`Goodbye, \${name}\`;
+}
+
+console.log(greet("Ana"));
+console.log(farewell("Ana"));`}
+    />
+  }
+>
+  Escribe, en comentarios, cómo se vería un archivo `greetings.js` que exporta dos funciones: `greet(name)`, que devuelve `` `Hello, ${name}` ``, y `farewell(name)`, que devuelve `` `Goodbye, ${name}` ``. Debajo, en código real que se pueda ejecutar, define las mismas dos funciones sin `export` y llama a cada una con `"Ana"`.
+</Challenge>
+
+## Errores comunes
+
+**Olvidar `"type": "module"` en `package.json`.** Sin esa línea, Node.js lanza `SyntaxError: Cannot use import statement outside a module` al encontrar la primera línea `import`. Se detecta por ese mensaje exacto; la solución es agregar `"type": "module"` al `package.json`, o usar la extensión `.mjs` en los archivos.
+
+**Omitir la extensión del archivo en la ruta de import.** `import { add } from "./math"` (sin `.js`) falla en Node.js con un error de tipo "Cannot find module", porque Node.js, a diferencia de otras herramientas, no adivina la extensión. Se detecta por ese mensaje; la solución es escribir la ruta completa, `"./math.js"`.
+
+**Importar sin llaves algo que se exportó con nombre.** `import add from "./math.js"` (sin llaves) busca una exportación por defecto que no existe en `math.js`, así que `add` termina siendo `undefined`. Se detecta porque la función "existe" pero llamarla lanza `TypeError: add is not a function`. Solución: usar llaves con el nombre exacto exportado, `import { add } from "./math.js"`.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué hace export delante de una función?", back: "La hace disponible para que otros archivos la importen." },
+    { front: "¿Qué necesita el package.json de un proyecto Node.js para usar export/import?", back: "La línea \"type\": \"module\"." },
+    { front: "¿Es obligatoria la extensión .js en la ruta de un import en Node.js?", back: "Sí: a diferencia de otras herramientas, Node.js no la agrega automáticamente." },
+    { front: "¿Qué pasa con una función sin export en un módulo?", back: "Permanece privada: ningún otro archivo puede importarla." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué mensaje lanza Node.js si usas import en un archivo sin \"type\": \"module\" en el package.json?",
+      options: [
+        { text: "Ningún mensaje, funciona igual", correct: false, feedback: "Sin esa configuración, import provoca un error de sintaxis." },
+        { text: "SyntaxError: Cannot use import statement outside a module", correct: true, feedback: "Correcto: ese es el error exacto que lanza Node.js." },
+        { text: "ReferenceError: import is not defined", correct: false, feedback: "El problema es de sintaxis del módulo, no una referencia indefinida." },
+      ],
+    },
+    {
+      prompt: "Con export function add(a, b) { ... } en math.js, ¿cómo se importa correctamente en main.js?",
+      options: [
+        { text: "import add from \"./math.js\";", correct: false, feedback: "Sin llaves se busca una exportación por defecto, que no existe aquí." },
+        { text: "import { add } from \"./math.js\";", correct: true, feedback: "Correcto: las exportaciones con nombre se importan con llaves." },
+        { text: "import \"add\" from \"./math.js\";", correct: false, feedback: "El nombre importado no va entre comillas." },
+      ],
+    },
+    {
+      prompt: "¿Qué le pasa a una función declarada en un módulo sin la palabra export delante?",
+      options: [
+        { text: "Se puede importar igual desde otro archivo", correct: false, feedback: "Sin export, otros archivos no pueden acceder a ella." },
+        { text: "Queda privada: solo se puede usar dentro de su propio archivo", correct: true, feedback: "Correcto: export es lo que decide qué se comparte." },
+        { text: "Node.js la borra automáticamente al ejecutar el archivo", correct: false, feedback: "La función sigue existiendo y funcionando dentro de su archivo; solo no es accesible desde afuera." },
+      ],
+    },
+  ]}
+/>

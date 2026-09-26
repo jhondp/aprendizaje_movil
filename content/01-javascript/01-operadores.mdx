@@ -1,0 +1,167 @@
+---
+id: "01-javascript/01-operadores"
+title: "Operadores"
+stage: 1
+module: "Fundamentos"
+order: 1
+minutes: 10
+prereqs: ["01-javascript/00-variables-y-tipos"]
+summary: "Usa operadores aritméticos, de comparación estricta y lógicos para combinar y comparar valores."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás combinar valores con operadores aritméticos, comparar valores con `===`, y combinar condiciones con operadores lógicos.
+
+**Prerrequisitos:** `01-javascript/00-variables-y-tipos`
+
+## Concepto
+
+Un operador es una herramienta que toma uno o dos valores y produce un resultado nuevo. Piensa en una calculadora: aprietas `+`, le das dos números, y te devuelve la suma. JavaScript tiene calculadoras similares para números, para comparar valores y para combinar condiciones verdadero/falso.
+
+### Operadores aritméticos
+
+Los operadores aritméticos trabajan con números: `+` (suma), `-` (resta), `*` (multiplicación), `/` (división) y `%` (módulo, el resto de una división entera).
+
+```js
+console.log(7 + 2); // 9
+console.log(7 - 2); // 5
+console.log(7 * 2); // 14
+console.log(7 / 2); // 3.5
+console.log(7 % 2); // 1, porque 7 dividido 2 da 3 con resto 1
+```
+
+El operador `%` (módulo) es especialmente útil para saber si un número es par (`n % 2 === 0`) o para repetir un patrón cada cierta cantidad de elementos.
+
+Cuidado con `+` entre un string y un number: en lugar de sumar, JavaScript convierte el número a texto y concatena.
+
+```js
+console.log("7" + 2); // "72", texto, no el número 9
+```
+
+### Comparación: === contra ==
+
+Para comparar dos valores, JavaScript ofrece dos operadores que se ven casi iguales pero se comportan distinto: `===` (igualdad estricta) y `==` (igualdad con conversión de tipos).
+
+```js
+console.log(7 === "7"); // false: distinto tipo, no son iguales
+console.log(7 == "7"); // true: == convierte "7" a número antes de comparar
+```
+
+`==` intenta adivinar qué quisiste decir convirtiendo tipos antes de comparar, y esas conversiones son una fuente constante de errores difíciles de rastrear. Este curso usa siempre `===` (y su opuesto, `!==`) para comparar. Considera `==` una herramienta que existe en el lenguaje pero que no vas a usar.
+
+Además de igualdad, existen los operadores relacionales `>`, `<`, `>=` y `<=`, que comparan orden y siempre devuelven un boolean.
+
+```js
+console.log(10 > 5); // true
+console.log(10 <= 5); // false
+```
+
+### Operadores lógicos
+
+Los operadores lógicos combinan valores boolean: `&&` (y, verdadero solo si ambos lados son verdaderos), `||` (o, verdadero si al menos un lado es verdadero) y `!` (no, invierte el valor).
+
+```js
+console.log(true && false); // false
+console.log(true || false); // true
+console.log(!true); // false
+```
+
+Piensa en `&&` como una puerta que necesita dos llaves para abrirse (ambas condiciones deben cumplirse), y en `||` como una puerta que se abre con cualquiera de dos llaves distintas. Vas a combinar estos operadores con condicionales en la próxima lección.
+
+Puedes revisar la referencia completa de operadores en MDN: https://developer.mozilla.org/es/docs/Web/JavaScript/Reference/Operators.
+
+## Práctica
+
+Ejecuta el código y revisa cada resultado. Después cambia los números y vuelve a ejecutar para confirmar que entiendes cada operador.
+
+<Playground
+  lang="js"
+  code={`console.log(7 + 2);
+console.log(7 - 2);
+console.log(7 * 2);
+console.log(7 / 2);
+console.log(7 % 2);
+
+console.log("7" + 2);
+console.log(7 === "7");
+console.log(7 == "7");
+
+console.log(true && false);
+console.log(true || false);
+console.log(!true);`}
+  expected={`9
+5
+14
+3.5
+1
+72
+false
+true
+false
+true
+false`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Par o impar, mayor o igual"
+  solution={
+    <Playground
+      lang="js"
+      code={`const number = 14;
+
+console.log(number % 2 === 0);
+console.log(number >= 10 && number <= 20);`}
+    />
+  }
+>
+  Declara una constante `number` con el valor `14`. Imprime si `number` es par (usa `%` y `===`). Luego imprime si `number` está entre 10 y 20 usando `>=`, `<=` y `&&`.
+</Challenge>
+
+## Errores comunes
+
+**Usar `==` en lugar de `===`.** `0 == false` da `true` porque `==` convierte tipos antes de comparar; `0 === false` da `false` porque son de tipos distintos. Se detecta cuando una comparación "funciona" con valores que en realidad no deberían considerarse iguales. Solución: usar siempre `===` y `!==`.
+
+**Confundir `=` con `===`.** `=` asigna un valor, `===` compara dos valores. Escribir `if (score = 10)` dentro de una condición no compara nada: asigna 10 a `score` y esa asignación se evalúa como verdadera. Se detecta porque el código "siempre" entra en la rama esperada, sin importar el valor real.
+
+**Sumar un número y un texto esperando una suma numérica.** `"7" + 2` da `"72"`, no `9`, porque `+` con un string concatena. Se detecta revisando el tipo de cada operando antes de sumar; si uno es texto que representa un número, hay que convertirlo primero con `Number(...)`.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué operador calcula el resto de una división?", back: "%, el operador módulo." },
+    { front: "¿Qué operador de comparación se debe usar siempre en este curso?", back: "===, la igualdad estricta." },
+    { front: "¿Qué hace + entre un number y un string?", back: "Concatena: convierte el número a texto y une ambos strings." },
+    { front: "¿Qué devuelve true && false?", back: "false, porque && requiere que ambos lados sean verdaderos." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué imprime console.log(\"5\" + 1)?",
+      options: [
+        { text: "6", correct: false, feedback: "No suma: el operando texto hace que + concatene." },
+        { text: "\"51\"", correct: true, feedback: "Correcto: + entre string y number concatena como texto." },
+        { text: "Un error", correct: false, feedback: "No lanza error; concatena silenciosamente." },
+      ],
+    },
+    {
+      prompt: "¿Cuál es la diferencia entre === y ==?",
+      options: [
+        { text: "No hay diferencia, son sinónimos", correct: false, feedback: "Se comportan distinto ante tipos diferentes." },
+        { text: "=== compara sin convertir tipos; == convierte tipos antes de comparar", correct: true, feedback: "Correcto: por eso este curso usa siempre ===." },
+        { text: "== es más rápido que ===", correct: false, feedback: "La diferencia relevante es de comportamiento, no de velocidad." },
+      ],
+    },
+    {
+      prompt: "¿Qué devuelve 9 % 4?",
+      options: [
+        { text: "2.25", correct: false, feedback: "Eso sería el resultado de la división, no del módulo." },
+        { text: "1", correct: true, feedback: "Correcto: 9 dividido 4 da 2 con resto 1." },
+        { text: "4", correct: false, feedback: "4 es el divisor, no el resto." },
+      ],
+    },
+  ]}
+/>

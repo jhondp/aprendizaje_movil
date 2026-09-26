@@ -1,0 +1,188 @@
+---
+id: "01-javascript/06-bucles"
+title: "Bucles"
+stage: 1
+module: "Estructuras"
+order: 6
+minutes: 12
+prereqs: ["01-javascript/05-objetos"]
+summary: "Repite instrucciones con for, while y for...of, y recorre arrays sin repetir código."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás repetir instrucciones con `for`, `while` y `for...of`, y usar un bucle para acumular un resultado a partir de un array.
+
+**Prerrequisitos:** `01-javascript/05-objetos`
+
+## Concepto
+
+Si tuvieras que sumar cien números uno por uno, escribirías cien líneas de `console.log`. Un bucle es una instrucción que dice "repite estos pasos mientras se cumpla una condición", como una lavadora que repite el mismo ciclo de enjuague hasta que el temporizador llega a cero.
+
+### for
+
+`for` repite un bloque un número controlado de veces. Tiene tres partes entre paréntesis, separadas por `;`: la inicialización (se ejecuta una vez, al empezar), la condición (se revisa antes de cada vuelta; el bucle sigue mientras sea verdadera) y la actualización (se ejecuta al final de cada vuelta).
+
+```js
+for (let i = 0; i < 3; i += 1) {
+  console.log(i);
+}
+// 0
+// 1
+// 2
+```
+
+`i` empieza en `0`. Antes de cada vuelta se revisa `i < 3`. Al final de cada vuelta, `i += 1` incrementa el contador. Cuando `i` llega a `3`, la condición es falsa y el bucle se detiene: por eso se imprimen `0`, `1` y `2`, pero no `3`.
+
+Un uso típico de `for` es recorrer un array por índice:
+
+```js
+const numbers = [10, 20, 30, 40];
+let sum = 0;
+
+for (let i = 0; i < numbers.length; i += 1) {
+  sum += numbers[i];
+}
+
+console.log(sum); // 100
+```
+
+`numbers.length` evita escribir el número `4` a mano: si el array cambia de tamaño, el bucle se ajusta solo.
+
+### while
+
+`while` repite un bloque mientras una condición sea verdadera, sin una parte de inicialización o actualización integradas: tú controlas esas partes en el cuerpo del bucle.
+
+```js
+let count = 0;
+while (count < 3) {
+  console.log(`iteration ${count}`);
+  count += 1;
+}
+```
+
+Si olvidas actualizar la variable de control dentro del cuerpo del bucle, la condición nunca se vuelve falsa y el bucle no termina nunca: eso se llama bucle infinito.
+
+### for...of
+
+`for...of` recorre directamente los valores de un array, sin manejar un índice a mano. Es la forma más clara de recorrer un array cuando no necesitas la posición de cada elemento.
+
+```js
+const numbers = [10, 20, 30, 40];
+let total = 0;
+
+for (const value of numbers) {
+  total += value;
+}
+
+console.log(total); // 100
+```
+
+Aquí `value` toma, en cada vuelta, uno de los valores del array (`10`, después `20`, después `30`, después `40`), sin que tengas que escribir `numbers[i]`.
+
+Puedes revisar la referencia completa de bucles en la guía de JavaScript de MDN: https://developer.mozilla.org/es/docs/Web/JavaScript/Guide/Loops_and_iteration.
+
+<Callout kind="tip">
+  En la próxima lección vas a ver métodos de array como map y filter, que recorren un array sin escribir un bucle explícito. Son la forma preferida cuando el objetivo es transformar o filtrar datos; for y while siguen siendo útiles para casos donde necesitas control total, como detenerte antes de terminar o repetir sin recorrer una colección.
+</Callout>
+
+## Práctica
+
+Ejecuta el código y compara las tres formas de sumar el mismo array. Luego cambia los valores del array y confirma que las tres sumas cambian igual.
+
+<Playground
+  lang="js"
+  code={`const numbers = [10, 20, 30, 40];
+
+let sum = 0;
+for (let i = 0; i < numbers.length; i += 1) {
+  sum += numbers[i];
+}
+console.log(sum);
+
+let total = 0;
+for (const value of numbers) {
+  total += value;
+}
+console.log(total);
+
+let count = 0;
+while (count < 3) {
+  console.log(\`iteration \${count}\`);
+  count += 1;
+}`}
+  expected={`100
+100
+iteration 0
+iteration 1
+iteration 2`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Contar palabras largas"
+  solution={
+    <Playground
+      lang="js"
+      code={`const words = ["sun", "mountain", "sky", "elephant"];
+
+let longWords = 0;
+for (const word of words) {
+  if (word.length > 4) {
+    longWords += 1;
+  }
+}
+
+console.log(longWords);`}
+    />
+  }
+>
+  Declara un array `words` con `"sun"`, `"mountain"`, `"sky"` y `"elephant"`. Usa `for...of` para contar cuántas palabras tienen más de 4 letras (`word.length > 4`) y guarda el resultado en una variable `longWords`. Imprime `longWords`.
+</Challenge>
+
+## Errores comunes
+
+**Olvidar actualizar la variable de control en un while.** `let count = 0; while (count < 3) { console.log(count); }` nunca termina, porque `count` nunca cambia y la condición siempre es verdadera. Se detecta porque el programa se queda "colgado" o el entorno lo detiene por exceder el tiempo. Solución: incluir la actualización, `count += 1`, dentro del cuerpo del bucle.
+
+**Confundir `<` con `<=` en la condición de un for.** `for (let i = 0; i <= numbers.length; i += 1)` intenta acceder a `numbers[numbers.length]`, una posición que no existe, y obtiene `undefined` en la última vuelta. Se detecta porque el resultado incluye un valor extra inesperado, o un `NaN` si ese valor se usó en una suma.
+
+**Declarar la variable acumuladora dentro del bucle en lugar de antes.** Si escribes `for (const value of numbers) { let total = 0; total += value; }`, `total` se reinicia a `0` en cada vuelta y al final solo tiene el último valor sumado consigo mismo. Se detecta comparando el resultado final con la suma esperada; el acumulador debe declararse una sola vez, antes del bucle.
+
+<Flashcards
+  cards={[
+    { front: "¿Cuáles son las tres partes de un for clásico?", back: "Inicialización, condición y actualización, separadas por punto y coma." },
+    { front: "¿Qué pasa si la condición de un while nunca se vuelve falsa?", back: "El bucle se convierte en un bucle infinito y nunca termina." },
+    { front: "¿Qué recorre for...of en un array?", back: "Los valores del array directamente, sin necesidad de manejar un índice." },
+    { front: "¿Dónde debe declararse la variable acumuladora de un bucle que suma un total?", back: "Antes del bucle, para que conserve su valor entre una vuelta y otra." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Cuántas veces se ejecuta el cuerpo de for (let i = 0; i < 4; i += 1) { ... }?",
+      options: [
+        { text: "3 veces", correct: false, feedback: "La condición i < 4 sigue siendo verdadera para i = 3." },
+        { text: "4 veces", correct: true, feedback: "Correcto: i toma los valores 0, 1, 2 y 3, cuatro vueltas en total." },
+        { text: "5 veces", correct: false, feedback: "Cuando i llega a 4, la condición i < 4 es falsa y el bucle se detiene." },
+      ],
+    },
+    {
+      prompt: "¿Qué provoca un bucle infinito en un while?",
+      options: [
+        { text: "Que la condición nunca se vuelva falsa", correct: true, feedback: "Correcto: si nada dentro del cuerpo cambia la condición, el bucle nunca se detiene." },
+        { text: "Usar for...of en vez de while", correct: false, feedback: "for...of recorre un array y siempre termina cuando se acaban los elementos." },
+        { text: "Declarar el acumulador con let en vez de const", correct: false, feedback: "El tipo de declaración no causa un bucle infinito." },
+      ],
+    },
+    {
+      prompt: "¿Cuál es la forma más directa de recorrer solo los valores de un array, sin manejar un índice?",
+      options: [
+        { text: "for...of", correct: true, feedback: "Correcto: for...of entrega directamente cada valor del array." },
+        { text: "for clásico con numbers[i]", correct: false, feedback: "Funciona, pero requiere manejar el índice manualmente; for...of no." },
+        { text: "while con un contador manual", correct: false, feedback: "También requiere manejar el índice a mano, igual que el for clásico." },
+      ],
+    },
+  ]}
+/>

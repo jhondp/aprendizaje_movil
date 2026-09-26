@@ -1,0 +1,197 @@
+---
+id: "01-javascript/07-metodos-de-array"
+title: "Métodos de array"
+stage: 1
+module: "Estructuras"
+order: 7
+minutes: 15
+prereqs: ["01-javascript/06-bucles"]
+summary: "Transforma, filtra y reduce arrays con map, filter, reduce y find, sin escribir bucles explícitos."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás transformar un array con `map`, filtrarlo con `filter`, buscar un elemento con `find` y acumular un resultado con `reduce`.
+
+**Prerrequisitos:** `01-javascript/06-bucles`
+
+## Concepto
+
+En la lección anterior recorriste arrays con `for` y `while`, escribiendo tú mismo cada paso: dónde empezar, cuándo parar, qué acumular. Los métodos de array son como contratar a un especialista para cada tarea repetitiva: le entregas el array y una función pequeña que describe qué hacer con cada elemento, y el especialista se encarga del recorrido completo. Tú describes el "qué", el método se encarga del "cómo".
+
+Los cuatro métodos de esta lección nunca modifican el array original: siempre devuelven algo nuevo.
+
+### map: transformar cada elemento
+
+`map` recorre un array y devuelve un array nuevo, del mismo tamaño, con el resultado de aplicar una función a cada elemento.
+
+```js
+const numbers = [1, 2, 3, 4];
+
+const doubled = numbers.map((n) => n * 2);
+console.log(doubled); // [2, 4, 6, 8]
+```
+
+`(n) => n * 2` es la función que `map` aplica a cada elemento. El array `doubled` tiene los mismos 4 elementos que `numbers`, pero transformados.
+
+### filter: quedarse con algunos elementos
+
+`filter` recorre un array y devuelve un array nuevo, solo con los elementos para los que la función devuelve `true`. Puede ser más corto que el original, o incluso vacío.
+
+```js
+const evens = numbers.filter((n) => n % 2 === 0);
+console.log(evens); // [2, 4]
+```
+
+### find: buscar un solo elemento
+
+`find` devuelve el primer elemento para el que la función devuelve `true`, no un array. Si ningún elemento cumple la condición, devuelve `undefined`.
+
+```js
+const firstEven = numbers.find((n) => n % 2 === 0);
+console.log(firstEven); // 2
+
+const firstNegative = numbers.find((n) => n < 0);
+console.log(firstNegative); // undefined
+```
+
+### reduce: acumular un solo valor
+
+`reduce` recorre un array y lo reduce a un solo valor, acumulando resultado tras resultado. Recibe dos argumentos: una función con el acumulador y el elemento actual, y el valor inicial del acumulador.
+
+```js
+const total = numbers.reduce((sum, n) => sum + n, 0);
+console.log(total); // 10
+```
+
+En cada vuelta, `sum` es el acumulador (empieza en `0`, el valor inicial) y `n` es el elemento actual. La función devuelve el nuevo valor de `sum` para la siguiente vuelta.
+
+### Los cuatro métodos sobre una lista de tareas
+
+Estos métodos son especialmente útiles sobre arrays de objetos, el patrón que viste en la lección de objetos.
+
+```js
+const tasks = [
+  { id: 1, title: "Buy milk", done: false },
+  { id: 2, title: "Clean house", done: true },
+  { id: 3, title: "Write report", done: false },
+];
+
+const titles = tasks.map((task) => task.title);
+console.log(titles); // ["Buy milk","Clean house","Write report"]
+
+const pending = tasks.filter((task) => !task.done);
+console.log(pending); // [{"id":1,"title":"Buy milk","done":false},{"id":3,"title":"Write report","done":false}]
+
+const completedCount = tasks.reduce((count, task) => (task.done ? count + 1 : count), 0);
+console.log(completedCount); // 1
+```
+
+Puedes revisar la referencia completa de estos métodos en MDN: https://developer.mozilla.org/es/docs/Web/JavaScript/Reference/Global_Objects/Array.
+
+<Callout kind="tip">
+  Vas a usar estos cuatro métodos en el proyecto de cierre de esta etapa, una app de tareas en consola, para listar, filtrar y contar tareas.
+</Callout>
+
+## Práctica
+
+Ejecuta el código y observa cómo cada método produce un resultado distinto a partir del mismo array de tareas. Luego cambia `done: false` por `done: true` en alguna tarea y vuelve a ejecutar.
+
+<Playground
+  lang="js"
+  code={`const tasks = [
+  { id: 1, title: "Buy milk", done: false },
+  { id: 2, title: "Clean house", done: true },
+  { id: 3, title: "Write report", done: false },
+];
+
+const titles = tasks.map((task) => task.title);
+console.log(titles);
+
+const pending = tasks.filter((task) => !task.done);
+console.log(pending);
+
+const completedCount = tasks.reduce((count, task) => (task.done ? count + 1 : count), 0);
+console.log(completedCount);
+
+const found = tasks.find((task) => task.id === 2);
+console.log(found);`}
+  expected={`["Buy milk","Clean house","Write report"]
+[{"id":1,"title":"Buy milk","done":false},{"id":3,"title":"Write report","done":false}]
+1
+{"id":2,"title":"Clean house","done":true}`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Precios con descuento"
+  solution={
+    <Playground
+      lang="js"
+      code={`const products = [
+  { name: "mouse", price: 20 },
+  { name: "keyboard", price: 45 },
+  { name: "monitor", price: 150 },
+];
+
+const discounted = products.map((product) => ({ ...product, price: product.price * 0.9 }));
+console.log(discounted);
+
+const expensive = products.filter((product) => product.price > 30);
+console.log(expensive);
+
+const total = products.reduce((sum, product) => sum + product.price, 0);
+console.log(total);`}
+    />
+  }
+>
+  Declara un array `products` con tres objetos `{ name, price }`. Usa `map` para crear un array `discounted` con cada precio multiplicado por `0.9`. Usa `filter` para crear un array `expensive` solo con los productos de más de `30`. Usa `reduce` para calcular `total`, la suma de todos los precios originales.
+</Challenge>
+
+## Errores comunes
+
+**Olvidar el `return` dentro de una función flecha con llaves.** `numbers.map((n) => { n * 2 })` devuelve un array lleno de `undefined`, porque una función flecha con llaves no devuelve nada automáticamente. Se detecta porque el array resultante tiene la longitud correcta pero todos sus valores son `undefined`. Solución: usar `return n * 2;` dentro de las llaves, o quitar las llaves para que la expresión se devuelva sola.
+
+**Olvidar el valor inicial de `reduce`.** `numbers.reduce((sum, n) => sum + n)` sin el segundo argumento usa el primer elemento del array como valor inicial de `sum`, lo que produce un resultado distinto al esperado cuando el array está vacío o cuando el cálculo depende de empezar en `0`. Se detecta comparando el resultado con uno calculado a mano; la solución es siempre pasar el valor inicial explícito, como `0`.
+
+**Confundir `filter` con `find`.** `filter` siempre devuelve un array, aunque tenga un solo elemento o ninguno; `find` devuelve el elemento directamente, o `undefined`. Usar `filter` cuando se necesita un solo objeto obliga a acceder con `[0]` después; usar `find` cuando en realidad se necesitan todos los elementos deja fuera al resto. Se detecta revisando si el resultado es un array (`[...]`) cuando se esperaba un objeto suelto, o viceversa.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué devuelve map sobre un array de 4 elementos?", back: "Un array nuevo de 4 elementos, cada uno transformado por la función." },
+    { front: "¿Qué devuelve filter cuando ningún elemento cumple la condición?", back: "Un array vacío." },
+    { front: "¿Qué devuelve find cuando ningún elemento cumple la condición?", back: "undefined." },
+    { front: "¿Qué dos argumentos recibe reduce?", back: "Una función con el acumulador y el elemento actual, y el valor inicial del acumulador." },
+    { front: "¿map, filter, reduce y find modifican el array original?", back: "No: los cuatro devuelven un valor nuevo sin tocar el array original." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Con const nums = [1, 2, 3], ¿qué imprime console.log(nums.map((n) => n * 10))?",
+      options: [
+        { text: "[1, 2, 3]", correct: false, feedback: "map transforma cada elemento; no devuelve el array original." },
+        { text: "[10, 20, 30]", correct: true, feedback: "Correcto: map aplica la función a cada elemento y devuelve el resultado." },
+        { text: "60", correct: false, feedback: "60 sería una suma, no lo que produce map." },
+      ],
+    },
+    {
+      prompt: "¿Qué diferencia principal hay entre filter y find?",
+      options: [
+        { text: "filter devuelve un array; find devuelve un solo elemento o undefined", correct: true, feedback: "Correcto: esa es la diferencia clave entre ambos." },
+        { text: "No hay diferencia, son sinónimos", correct: false, feedback: "Se comportan distinto: uno devuelve un array, el otro un elemento." },
+        { text: "find modifica el array original y filter no", correct: false, feedback: "Ninguno de los dos modifica el array original." },
+      ],
+    },
+    {
+      prompt: "Con const nums = [2, 4, 6], ¿qué imprime console.log(nums.reduce((sum, n) => sum + n, 0))?",
+      options: [
+        { text: "2", correct: false, feedback: "2 es solo el primer elemento, no la suma total." },
+        { text: "12", correct: true, feedback: "Correcto: 0 + 2 + 4 + 6 es 12." },
+        { text: "[2, 4, 6]", correct: false, feedback: "reduce devuelve un único valor, no un array." },
+      ],
+    },
+  ]}
+/>
