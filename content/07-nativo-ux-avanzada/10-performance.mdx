@@ -1,0 +1,288 @@
+---
+id: "07-nativo-ux-avanzada/10-performance"
+title: "Performance"
+stage: 7
+module: "Robustez"
+order: 10
+minutes: 15
+prereqs: ["07-nativo-ux-avanzada/09-offline-first"]
+summary: "Mide antes de optimizar con el Profiler de React Native DevTools y corrige renders innecesarios en una lista con memo y useCallback."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás medir dónde se pierde tiempo en una pantalla con el Profiler de React Native DevTools y eliminar renders innecesarios de una lista con `memo` y `useCallback`.
+
+**Prerrequisitos:** `07-nativo-ux-avanzada/09-offline-first`
+
+## Concepto
+
+Una app lenta rara vez es lenta en todas partes. Casi siempre hay un punto concreto: una lista que vuelve a dibujar cien filas cada vez que escribes una letra, una imagen enorme, un cálculo que se repite en cada render. Optimizar sin medir es adivinar, y adivinar suele llevar a código más complicado sin ninguna mejora.
+
+La analogía: un médico no receta antibióticos a quien dice "me siento mal". Primero toma la temperatura, pide un análisis y encuentra la causa. En performance, el **profiler** es el termómetro y el análisis. `memo` y `useCallback` son medicamentos: útiles cuando el diagnóstico los pide, inútiles o dañinos si se toman "por si acaso".
+
+Documentación oficial: https://reactnative.dev/docs/performance y https://reactnative.dev/docs/react-native-devtools
+
+### Qué significa "lento"
+
+Recuerda la lección de Reanimated: la pantalla se dibuja cada 16 ms. Si el hilo de JavaScript tarda más que eso en responder a un toque o en renderizar, el usuario percibe:
+
+- **Tirones en el scroll**: se pierden fotogramas.
+- **Retraso al escribir**: la letra aparece un instante después de tocar la tecla.
+- **Botones "pegajosos"**: el toque responde tarde.
+
+### Medir en condiciones reales
+
+El modo de desarrollo es mucho más lento que la app publicada: valida props, muestra advertencias y no minifica. Antes de concluir que algo es lento, pruébalo sin modo de desarrollo:
+
+```bash
+npx expo start --no-dev --minify
+```
+
+Y pruébalo en un teléfono de gama media, no solo en el último modelo o en el simulador de tu computadora.
+
+### El Profiler de React Native DevTools
+
+Con la app abierta desde `npx expo start`, pulsa `j` en la terminal para abrir **React Native DevTools**. La pestaña **Profiler** graba qué componentes se renderizaron, cuántas veces y cuánto tardaron:
+
+1. Pulsa el botón de grabar.
+2. Haz en la app la acción lenta (escribir en el buscador, hacer scroll).
+3. Detén la grabación.
+4. Revisa el gráfico de llamas: cada barra es un componente; cuanto más ancha y más amarilla, más tiempo tardó.
+
+En la configuración del Profiler activa "Record why each component rendered". Así, al seleccionar un componente, verás la causa: "props changed: onPress", "parent rendered", "hooks changed". Esa causa es tu diagnóstico. La opción "Highlight updates when components render" dibuja un borde en pantalla cada vez que un componente se vuelve a renderizar: si al escribir una letra se iluminan todas las filas de la lista, ya encontraste el problema.
+
+### Por qué se renderiza de más
+
+Cuando un componente cambia de estado, React vuelve a ejecutar ese componente **y todos sus hijos**, aunque las props de los hijos no hayan cambiado. En la etapa 3 viste `memo`, `useMemo` y `useCallback`; aquí es donde se vuelven importantes.
+
+```tsx
+function NotesScreen() {
+  const [query, setQuery] = useState("");
+
+  return (
+    <>
+      <TextInput value={query} onChangeText={setQuery} />
+      <FlatList
+        data={notes}
+        renderItem={({ item }) => <NoteRow note={item} onDelete={(id) => remove(id)} />}
+      />
+    </>
+  );
+}
+```
+
+Cada letra cambia `query`, `NotesScreen` se vuelve a renderizar y todas las filas visibles también. Si cada fila es barata, no importa. Si cada fila tarda 2 ms y hay 20 visibles, cada letra cuesta 40 ms: más de dos fotogramas perdidos.
+
+### La corrección: `memo` y `useCallback` juntos
+
+`memo` envuelve un componente para que solo se vuelva a renderizar si sus props cambian. Pero hay una trampa: `(id) => remove(id)` crea una función **nueva** en cada render, así que la prop `onDelete` siempre "cambia" y `memo` no sirve de nada. Por eso van en pareja:
+
+```tsx
+type Props = { note: Note; onDelete: (id: string) => void };
+
+const NoteRow = memo(function NoteRow({ note, onDelete }: Props) {
+  return (
+    <Pressable onLongPress={() => onDelete(note.id)}>
+      <Text>{note.title}</Text>
+    </Pressable>
+  );
+});
+
+function NotesScreen() {
+  const [query, setQuery] = useState("");
+  const handleDelete = useCallback((id: string) => remove(id), []);
+
+  return (
+    <FlatList
+      data={notes}
+      renderItem={({ item }) => <NoteRow note={item} onDelete={handleDelete} />}
+    />
+  );
+}
+```
+
+Ahora `handleDelete` es la misma función entre renders, las props de cada fila no cambian y `memo` evita el render. Lo mismo ocurre con objetos y arreglos creados en línea (`style={{ margin: 8 }}`, `filters={["a"]}`): son nuevos en cada render. Muévelos fuera del componente, a `StyleSheet.create` o a `useMemo`.
+
+<Callout kind="tip">
+  React Compiler puede aplicar estas memorizaciones de forma automática. En Expo se activa con `experiments.reactCompiler` en `app.json`. Si tu proyecto lo usa, escribirás menos `memo` a mano, pero el diagnóstico con el Profiler sigue siendo el mismo.
+</Callout>
+
+### Otras causas frecuentes
+
+- **Cálculos repetidos**: filtrar y ordenar mil notas en cada render. Usa `useMemo` con las dependencias correctas.
+- **Imágenes enormes**: una foto de 4000 píxeles mostrada en una miniatura de 80. Redimensiona al guardar o usa `expo-image`, que gestiona caché y tamaño.
+- **`console.log` en bucles**: cada log cruza al sistema y cuesta tiempo. Quítalos de las rutas críticas.
+- **Listas largas sin virtualizar**: un `ScrollView` con `map` de mil elementos. Usa `FlatList` o `FlashList`.
+
+## Práctica
+
+El Snack tiene una lista donde cada fila tarda 2 ms en renderizarse a propósito. Cada fila muestra cuántas veces se ha renderizado. Escribe en el campo de búsqueda con el interruptor apagado: el contador de todas las filas sube con cada letra. Enciende "Optimizado" y vuelve a escribir: las filas ya no se renderizan.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  code={`import { memo, useCallback, useRef, useState } from "react";
+import { FlatList, Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+
+type Item = { id: string; title: string };
+type RowProps = { item: Item; onSelect: (id: string) => void };
+
+const ITEMS: Item[] = Array.from({ length: 200 }, (_, i) => ({ id: String(i), title: "Nota " + (i + 1) }));
+
+function Row({ item, onSelect }: RowProps) {
+  const renders = useRef(0);
+  renders.current += 1;
+  const start = Date.now();
+  while (Date.now() - start < 2) {
+    // Simulates an expensive row: 2 ms per render.
+  }
+  return (
+    <Pressable style={styles.row} onPress={() => onSelect(item.id)}>
+      <Text>{item.title} · renders: {renders.current}</Text>
+    </Pressable>
+  );
+}
+
+const MemoRow = memo(Row);
+
+export default function App() {
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<string | null>(null);
+  const [optimized, setOptimized] = useState(false);
+
+  const stableSelect = useCallback((id: string) => setSelected(id), []);
+  const inlineSelect = (id: string) => setSelected(id);
+  const RowComponent = optimized ? MemoRow : Row;
+  const onSelect = optimized ? stableSelect : inlineSelect;
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.bar}>
+        <Text>Optimizado</Text>
+        <Switch value={optimized} onValueChange={setOptimized} />
+      </View>
+      <TextInput style={styles.input} value={query} onChangeText={setQuery} placeholder="Buscar" />
+      <Text>Seleccionada: {selected ?? "ninguna"}</Text>
+      <FlatList
+        data={ITEMS}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => <RowComponent item={item} onSelect={onSelect} />}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, paddingTop: 60, paddingHorizontal: 16, gap: 8 },
+  bar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  input: { borderWidth: 1, borderColor: "#999999", borderRadius: 8, padding: 10 },
+  row: { paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: "#cccccc" }
+});`}
+/>
+
+Cuando trabajes en tu propia app, sigue estos pasos para perfilar una pantalla:
+
+<Checklist
+  id="07-nativo-ux-avanzada/10-performance-perfilado"
+  items={[
+    "Reproduje la lentitud con npx expo start --no-dev --minify en un teléfono real",
+    "Abrí React Native DevTools pulsando j en la terminal de Expo",
+    "Activé Record why each component rendered en el Profiler",
+    "Grabé la acción lenta y encontré el componente más costoso en el gráfico de llamas",
+    "Anoté la causa del render (props, estado, padre) antes de cambiar código",
+    "Apliqué una sola corrección (memo, useCallback, useMemo o mover objetos fuera del render)",
+    "Volví a grabar y comprobé que el tiempo bajó; si no bajó, revertí el cambio"
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Filtrar sin recalcular"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="55.0.0"
+      code={`import { useMemo, useState } from "react";
+import { Button, StyleSheet, Text, TextInput, View } from "react-native";
+
+const NOTES = Array.from({ length: 5000 }, (_, i) => "Nota " + (i + 1));
+let filterRuns = 0;
+
+export default function App() {
+  const [query, setQuery] = useState("");
+  const [dark, setDark] = useState(false);
+
+  const results = useMemo(() => {
+    filterRuns += 1;
+    return NOTES.filter((note) => note.includes(query));
+  }, [query]);
+
+  return (
+    <View style={[styles.container, dark && styles.dark]}>
+      <TextInput style={styles.input} value={query} onChangeText={setQuery} placeholder="Buscar" />
+      <Button title="Cambiar tema" onPress={() => setDark(!dark)} />
+      <Text style={dark && styles.lightText}>Resultados: {results.length}</Text>
+      <Text style={dark && styles.lightText}>Veces que se filtró: {filterRuns}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", padding: 24, gap: 12, backgroundColor: "#ffffff" },
+  dark: { backgroundColor: "#1a1a1a" },
+  lightText: { color: "#ffffff" },
+  input: { borderWidth: 1, borderColor: "#999999", borderRadius: 8, padding: 10, backgroundColor: "#ffffff" }
+});`}
+    />
+  }
+>
+  Crea una pantalla con 5000 notas, un campo de búsqueda y un botón que cambia entre tema claro y oscuro. Muestra cuántas notas coinciden con la búsqueda y cuántas veces se ha ejecutado el filtro. Usa `useMemo` para que cambiar el tema no vuelva a filtrar: el contador solo debe subir cuando cambia el texto de búsqueda.
+</Challenge>
+
+## Errores comunes
+
+**Optimizar sin medir.** Se ve como `memo` y `useCallback` en todos los componentes del proyecto. Ocurre porque "más memo parece más rápido". Se detecta porque el código es más difícil de leer y el Profiler no muestra ninguna mejora. Solución: mide, corrige el componente que el Profiler señala y vuelve a medir.
+
+**`memo` con props que cambian siempre.** La fila está envuelta en `memo` pero se sigue renderizando en cada letra. Ocurre porque recibe una función, un objeto o un arreglo creado en línea. Se detecta en el Profiler con la causa "props changed" apuntando a esa prop. Solución: `useCallback` para funciones, `useMemo` o constantes fuera del componente para objetos.
+
+**Medir en modo de desarrollo.** La app parece lenta en el simulador y se pierde tiempo optimizando algo que en producción va bien. Ocurre porque el modo de desarrollo añade validaciones. Se detecta comparando con `npx expo start --no-dev --minify`. Solución: confirma cada problema sin modo de desarrollo y en un teléfono real.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué herramienta muestra qué componentes se renderizaron, cuántas veces y por qué en React Native?", back: "El Profiler de React Native DevTools, que se abre pulsando j en la terminal de Expo." },
+    { front: "¿Por qué memo no evita el render si le pasas una función flecha creada en línea?", back: "Porque la función es nueva en cada render, así que la prop cambia siempre; hay que estabilizarla con useCallback." },
+    { front: "¿Cómo pruebas la performance de una app Expo sin el modo de desarrollo?", back: "Con npx expo start --no-dev --minify, idealmente en un teléfono real de gama media." },
+    { front: "¿Cuándo conviene usar useMemo?", back: "Cuando un cálculo costoso (filtrar, ordenar) se repite en renders donde sus dependencias no cambiaron." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Al escribir en un buscador, todas las filas de la lista se vuelven a renderizar. ¿Cuál es el primer paso?",
+      options: [
+        { text: "Envolver todos los componentes en memo", correct: false, feedback: "Sin diagnóstico, puede no servir y complica el código." },
+        { text: "Grabar con el Profiler y ver por qué se renderiza cada fila", correct: true, feedback: "Correcto: primero el diagnóstico." },
+        { text: "Cambiar a FlashList", correct: false, feedback: "Puede ayudar al scroll, pero no evita renders causados por el padre." }
+      ]
+    },
+    {
+      prompt: "Una fila con memo recibe onPress={() => open(id)}. ¿Qué ocurre cuando el padre se renderiza?",
+      options: [
+        { text: "La fila no se renderiza gracias a memo", correct: false, feedback: "La función en línea es nueva cada vez, así que la prop cambia." },
+        { text: "La fila se renderiza porque onPress es una función nueva", correct: true, feedback: "Correcto: estabilízala con useCallback." },
+        { text: "La app lanza un error", correct: false, feedback: "Funciona, solo que memo no aporta nada." }
+      ]
+    },
+    {
+      prompt: "¿Dónde deberías confirmar que un problema de performance es real?",
+      options: [
+        { text: "En el simulador en modo de desarrollo", correct: false, feedback: "El modo de desarrollo es más lento que la app publicada." },
+        { text: "En un teléfono real, sin modo de desarrollo", correct: true, feedback: "Correcto: son las condiciones de tus usuarios." },
+        { text: "En la vista previa web de Snack", correct: false, feedback: "La web no representa el rendimiento nativo." }
+      ]
+    }
+  ]}
+/>
