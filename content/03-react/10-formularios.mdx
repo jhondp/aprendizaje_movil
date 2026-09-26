@@ -1,0 +1,275 @@
+---
+id: "03-react/10-formularios"
+title: "Formularios"
+stage: 3
+module: "Composición"
+order: 10
+minutes: 12
+prereqs: ["03-react/09-context"]
+summary: "Aprende a construir un formulario controlado en React, prevenir el envío por defecto del navegador, y mostrar un mensaje de validación antes de aceptar los datos."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a poder construir un formulario controlado con `<form>`, manejar su envío con `onSubmit`, y validar un campo mostrando un mensaje de error antes de aceptar los datos.
+
+**Prerrequisitos:** `03-react/09-context`
+
+## Concepto
+
+Piensa en un formulario de papel que entregas en una ventanilla: la persona que lo recibe revisa que esté completo antes de aceptarlo, y si falta algo, te lo devuelve señalando exactamente qué corregir, en lugar de archivarlo incompleto. Un formulario en React funciona igual: antes de aceptar los datos (por ejemplo, antes de agregar una tarea a una lista), revisas que cumplan una condición y, si no la cumplen, se lo indicas a quien lo llenó en lugar de procesarlo a medias.
+
+### Recordando el input controlado
+
+En la lección "State y eventos" ya viste el patrón base: un input cuyo `value` viene del estado y cuyo `onChange` actualiza ese estado.
+
+```tsx
+function TaskForm() {
+  const [title, setTitle] = useState("");
+  return <input value={title} onChange={(event) => setTitle(event.target.value)} />;
+}
+```
+
+Un formulario completo agrupa uno o más de estos inputs controlados dentro de un elemento `<form>`, y agrega un manejador para el momento en que el formulario se envía.
+
+### Manejar el envío con onSubmit
+
+```tsx
+function TaskForm({ onAdd }: { onAdd: (title: string) => void }) {
+  const [title, setTitle] = useState("");
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    onAdd(title);
+    setTitle("");
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input value={title} onChange={(event) => setTitle(event.target.value)} />
+      <button type="submit">Agregar</button>
+    </form>
+  );
+}
+```
+
+`event.preventDefault()` es la línea más importante de este bloque: el comportamiento por defecto de un `<form>` en el navegador es recargar la página y enviar los datos como si fuera un formulario clásico de HTML, sin JavaScript. Eso destruiría todo el estado de tu aplicación de React en ese mismo instante. Al llamar a `preventDefault()`, le dices al navegador "yo me encargo de este envío", y el control queda enteramente en tu código.
+
+### Validar antes de aceptar
+
+Agregar validación significa revisar los datos antes de llamar a la función que los acepta, y guardar un mensaje de error en estado cuando no son válidos:
+
+```tsx
+function TaskForm({ onAdd }: { onAdd: (title: string) => void }) {
+  const [title, setTitle] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = title.trim();
+    if (trimmed.length < 3) {
+      setError("El título debe tener al menos 3 caracteres.");
+      return;
+    }
+    setError(null);
+    onAdd(trimmed);
+    setTitle("");
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Nueva tarea" />
+      <button type="submit">Agregar</button>
+      {error && <p role="alert">{error}</p>}
+    </form>
+  );
+}
+```
+
+Tres decisiones importan aquí: la validación se hace dentro del propio `handleSubmit`, antes de llamar a `onAdd`, así que datos inválidos nunca llegan a quien procesa el formulario; el mensaje de error vive en su propio estado (`error`), separado del valor del campo (`title`), porque son dos cosas distintas: una es el dato, la otra es la retroalimentación sobre ese dato; y `setError(null)` limpia un error anterior en cuanto el envío es válido, para que el mensaje no quede pegado en pantalla después de corregirlo.
+
+### Cuándo validar: en cada tecla o al enviar
+
+Validar en cada tecla (dentro de `onChange`) da retroalimentación inmediata, pero puede resultar molesto si marca un error mientras el usuario todavía está escribiendo la primera letra. Validar solo en `onSubmit`, como en el ejemplo, evita ese ruido, a costa de que el usuario no se entera del problema hasta que intenta enviar. Una alternativa común es validar en el evento `onBlur` (cuando el campo pierde el foco), un punto intermedio que no cubre esta lección pero que sigue el mismo principio: guardar el resultado de la validación en estado y mostrarlo condicionalmente en el JSX.
+
+Documentación oficial: [react.dev/reference/react-dom/components/input](https://react.dev/reference/react-dom/components/input) y [react.dev/reference/react-dom/components/form](https://react.dev/reference/react-dom/components/form).
+
+## Práctica
+
+El siguiente Sandpack implementa `TaskForm` con validación de longitud mínima y muestra las tareas agregadas en una lista.
+
+```tsx
+function TaskForm({ onAdd }: { onAdd: (title: string) => void }) {
+  const [title, setTitle] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = title.trim();
+    if (trimmed.length < 3) {
+      setError("El título debe tener al menos 3 caracteres.");
+      return;
+    }
+    setError(null);
+    onAdd(trimmed);
+    setTitle("");
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Nueva tarea" />
+      <button type="submit">Agregar</button>
+      {error && <p role="alert">{error}</p>}
+    </form>
+  );
+}
+```
+
+<Sandpack
+  files={{
+    '/App.tsx': `import { useState } from "react";
+
+function TaskForm({ onAdd }: { onAdd: (title: string) => void }) {
+  const [title, setTitle] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = title.trim();
+    if (trimmed.length < 3) {
+      setError("El título debe tener al menos 3 caracteres.");
+      return;
+    }
+    setError(null);
+    onAdd(trimmed);
+    setTitle("");
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Nueva tarea" />
+      <button type="submit">Agregar</button>
+      {error && <p role="alert" style={{ color: "crimson" }}>{error}</p>}
+    </form>
+  );
+}
+
+export default function App() {
+  const [tasks, setTasks] = useState<string[]>([]);
+
+  function handleAdd(title: string) {
+    setTasks((previous) => [...previous, title]);
+  }
+
+  return (
+    <div>
+      <TaskForm onAdd={handleAdd} />
+      <ul>
+        {tasks.map((title, index) => (
+          <li key={title + index}>{title}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}`,
+  }}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Formulario de registro con dos campos"
+  solution={
+    <Sandpack
+      files={{
+        '/App.tsx': `import { useState } from "react";
+
+function SignupForm({ onSubmit }: { onSubmit: (email: string) => void }) {
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!email.includes("@")) {
+      setError("Ingresa un correo válido.");
+      return;
+    }
+    setError(null);
+    onSubmit(email);
+    setEmail("");
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Correo" />
+      <button type="submit">Registrarse</button>
+      {error && <p role="alert">{error}</p>}
+    </form>
+  );
+}
+
+export default function App() {
+  const [registered, setRegistered] = useState<string[]>([]);
+  return (
+    <div>
+      <SignupForm onSubmit={(email) => setRegistered((previous) => [...previous, email])} />
+      <ul>
+        {registered.map((email) => (
+          <li key={email}>{email}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}`,
+      }}
+    />
+  }
+>
+  Escribe un componente `SignupForm` con un input controlado de correo electrónico y un botón "Registrarse". Al enviar, valida que el valor contenga el carácter `@`; si no lo contiene, muestra un mensaje de error y no llames a `onSubmit`. Si es válido, llama a `onSubmit(email)`, limpia el campo y borra cualquier error anterior. No olvides `event.preventDefault()`.
+</Challenge>
+
+## Errores comunes
+
+**Olvidar `event.preventDefault()`.** Sin esa línea, al enviar el formulario el navegador recarga la página completa como si fuera un formulario clásico de HTML, perdiendo todo el estado de React en el proceso. Se detecta porque la página "parpadea" y se reinicia al enviar, en lugar de actualizarse solo con JavaScript.
+
+**Dejar el input sin `value`, o alternar entre un string y `undefined`.** Si el input no recibe `value` en absoluto, el navegador lo maneja de forma no controlada (el DOM guarda el valor, no React); si alterna entre un `value` definido y `undefined` según alguna condición, React muestra la advertencia "A component is changing an uncontrolled input to be controlled". Se detecta por ese mensaje exacto en la consola; la solución es inicializar el estado siempre con un string, nunca con `undefined`.
+
+**Mostrar el error de validación desde la primera tecla, antes de que el usuario termine de escribir.** Si validas dentro del `onChange` y muestras el error de inmediato, el usuario ve un mensaje de "muy corto" mientras todavía está escribiendo la primera letra, lo cual se siente como un regaño prematuro. Se detecta pidiendo a alguien que use el formulario y observando si el mensaje aparece y desaparece de forma molesta mientras escribe; la solución más simple es validar en `onSubmit`, como en el ejemplo.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué hace event.preventDefault() en el envío de un formulario de React?", back: "Evita que el navegador recargue la página con el comportamiento por defecto de un formulario HTML, dejando el control del envío en el código de React." },
+    { front: "¿Dónde conviene guardar el mensaje de error de un campo de formulario?", back: "En su propio estado, separado del valor del campo, porque el dato y la retroalimentación sobre el dato son cosas distintas." },
+    { front: "¿Qué advertencia muestra React si un input alterna entre value definido y undefined?", back: "'A component is changing an uncontrolled input to be controlled', porque el input pasa de no controlado a controlado entre renders." },
+    { front: "¿Cuál es una ventaja de validar en onSubmit en lugar de en cada tecla?", back: "Evita mostrar mensajes de error mientras el usuario todavía está escribiendo, reduciendo el ruido en la experiencia." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué ocurre si no llamas a event.preventDefault() en el manejador de onSubmit de un formulario?",
+      options: [
+        { text: "El navegador recarga la página con el comportamiento por defecto de un formulario HTML", correct: true, feedback: "Correcto: y con eso se pierde todo el estado de la aplicación de React." },
+        { text: "El formulario simplemente no se envía", correct: false, feedback: "Se envía, pero con el comportamiento nativo del navegador, que recarga la página." },
+        { text: "React lanza un error en la consola", correct: false, feedback: "No hay ningún error de React; el problema es una recarga completa de página, silenciosa para React." },
+      ],
+    },
+    {
+      prompt: "¿Por qué conviene guardar el error de validación en un estado separado del valor del campo?",
+      options: [
+        { text: "Porque TypeScript no permite tener dos useState en el mismo componente", correct: false, feedback: "Un componente puede tener tantos useState como necesite." },
+        { text: "Porque el dato ingresado y el mensaje de retroalimentación sobre ese dato son cosas distintas que cambian en momentos distintos", correct: true, feedback: "Correcto: separarlos hace más simple limpiar el error sin tocar el valor del campo." },
+        { text: "Porque el valor del campo no puede mostrarse en el JSX si hay un error", correct: false, feedback: "El valor del campo y el mensaje de error se muestran de forma independiente en el JSX." },
+      ],
+    },
+    {
+      prompt: "Si validas dentro de onChange y muestras el error de inmediato en cada tecla, ¿qué problema de experiencia puede aparecer?",
+      options: [
+        { text: "El formulario deja de ser controlado", correct: false, feedback: "Sigue siendo controlado; el problema es de experiencia de usuario, no de control del input." },
+        { text: "El mensaje de error puede aparecer antes de que el usuario termine de escribir, sintiéndose prematuro", correct: true, feedback: "Correcto: por eso muchas validaciones se hacen en onSubmit o en onBlur en lugar de en cada tecla." },
+        { text: "El navegador bloquea el evento onChange", correct: false, feedback: "onChange sigue disparándose normalmente; nada lo bloquea." },
+      ],
+    },
+  ]}
+/>
