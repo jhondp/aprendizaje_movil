@@ -1,0 +1,370 @@
+---
+id: "05-estado-datos-arquitectura/06-arquitectura-hexagonal"
+title: "Arquitectura hexagonal"
+stage: 5
+module: "Arquitectura"
+order: 6
+minutes: 15
+prereqs: ["05-estado-datos-arquitectura/05-sqlite-y-securestore"]
+summary: "Separa las reglas de la app de React, Expo y el almacenamiento con puertos, adaptadores y casos de uso."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás separar una feature en dominio, puerto, caso de uso y adaptador, y cambiar el almacenamiento sin tocar las reglas de la app.
+
+**Prerrequisitos:** `05-estado-datos-arquitectura/05-sqlite-y-securestore`
+
+## Concepto
+
+En la lección anterior escribiste funciones como `addNote(db, title)` que reciben la base SQLite directamente. Funciona, pero tiene un costo escondido: la regla "una nota necesita título" y la decisión "las notas viven en SQLite" quedaron mezcladas en el mismo lugar. Si mañana quieres probar la regla sin un dispositivo, o guardar las notas en una API, tienes que reescribir las dos cosas a la vez.
+
+La arquitectura hexagonal, también llamada de puertos y adaptadores, propone separar esas dos preguntas. Alistair Cockburn la describió así: https://alistair.cockburn.us/hexagonal-architecture/
+
+Piensa en un secador de pelo y un viaje. El secador (tu lógica) funciona igual en cualquier país. Lo que cambia es el enchufe de la pared. El secador define qué forma de clavija necesita (el puerto) y, en cada país, usas un adaptador que conecta esa clavija con el enchufe local. Nadie abre el secador para cambiarle el cable cuando viaja.
+
+### Las piezas
+
+- **Dominio**: los datos y las reglas del negocio. Qué es una nota, qué la hace válida. Son funciones puras de TypeScript.
+- **Puerto**: un contrato que la aplicación necesita del mundo exterior, escrito como un tipo. "Necesito algo que guarde y liste notas."
+- **Caso de uso**: una acción que el usuario puede hacer ("agregar una nota"). Usa el dominio y habla con el exterior solo a través de puertos.
+- **Adaptador**: una implementación concreta de un puerto. Un repositorio en memoria, uno con SQLite, uno con una API.
+- **Interfaz (UI)**: las pantallas de React Native. Llaman a casos de uso; no saben qué adaptador hay detrás.
+
+La regla que sostiene todo es la dirección de las dependencias: **el dominio no importa nada de React ni de Expo**. El caso de uso importa el dominio y el puerto. El adaptador importa el puerto y la librería concreta. Las flechas siempre apuntan hacia el centro.
+
+### Una feature, tres archivos
+
+No necesitas veinte carpetas para empezar. Con la feature de notas bastan tres archivos y la pantalla.
+
+El dominio define la nota y su regla de validación:
+
+```ts
+// src/notes/note.ts
+export type Note = { id: string; title: string; createdAt: string };
+
+export function createNote(title: string, now: Date): Note {
+  const clean = title.trim();
+  if (clean.length === 0) throw new Error("El título es obligatorio");
+  if (clean.length > 80) throw new Error("El título admite hasta 80 caracteres");
+  return { id: String(now.getTime()), title: clean, createdAt: now.toISOString() };
+}
+```
+
+La capa de aplicación declara el puerto y los casos de uso. Fíjate en que `now` llega como función: así un test puede fijar la fecha.
+
+```ts
+// src/notes/notesService.ts
+import { createNote, type Note } from "./note";
+
+export type NotesRepository = {
+  list(): Promise<Note[]>;
+  save(note: Note): Promise<void>;
+};
+
+export function makeAddNote(repository: NotesRepository, now: () => Date) {
+  return async (title: string): Promise<Note> => {
+    const note = createNote(title, now());
+    await repository.save(note);
+    return note;
+  };
+}
+
+export function makeListNotes(repository: NotesRepository) {
+  return (): Promise<Note[]> => repository.list();
+}
+```
+
+El adaptador cumple el puerto. Este guarda en memoria; el de SQLite tendría la misma forma con `runAsync` y `getAllAsync` dentro.
+
+```ts
+// src/notes/inMemoryNotesRepository.ts
+import type { Note } from "./note";
+import type { NotesRepository } from "./notesService";
+
+export function createInMemoryNotesRepository(): NotesRepository {
+  let notes: Note[] = [];
+  return {
+    async list() {
+      return [...notes].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    },
+    async save(note) {
+      notes = [...notes, note];
+    },
+  };
+}
+```
+
+Falta un lugar que conecte todo, llamado **raíz de composición**. Es el único archivo que conoce el adaptador concreto:
+
+```ts
+// src/notes/notesModule.ts
+import { createInMemoryNotesRepository } from "./inMemoryNotesRepository";
+import { makeAddNote, makeListNotes } from "./notesService";
+
+const repository = createInMemoryNotesRepository();
+
+export const addNote = makeAddNote(repository, () => new Date());
+export const listNotes = makeListNotes(repository);
+```
+
+La pantalla importa `addNote` y `listNotes` de ese módulo. Cambiar a SQLite significa escribir `createSqliteNotesRepository` y cambiar una línea en `notesModule.ts`. `note.ts`, `notesService.ts` y la pantalla quedan intactos.
+
+### Qué ganas y qué pagas
+
+Ganas tres cosas. Pruebas las reglas con funciones puras, sin emulador. Cambias de almacenamiento o de API sin reescribir la lógica. Y cada archivo responde a una sola pregunta, lo que facilita leer el código de otra persona.
+
+Pagas con más archivos e indirección. Para una pantalla que solo muestra un texto fijo, esta separación es excesiva. Úsala cuando haya reglas que proteger o cuando sepas que el almacenamiento puede cambiar.
+
+### Un ejemplo real
+
+Esta misma plataforma de aprendizaje sigue la idea. Su código está en `src/` con estas carpetas:
+
+```text
+src/
+├── domain/            # pure rules: notes, progress, spaced repetition
+│   └── notes/
+├── application/
+│   ├── ports/         # Repositories.ts, Store.ts, Clock.ts
+│   └── useCases/      # completeLesson.ts, gradeCard.ts
+├── infrastructure/
+│   └── storage/       # createPersistedStore.ts: the localStorage adapter
+└── ui/                # React components
+```
+
+Los archivos de `src/domain/notes`, `src/domain/progress` y `src/domain/srs` no importan React. Hay una excepción consciente: `src/domain/course/types.ts` importa solo el tipo `ComponentType` de React para describir el componente de una lección, un compromiso pragmático que vale la pena conocer. `src/application/ports/Clock.ts` aplica la misma idea que `now: () => Date` de arriba: el reloj es un puerto, y los tests usan un reloj fijo en lugar del real.
+
+## Práctica
+
+El Snack contiene las cuatro capas en un solo archivo, separadas por comentarios, porque el editor en línea trabaja con un único archivo. Agrega notas y prueba a enviar un título vacío: el error lo lanza el dominio y la pantalla solo lo muestra. Luego lee el código de abajo hacia arriba y comprueba que ninguna función del dominio usa algo de React.
+
+<Snack
+  platform="ios"
+  sdkVersion="56.0.0"
+  code={`import { useEffect, useState } from "react";
+import { Button, FlatList, StyleSheet, Text, TextInput, View } from "react-native";
+
+// domain: pure rules, no React, no Expo
+function createNote(title, now) {
+  const clean = title.trim();
+  if (clean.length === 0) throw new Error("El título es obligatorio");
+  if (clean.length > 80) throw new Error("El título admite hasta 80 caracteres");
+  return { id: String(now.getTime()), title: clean, createdAt: now.toISOString() };
+}
+
+// application: port NotesRepository = { list(), save(note) } and use cases
+const makeAddNote = (repository, now) => async (title) => {
+  const note = createNote(title, now());
+  await repository.save(note);
+  return note;
+};
+const makeListNotes = (repository) => () => repository.list();
+
+// infrastructure: in-memory adapter
+function createInMemoryNotesRepository() {
+  let notes = [];
+  return {
+    list: async () => [...notes].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    save: async (note) => {
+      notes = [...notes, note];
+    },
+  };
+}
+
+// composition root: the only place that knows the adapter
+const repository = createInMemoryNotesRepository();
+const addNote = makeAddNote(repository, () => new Date());
+const listNotes = makeListNotes(repository);
+
+// ui: calls use cases only
+export default function App() {
+  const [notes, setNotes] = useState([]);
+  const [title, setTitle] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    listNotes().then(setNotes);
+  }, []);
+
+  const submit = async () => {
+    try {
+      await addNote(title);
+      setTitle("");
+      setError("");
+      setNotes(await listNotes());
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.row}>
+        <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="Nueva nota" />
+        <Button title="Agregar" onPress={submit} />
+      </View>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <FlatList
+        data={notes}
+        keyExtractor={(n) => n.id}
+        renderItem={({ item }) => <Text style={styles.note}>{item.title}</Text>}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, paddingTop: 64, paddingHorizontal: 16, gap: 12 },
+  row: { flexDirection: "row", gap: 8 },
+  input: { flex: 1, borderWidth: 1, borderColor: "#ccc", borderRadius: 6, padding: 8 },
+  error: { color: "#b00020" },
+  note: { fontSize: 16, paddingVertical: 6 },
+});`}
+/>
+
+Revisa tu propio proyecto de notas con estas reglas de dependencia:
+
+<Checklist
+  id="05-estado-datos-arquitectura/06-arquitectura-hexagonal-reglas"
+  items={[
+    "El dominio no importa react, react-native ni ningún paquete expo-*",
+    "Las reglas de validación de una nota viven en el dominio, no en la pantalla",
+    "El repositorio es un tipo (puerto) declarado en la capa de aplicación",
+    "Los casos de uso reciben el repositorio como parámetro, no lo importan",
+    "Solo la raíz de composición sabe qué adaptador concreto se usa",
+    "La pantalla llama a casos de uso y no toca SQLite ni AsyncStorage directamente"
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Cambiar de adaptador sin tocar el dominio"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="56.0.0"
+      dependencies={{ '@react-native-async-storage/async-storage': '*' }}
+      code={`import { useEffect, useState } from "react";
+import { Button, FlatList, Text, TextInput, View } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+// domain (unchanged)
+function createNote(title, now) {
+  const clean = title.trim();
+  if (clean.length === 0) throw new Error("El título es obligatorio");
+  return { id: String(now.getTime()), title: clean, createdAt: now.toISOString() };
+}
+
+// application (unchanged)
+const makeAddNote = (repository, now) => async (title) => {
+  const note = createNote(title, now());
+  await repository.save(note);
+  return note;
+};
+const makeListNotes = (repository) => () => repository.list();
+
+// infrastructure: new adapter, same port
+function createAsyncStorageNotesRepository(key) {
+  const read = async () => {
+    const raw = await AsyncStorage.getItem(key);
+    try {
+      return raw === null ? [] : JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  };
+  return {
+    list: async () => (await read()).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    save: async (note) => {
+      const notes = await read();
+      await AsyncStorage.setItem(key, JSON.stringify([...notes, note]));
+    },
+  };
+}
+
+// composition root: the only line that changed
+const repository = createAsyncStorageNotesRepository("notes");
+const addNote = makeAddNote(repository, () => new Date());
+const listNotes = makeListNotes(repository);
+
+export default function App() {
+  const [notes, setNotes] = useState([]);
+  const [title, setTitle] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    listNotes().then(setNotes);
+  }, []);
+
+  const submit = async () => {
+    try {
+      await addNote(title);
+      setTitle("");
+      setError("");
+      setNotes(await listNotes());
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  return (
+    <View style={{ flex: 1, paddingTop: 64, paddingHorizontal: 16, gap: 12 }}>
+      <TextInput style={{ borderWidth: 1, borderColor: "#ccc", padding: 8 }} value={title} onChangeText={setTitle} placeholder="Nueva nota" />
+      <Button title="Agregar" onPress={submit} />
+      {error ? <Text style={{ color: "#b00020" }}>{error}</Text> : null}
+      <FlatList data={notes} keyExtractor={(n) => n.id} renderItem={({ item }) => <Text>{item.title}</Text>} />
+    </View>
+  );
+}`}
+    />
+  }
+>
+  Parte del código del Snack de práctica. Escribe un adaptador `createAsyncStorageNotesRepository(key)` que cumpla el mismo puerto (`list` y `save`) guardando el arreglo de notas como JSON en AsyncStorage, con el `JSON.parse` protegido. Cambia solo la raíz de composición para usarlo. Recarga el Snack y comprueba que las notas sobreviven. Ni `createNote` ni los casos de uso deben cambiar.
+</Challenge>
+
+## Errores comunes
+
+**Importar React o Expo desde el dominio.** Se ve como un `note.ts` que hace `import { Alert } from "react-native"` para avisar de un título vacío, o que llama a `SQLite.openDatabaseAsync`. Pasa porque es cómodo resolverlo ahí mismo. El dominio deja de poder probarse sin un dispositivo y queda atado a una librería. Se detecta revisando los `import` de los archivos de dominio: solo deben apuntar a otros archivos de dominio. Solución: el dominio lanza un error y la pantalla decide cómo mostrarlo.
+
+**Importar el adaptador dentro del caso de uso.** Se ve como `import { sqliteRepository } from "./sqliteNotesRepository"` en `notesService.ts`. Ocurre por saltarse la raíz de composición. El caso de uso vuelve a depender de SQLite y el puerto pierde sentido. Se detecta porque no puedes probar el caso de uso sin SQLite. Solución: el caso de uso recibe el repositorio como parámetro.
+
+**Crear capas vacías por anticipado.** Se ve como un proyecto con veinte carpetas y archivos que solo reexportan otros. Pasa por copiar una plantilla empresarial antes de tener el problema. El código se vuelve difícil de navegar sin ganar nada. Se detecta cuando un cambio pequeño obliga a tocar cinco archivos que no tienen lógica. Solución: empieza con una feature y tres archivos, y separa más solo cuando duela.
+
+<Flashcards
+  cards={[
+    { front: "En arquitectura hexagonal, ¿qué es un puerto?", back: "Un contrato, escrito como tipo, de lo que la aplicación necesita del exterior; por ejemplo, un NotesRepository con list y save." },
+    { front: "En arquitectura hexagonal, ¿qué es un adaptador?", back: "Una implementación concreta de un puerto, como un repositorio en memoria, con SQLite o con una API." },
+    { front: "¿Qué regla de dependencias sigue el dominio en arquitectura hexagonal?", back: "El dominio no importa nada de React, React Native ni Expo; las dependencias apuntan hacia el dominio." },
+    { front: "¿Qué es la raíz de composición?", back: "El único lugar que crea los adaptadores concretos y se los pasa a los casos de uso." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Dónde debe vivir la regla \"una nota necesita un título no vacío\"?",
+      options: [
+        { text: "En la pantalla, junto al TextInput", correct: false, feedback: "La pantalla muestra el error, pero la regla es del negocio y debe poder probarse sin UI." },
+        { text: "En el dominio", correct: true, feedback: "Correcto: es una regla de negocio y el dominio es código puro." },
+        { text: "En el adaptador de SQLite", correct: false, feedback: "Si cambias de adaptador, perderías la regla." }
+      ]
+    },
+    {
+      prompt: "Quieres pasar de un repositorio en memoria a uno con SQLite. ¿Qué debería cambiar?",
+      options: [
+        { text: "El dominio, los casos de uso y la pantalla", correct: false, feedback: "Si todo cambia, las capas no están separadas." },
+        { text: "Un adaptador nuevo y la raíz de composición", correct: true, feedback: "Correcto: el puerto se mantiene y solo cambia qué implementación se conecta." },
+        { text: "Solo el tipo del puerto", correct: false, feedback: "El puerto describe lo que la aplicación necesita; no cambia por cambiar de almacenamiento." }
+      ]
+    },
+    {
+      prompt: "¿Por qué el caso de uso recibe now: () => Date en lugar de llamar a new Date() directamente?",
+      options: [
+        { text: "Porque new Date() no funciona en React Native", correct: false, feedback: "new Date() funciona; el motivo es otro." },
+        { text: "Para que un test pueda fijar la fecha y obtener resultados deterministas", correct: true, feedback: "Correcto: el reloj también es un detalle externo que se inyecta." },
+        { text: "Porque es más rápido", correct: false, feedback: "No hay diferencia de rendimiento relevante." }
+      ]
+    }
+  ]}
+/>

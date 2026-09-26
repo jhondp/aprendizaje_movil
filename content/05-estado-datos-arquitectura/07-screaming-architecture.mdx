@@ -1,0 +1,217 @@
+---
+id: "05-estado-datos-arquitectura/07-screaming-architecture"
+title: "Screaming architecture y carpetas por feature"
+stage: 5
+module: "Arquitectura"
+order: 7
+minutes: 10
+prereqs: ["05-estado-datos-arquitectura/06-arquitectura-hexagonal"]
+summary: "Organiza el proyecto en carpetas por feature, cada una con sus capas, para que la estructura cuente qué hace la app."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás organizar un proyecto de Expo en carpetas por feature con las capas `domain`, `application`, `infrastructure` y `ui`, y definir qué puede importar cada una.
+
+**Prerrequisitos:** `05-estado-datos-arquitectura/06-arquitectura-hexagonal`
+
+## Concepto
+
+En la lección anterior separaste la feature de notas en dominio, puerto, caso de uso y adaptador. Queda una pregunta práctica: ¿dónde pongo esos archivos cuando la app tiene notas, frases, ajustes y perfil?
+
+Piensa en el plano de una casa. Al verlo, sabes de inmediato que es una casa: ves cocina, dormitorios, baño. Nadie dibuja el plano agrupando "todas las paredes" en una hoja y "todas las puertas" en otra. Robert C. Martin llamó screaming architecture a esta idea: la estructura del proyecto debe "gritar" qué hace la app, no qué herramientas usa. Artículo original: https://blog.cleancoder.com/uncle-bob/2011/09/30/Screaming-Architecture.html
+
+### Por capa o por feature
+
+Hay dos formas comunes de ordenar carpetas. **Por capa** o tipo de archivo:
+
+```text
+src/
+├── components/
+├── hooks/
+├── screens/
+├── services/
+└── stores/
+```
+
+Esta estructura grita "React". Para cambiar algo de las notas abres cinco carpetas, y nada impide que `services/` importe de `screens/`.
+
+**Por feature**, cada carpeta es una capacidad de la app y adentro repite las capas de la lección anterior:
+
+```text
+src/
+├── app/                  # Expo Router routes, thin
+│   ├── _layout.tsx
+│   └── index.tsx
+├── features/
+│   ├── notes/
+│   │   ├── domain/
+│   │   ├── application/
+│   │   ├── infrastructure/
+│   │   ├── ui/
+│   │   └── index.ts      # public API of the feature
+│   └── quotes/
+└── shared/               # code with no feature: ui kit, utils
+```
+
+Al abrir `src/features` ves "notas" y "frases". Todo lo que cambia junto vive junto, y borrar una feature es borrar una carpeta.
+
+### Las reglas de cada capa
+
+Las carpetas solo sirven si las reglas de dependencias se respetan. Dentro de una feature:
+
+| Capa | Contiene | Puede importar |
+| --- | --- | --- |
+| `domain` | Tipos y reglas puras | Nada de otras capas ni de React o Expo |
+| `application` | Puertos y casos de uso | `domain` |
+| `infrastructure` | Adaptadores: SQLite, `fetch`, AsyncStorage | `domain`, `application` y librerías externas |
+| `ui` | Pantallas, componentes, hooks de React | `domain`, `application` |
+
+Entre features, la regla es otra: una feature solo importa de otra a través de su `index.ts`. Así `quotes` puede usar el tipo `Note` exportado por `features/notes/index.ts` sin conocer sus carpetas internas.
+
+### Rutas delgadas
+
+Con Expo Router las rutas viven en `src/app/`, y la tentación es escribir toda la pantalla ahí. Mantén esos archivos delgados: importan una pantalla de la feature y la exportan.
+
+```tsx
+// src/app/index.tsx
+import { NotesScreen } from "@/features/notes";
+
+export default NotesScreen;
+```
+
+El alias `@/` apunta a `src/`; Expo lo configura en `tsconfig.json` con `"paths": { "@/*": ["./src/*"] }`. Documentación: https://docs.expo.dev/guides/typescript/#path-aliases
+
+### Un contraejemplo honesto
+
+Esta plataforma de aprendizaje está organizada primero por capa (`src/domain`, `src/application`, `src/infrastructure`, `src/ui`) y dentro de `src/domain` por tema (`notes`, `progress`, `srs`). Es una decisión razonable para una app pequeña con un solo equipo: las capas quedan muy visibles y los puertos se comparten. Cuando las features crecen y distintos equipos trabajan en ellas, agrupar primero por feature reduce los choques. Lo importante no es cuál eliges, sino que las reglas de dependencias sean las mismas y se revisen.
+
+## Práctica
+
+Recorre la creación de la estructura de la feature de notas en la terminal. Luego revisa tu proyecto con la lista.
+
+<Terminal
+  steps={[
+    { cmd: "mkdir -p src/features/notes/domain src/features/notes/application src/features/notes/infrastructure src/features/notes/ui", out: "" },
+    { cmd: "tree src/features/notes", out: "src/features/notes\n├── application\n│   ├── addNote.ts\n│   ├── listNotes.ts\n│   └── notesRepository.ts\n├── domain\n│   ├── note.test.ts\n│   └── note.ts\n├── index.ts\n├── infrastructure\n│   └── sqliteNotesRepository.ts\n└── ui\n    ├── NoteForm.tsx\n    └── NotesScreen.tsx\n\n4 directories, 9 files" },
+    { cmd: "cat src/features/notes/index.ts", out: "export type { Note } from \"./domain/note\";\nexport { NotesScreen } from \"./ui/NotesScreen\";" },
+    { cmd: "grep -rnE \"from \\\"(react|react-native|expo)\" src/features/notes/domain", out: "" }
+  ]}
+/>
+
+El último comando busca imports de React o Expo dentro del dominio. Que no imprima nada es el resultado esperado.
+
+<Checklist
+  id="05-estado-datos-arquitectura/07-screaming-architecture-estructura"
+  items={[
+    "Cada feature tiene su carpeta en src/features con domain, application, infrastructure y ui",
+    "Los archivos de src/app solo importan y exportan pantallas de las features",
+    "Cada feature expone lo público en su index.ts",
+    "Ninguna feature importa carpetas internas de otra feature",
+    "El dominio no importa react, react-native ni expo",
+    "El código sin feature propia vive en src/shared"
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Detectar imports prohibidos"
+  solution={
+    <Playground
+      lang="js"
+      code={`const allowed = {
+  domain: [],
+  application: ["domain"],
+  infrastructure: ["domain", "application"],
+  ui: ["domain", "application"],
+};
+
+function isFramework(name) {
+  return name === "react" || name === "react-native" || name === "expo" || name.startsWith("expo-");
+}
+
+const files = [
+  { path: "src/features/notes/domain/note.ts", imports: [] },
+  { path: "src/features/notes/domain/formatNote.ts", imports: ["react-native"] },
+  { path: "src/features/notes/application/addNote.ts", imports: ["../domain/note"] },
+  { path: "src/features/notes/application/loadNotes.ts", imports: ["../infrastructure/sqliteNotesRepository"] },
+  { path: "src/features/notes/infrastructure/sqliteNotesRepository.ts", imports: ["expo-sqlite", "../domain/note"] },
+  { path: "src/features/notes/ui/NotesScreen.tsx", imports: ["react", "react-native", "../application/addNote"] },
+];
+
+function findViolations(files) {
+  const violations = [];
+  for (const file of files) {
+    const layer = file.path.split("/")[3];
+    for (const target of file.imports) {
+      if (target.startsWith("../")) {
+        const targetLayer = target.split("/")[1];
+        if (targetLayer !== layer && !allowed[layer].includes(targetLayer)) {
+          violations.push(file.path + " -> " + target);
+        }
+      } else if ((layer === "domain" || layer === "application") && isFramework(target)) {
+        violations.push(file.path + " -> " + target);
+      }
+    }
+  }
+  return violations;
+}
+
+const violations = findViolations(files);
+violations.forEach((v) => console.log(v));
+console.log(violations.length + " violaciones");`}
+      expected={`src/features/notes/domain/formatNote.ts -> react-native
+src/features/notes/application/loadNotes.ts -> ../infrastructure/sqliteNotesRepository
+2 violaciones`}
+    />
+  }
+>
+  Escribe una función `findViolations(files)` que reciba una lista de archivos con su ruta y sus imports, y devuelva los que rompen las reglas de la tabla. La capa es el cuarto segmento de la ruta (`src/features/notes/<capa>/...`). Un import relativo como `../domain/note` apunta a la capa `domain`. Además, `domain` y `application` no pueden importar `react`, `react-native`, `expo` ni paquetes `expo-*`. Prueba con seis archivos de ejemplo: dos deben fallar, uno en `domain` que importa `react-native` y uno en `application` que importa un adaptador de `infrastructure`. Imprime cada violación y el total.
+</Challenge>
+
+## Errores comunes
+
+**Rutas gordas en `src/app`.** Se ve como `src/app/index.tsx` con doscientas líneas, `useQuery`, SQLite y estilos. Pasa porque Expo Router hace que ese archivo sea lo primero que se abre. La lógica queda atada a la navegación y no se puede reutilizar. Se detecta porque los archivos de `src/app` importan algo distinto de pantallas. Solución: mover la pantalla a `features/<feature>/ui` y dejar la ruta en dos líneas.
+
+**Importar el interior de otra feature.** Se ve como `import { sqliteNotesRepository } from "@/features/notes/infrastructure/sqliteNotesRepository"` dentro de `features/quotes`. Ocurre porque el autocompletado del editor ofrece la ruta completa. Las features quedan acopladas y reorganizar una rompe la otra. Se detecta buscando imports de `features/<otra>/` que no terminen en el nombre de la feature. Solución: exportar lo necesario desde `index.ts`.
+
+**Un `shared` que crece sin control.** Se ve como una carpeta `shared/` con la mitad del código de la app. Pasa porque todo lo que "quizá se reutilice" termina ahí. Se detecta cuando un archivo de `shared` solo lo usa una feature. Solución: el código vive en su feature hasta que una segunda feature lo necesite de verdad.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué propone la screaming architecture?", back: "Que la estructura de carpetas muestre qué hace la app (sus features), no qué frameworks usa." },
+    { front: "En una organización por feature, ¿cuáles son las cuatro capas dentro de cada feature?", back: "domain, application, infrastructure y ui." },
+    { front: "¿Para qué sirve el index.ts de una feature?", back: "Define su API pública; otras features solo importan desde ahí, nunca de sus carpetas internas." },
+    { front: "Con Expo Router, ¿qué deben contener los archivos de src/app?", back: "Poco código: importan una pantalla de una feature y la exportan como ruta." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué estructura \"grita\" que la app gestiona notas y frases?",
+      options: [
+        { text: "src/components, src/hooks, src/services", correct: false, feedback: "Esa estructura muestra tipos de archivo, no lo que hace la app." },
+        { text: "src/features/notes y src/features/quotes", correct: true, feedback: "Correcto: las carpetas de primer nivel nombran capacidades de la app." },
+        { text: "Todos los archivos en src/", correct: false, feedback: "Sin carpetas no hay estructura que comunique nada." }
+      ]
+    },
+    {
+      prompt: "Un archivo en features/notes/application importa ../infrastructure/sqliteNotesRepository. ¿Qué pasa?",
+      options: [
+        { text: "Es correcto: application coordina todo", correct: false, feedback: "application solo puede importar domain; el adaptador se inyecta." },
+        { text: "Rompe la regla de dependencias: el caso de uso queda atado a SQLite", correct: true, feedback: "Correcto: el caso de uso debe recibir el repositorio por parámetro." },
+        { text: "Solo es un problema de estilo", correct: false, feedback: "Tiene consecuencias: ya no puedes probar ni cambiar el almacenamiento por separado." }
+      ]
+    },
+    {
+      prompt: "La feature quotes necesita el tipo Note. ¿Cómo lo importa?",
+      options: [
+        { text: "Desde @/features/notes, que lo reexporta en index.ts", correct: true, feedback: "Correcto: se usa la API pública de la feature." },
+        { text: "Desde @/features/notes/domain/note", correct: false, feedback: "Eso acopla quotes a la estructura interna de notes." },
+        { text: "Copiando el tipo dentro de quotes", correct: false, feedback: "Duplicar el tipo hace que se desincronicen." }
+      ]
+    }
+  ]}
+/>
