@@ -1,0 +1,310 @@
+---
+id: "05-estado-datos-arquitectura/09-react-hook-form-y-zod"
+title: "react-hook-form y zod"
+stage: 5
+module: "Formularios y proyecto"
+order: 9
+minutes: 15
+prereqs: ["05-estado-datos-arquitectura/08-atomic-design"]
+summary: "Construye formularios validados en React Native con react-hook-form, Controller y un esquema de zod."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás construir un formulario de React Native con `react-hook-form`, validar sus campos con un esquema de `zod` y mostrar los errores junto a cada campo.
+
+**Prerrequisitos:** `05-estado-datos-arquitectura/08-atomic-design`
+
+## Concepto
+
+Un formulario de dos campos con `useState` parece sencillo: un estado por campo, otro para los errores, una función que valida al enviar. Con cinco campos, validación al salir de cada uno, un botón que se desactiva mientras se guarda y mensajes de error por campo, ese código se vuelve la parte más larga de la pantalla. Dos librerías reparten el trabajo:
+
+- **react-hook-form** gestiona el estado del formulario: valores, qué campos se tocaron, errores y envío. Documentación: https://react-hook-form.com/get-started
+- **zod** describe la forma válida de los datos en un esquema y valida contra él. Documentación: https://zod.dev/
+
+Piensa en un formulario de aduana. El formulario en papel con sus casillas es react-hook-form: organiza qué escribes y dónde. La lista de reglas del agente ("el pasaporte debe estar vigente", "declara si llevas más de cierto monto") es zod. El agente revisa la hoja contra las reglas y marca con rojo cada casilla que no cumple.
+
+### Instalar
+
+```bash
+npx expo install react-hook-form zod @hookform/resolvers
+```
+
+`@hookform/resolvers` es el puente: convierte un esquema de zod en la función de validación que espera react-hook-form.
+
+### El esquema
+
+```ts
+// src/features/notes/ui/noteFormSchema.ts
+import { z } from "zod";
+
+export const noteFormSchema = z.object({
+  title: z.string().trim().min(1, "El título es obligatorio").max(80, "Máximo 80 caracteres"),
+  body: z.string().max(500, "Máximo 500 caracteres"),
+});
+
+export type NoteFormValues = z.infer<typeof noteFormSchema>;
+```
+
+`z.infer` genera el tipo TypeScript a partir del esquema: `{ title: string; body: string }`. Escribes las reglas una vez y obtienes el tipo gratis. `.trim()` limpia los espacios antes de validar, así que un título de solo espacios falla con "El título es obligatorio".
+
+El esquema vive en `ui` porque describe un formulario. Las reglas de negocio siguen en el dominio, en `createNote`: el formulario da mensajes rápidos al usuario y el dominio protege los datos venga de donde venga la nota.
+
+### useForm y Controller
+
+En la web, react-hook-form conecta campos con `register`. En React Native, `TextInput` no es un input HTML, así que se usa `Controller`, que entrega a tu componente `value`, `onChange` y `onBlur`:
+
+```tsx
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Controller, useForm } from "react-hook-form";
+import { Button, Text, TextInput, View } from "react-native";
+import { noteFormSchema, type NoteFormValues } from "./noteFormSchema";
+
+export function NoteForm({ onSave }: { onSave: (values: NoteFormValues) => Promise<void> }) {
+  const {
+    control,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<NoteFormValues>({
+    resolver: zodResolver(noteFormSchema),
+    defaultValues: { title: "", body: "" },
+  });
+
+  const onSubmit = async (values: NoteFormValues) => {
+    await onSave(values);
+    reset();
+  };
+
+  return (
+    <View>
+      <Controller
+        control={control}
+        name="title"
+        render={({ field: { value, onChange, onBlur } }) => (
+          <TextInput value={value} onChangeText={onChange} onBlur={onBlur} placeholder="Título" />
+        )}
+      />
+      {errors.title ? <Text>{errors.title.message}</Text> : null}
+      <Button title="Guardar" disabled={isSubmitting} onPress={handleSubmit(onSubmit)} />
+    </View>
+  );
+}
+```
+
+Lo esencial:
+
+- `resolver: zodResolver(noteFormSchema)` delega toda la validación en el esquema.
+- `defaultValues` es obligatorio en la práctica: sin él, `value` empieza en `undefined` y el `TextInput` pasa de no controlado a controlado.
+- `onChangeText={onChange}` funciona porque `onChangeText` entrega el texto directamente.
+- `handleSubmit(onSubmit)` valida y solo llama a `onSubmit` si todo es válido, con los valores ya transformados por zod (el título sin espacios sobrantes).
+- `errors.title?.message` es el mensaje que escribiste en el esquema.
+
+### Cuándo se valida
+
+Por defecto, react-hook-form valida al enviar y, después del primer envío, en cada cambio. Con `mode: "onBlur"` valida al salir de cada campo, que en móvil suele sentirse mejor que marcar error mientras la persona aún escribe.
+
+```ts
+useForm<NoteFormValues>({ resolver: zodResolver(noteFormSchema), defaultValues, mode: "onBlur" });
+```
+
+### Reglas entre campos
+
+Algunas reglas comparan dos campos, como confirmar una contraseña. En zod se escriben con `refine` sobre el objeto, y `path` indica en qué campo mostrar el error:
+
+```ts
+const signupSchema = z
+  .object({
+    email: z.email("Escribe un correo válido"),
+    password: z.string().min(8, "La contraseña necesita al menos 8 caracteres"),
+    confirm: z.string(),
+  })
+  .refine((data) => data.password === data.confirm, {
+    message: "Las contraseñas no coinciden",
+    path: ["confirm"],
+  });
+```
+
+## Práctica
+
+El Snack tiene un formulario de nota con título y cuerpo. Envíalo vacío, escribe solo espacios en el título y luego un título de más de 80 caracteres. Observa que cada error aparece debajo de su campo y que la nota guardada muestra el título ya recortado.
+
+<Snack
+  platform="ios"
+  sdkVersion="56.0.0"
+  dependencies={{ 'react-hook-form': '^7.55.0', zod: '^4.0.0', '@hookform/resolvers': '^5.0.0' }}
+  code={`import { useState } from "react";
+import { Button, StyleSheet, Text, TextInput, View } from "react-native";
+import { Controller, useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+
+const noteFormSchema = z.object({
+  title: z.string().trim().min(1, "El título es obligatorio").max(80, "Máximo 80 caracteres"),
+  body: z.string().max(500, "Máximo 500 caracteres"),
+});
+
+export default function App() {
+  const [saved, setSaved] = useState(null);
+  const { control, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
+    resolver: zodResolver(noteFormSchema),
+    defaultValues: { title: "", body: "" },
+    mode: "onBlur",
+  });
+
+  const onSubmit = async (values) => {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    setSaved(values);
+    reset();
+  };
+
+  return (
+    <View style={styles.container}>
+      <Controller
+        control={control}
+        name="title"
+        render={({ field: { value, onChange, onBlur } }) => (
+          <TextInput style={styles.input} value={value} onChangeText={onChange} onBlur={onBlur} placeholder="Título" />
+        )}
+      />
+      {errors.title ? <Text style={styles.error}>{errors.title.message}</Text> : null}
+      <Controller
+        control={control}
+        name="body"
+        render={({ field: { value, onChange, onBlur } }) => (
+          <TextInput style={[styles.input, styles.body]} value={value} onChangeText={onChange} onBlur={onBlur} placeholder="Contenido" multiline />
+        )}
+      />
+      {errors.body ? <Text style={styles.error}>{errors.body.message}</Text> : null}
+      <Button title={isSubmitting ? "Guardando..." : "Guardar"} disabled={isSubmitting} onPress={handleSubmit(onSubmit)} />
+      {saved ? <Text style={styles.saved}>Guardada: "{saved.title}"</Text> : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, paddingTop: 64, paddingHorizontal: 16, gap: 8 },
+  input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 8 },
+  body: { minHeight: 100, textAlignVertical: "top" },
+  error: { color: "#b00020" },
+  saved: { marginTop: 12, color: "#166534" },
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Formulario de registro"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="56.0.0"
+      dependencies={{ 'react-hook-form': '^7.55.0', zod: '^4.0.0', '@hookform/resolvers': '^5.0.0' }}
+      code={`import { useState } from "react";
+import { Button, Text, TextInput, View } from "react-native";
+import { Controller, useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+
+const signupSchema = z
+  .object({
+    email: z.email("Escribe un correo válido"),
+    password: z.string().min(8, "La contraseña necesita al menos 8 caracteres"),
+    confirm: z.string(),
+  })
+  .refine((data) => data.password === data.confirm, {
+    message: "Las contraseñas no coinciden",
+    path: ["confirm"],
+  });
+
+const fields = [
+  { name: "email", placeholder: "Correo", secure: false },
+  { name: "password", placeholder: "Contraseña", secure: true },
+  { name: "confirm", placeholder: "Repite la contraseña", secure: true },
+];
+
+export default function App() {
+  const [done, setDone] = useState(false);
+  const { control, handleSubmit, formState: { errors } } = useForm({
+    resolver: zodResolver(signupSchema),
+    defaultValues: { email: "", password: "", confirm: "" },
+  });
+
+  return (
+    <View style={{ flex: 1, paddingTop: 64, paddingHorizontal: 16, gap: 8 }}>
+      {fields.map((f) => (
+        <View key={f.name} style={{ gap: 4 }}>
+          <Controller
+            control={control}
+            name={f.name}
+            render={({ field: { value, onChange, onBlur } }) => (
+              <TextInput
+                style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 8 }}
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                placeholder={f.placeholder}
+                secureTextEntry={f.secure}
+                autoCapitalize="none"
+              />
+            )}
+          />
+          {errors[f.name] ? <Text style={{ color: "#b00020" }}>{errors[f.name].message}</Text> : null}
+        </View>
+      ))}
+      <Button title="Crear cuenta" onPress={handleSubmit(() => setDone(true))} />
+      {done ? <Text>Registro válido</Text> : null}
+    </View>
+  );
+}`}
+    />
+  }
+>
+  Crea un formulario de registro con tres campos: correo, contraseña y confirmación. El esquema de zod exige un correo válido (`z.email`), una contraseña de al menos 8 caracteres y que la confirmación coincida con la contraseña, mostrando ese último error en el campo de confirmación con `refine` y `path`. Usa `secureTextEntry` en las contraseñas y muestra "Registro válido" cuando el envío pase la validación.
+</Challenge>
+
+## Errores comunes
+
+**Usar `register` con `TextInput`.** Se ve como `<TextInput {...register("title")} />`, copiado de un ejemplo web. Pasa porque la documentación empieza por la web. El campo no actualiza el formulario y `handleSubmit` siempre recibe valores vacíos. Se detecta porque los errores de "obligatorio" aparecen aunque escribiste algo. Solución: `Controller` con `onChangeText={onChange}`.
+
+**Olvidar `defaultValues`.** Se ve como `useForm({ resolver })` sin valores iniciales. Ocurre porque en la web parece opcional. El `TextInput` arranca con `value={undefined}` y React avisa que un componente pasó de no controlado a controlado; además `reset()` no sabe a qué volver. Se detecta por esa advertencia en la consola. Solución: declarar un valor inicial para cada campo.
+
+**Validar dos veces a mano.** Se ve como un `if (title.trim() === "")` dentro de `onSubmit` además del esquema. Pasa por desconfiar de la librería. Las reglas se duplican y terminan diciendo cosas distintas. Se detecta cuando cambias un límite en el esquema y el formulario sigue aplicando el antiguo. Solución: la regla del formulario vive en el esquema; `onSubmit` solo recibe datos válidos.
+
+<Flashcards
+  cards={[
+    { front: "En React Native, ¿cómo se conecta un TextInput a react-hook-form?", back: "Con Controller, pasando value, onChangeText={onChange} y onBlur desde field." },
+    { front: "¿Qué hace z.infer<typeof schema> en zod?", back: "Genera el tipo TypeScript de los datos válidos a partir del esquema." },
+    { front: "¿Para qué sirve @hookform/resolvers en un formulario con zod?", back: "Convierte el esquema de zod en la función de validación que usa react-hook-form (zodResolver)." },
+    { front: "En zod, ¿cómo se valida que dos campos coincidan y se muestra el error en uno de ellos?", back: "Con refine sobre el objeto y la opción path con el nombre del campo." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Cuándo llama handleSubmit(onSubmit) a tu función onSubmit?",
+      options: [
+        { text: "Siempre que se pulsa el botón", correct: false, feedback: "Primero valida; con errores no llama a onSubmit." },
+        { text: "Solo cuando todos los campos pasan la validación del esquema", correct: true, feedback: "Correcto: onSubmit recibe datos válidos y ya transformados." },
+        { text: "Cada vez que cambia un campo", correct: false, feedback: "Eso describe la validación, no el envío." }
+      ]
+    },
+    {
+      prompt: "El esquema tiene title: z.string().trim().min(1). ¿Qué pasa si el usuario escribe solo espacios?",
+      options: [
+        { text: "Es válido porque la cadena no está vacía", correct: false, feedback: "trim se aplica antes de min, así que queda vacía." },
+        { text: "Falla con el mensaje de min", correct: true, feedback: "Correcto: tras recortar, la longitud es 0." },
+        { text: "zod lanza una excepción que cierra la app", correct: false, feedback: "El resolver convierte el fallo en un error del campo." }
+      ]
+    },
+    {
+      prompt: "¿Por qué el formulario usa mode: \"onBlur\" en móvil?",
+      options: [
+        { text: "Para validar al salir del campo y no marcar error mientras la persona escribe", correct: true, feedback: "Correcto: el mensaje aparece cuando termina de escribir." },
+        { text: "Porque React Native no admite validar al enviar", correct: false, feedback: "Validar al enviar es el modo por defecto y funciona." },
+        { text: "Para que el teclado se cierre solo", correct: false, feedback: "mode controla cuándo se valida, no el teclado." }
+      ]
+    }
+  ]}
+/>

@@ -1,0 +1,323 @@
+---
+id: "05-estado-datos-arquitectura/08-atomic-design"
+title: "Atomic design en React Native"
+stage: 5
+module: "Arquitectura"
+order: 8
+minutes: 12
+prereqs: ["05-estado-datos-arquitectura/07-screaming-architecture"]
+summary: "Construye la interfaz en niveles de átomos, moléculas y organismos para reutilizar componentes sin duplicar estilos."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás dividir una pantalla en átomos, moléculas, organismos, plantillas y páginas, y decidir en qué carpeta vive cada componente.
+
+**Prerrequisitos:** `05-estado-datos-arquitectura/07-screaming-architecture`
+
+## Concepto
+
+Ya ordenaste la lógica en capas y features. Falta ordenar la capa `ui`, que suele ser la que más crece. Sin un criterio, cada pantalla dibuja sus propios botones con estilos ligeramente distintos, y cambiar el color principal de la app significa buscar en veinte archivos.
+
+Piensa en un juego de bloques de construcción. Tienes piezas básicas (un bloque de dos por dos), las unes para formar partes reconocibles (una ventana, una puerta), con esas partes armas secciones (una fachada) y con las secciones, un edificio. Si quieres cambiar el color de todas las ventanas, cambias la pieza, no cada edificio. Brad Frost llamó atomic design a esta forma de pensar las interfaces: https://atomicdesign.bradfrost.com/chapter-2/
+
+### Los cinco niveles
+
+- **Átomos**: la pieza más pequeña con sentido propio. Un botón, un campo de texto, una etiqueta. No saben nada de notas ni de usuarios.
+- **Moléculas**: unos pocos átomos que juntos hacen una cosa. Una fila de nota con su título y un botón de borrar.
+- **Organismos**: secciones completas de la pantalla. La lista de notas con su estado vacío.
+- **Plantillas**: la disposición de una pantalla, con huecos para los organismos. Márgenes, encabezado, zona de contenido.
+- **Páginas**: la plantilla con datos reales. En una app de Expo es la pantalla que conecta los casos de uso con la plantilla.
+
+### Un átomo
+
+Un átomo recibe props genéricas y encapsula los estilos. Nadie más en la app define cómo se ve un botón.
+
+```tsx
+// src/shared/ui/atoms/Button.tsx
+import { Pressable, StyleSheet, Text } from "react-native";
+
+type ButtonProps = {
+  label: string;
+  onPress: () => void;
+  variant?: "primary" | "danger";
+};
+
+export function Button({ label, onPress, variant = "primary" }: ButtonProps) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.base, styles[variant], pressed && styles.pressed]}
+    >
+      <Text style={styles.label}>{label}</Text>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  base: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8 },
+  primary: { backgroundColor: "#2563eb" },
+  danger: { backgroundColor: "#dc2626" },
+  pressed: { opacity: 0.7 },
+  label: { color: "#fff", fontWeight: "600" },
+});
+```
+
+### Una molécula y un organismo
+
+La molécula combina átomos y ya conoce un concepto de la app. El organismo decide cómo se ve una sección entera, incluido el caso sin datos.
+
+```tsx
+// src/features/notes/ui/NoteRow.tsx
+type NoteRowProps = { title: string; onDelete: () => void };
+
+export function NoteRow({ title, onDelete }: NoteRowProps) {
+  return (
+    <View style={styles.row}>
+      <Text style={styles.title}>{title}</Text>
+      <Button label="Borrar" variant="danger" onPress={onDelete} />
+    </View>
+  );
+}
+
+// src/features/notes/ui/NoteList.tsx
+type NoteListProps = { notes: Note[]; onDelete: (id: string) => void };
+
+export function NoteList({ notes, onDelete }: NoteListProps) {
+  if (notes.length === 0) return <Text>Todavía no tienes notas.</Text>;
+  return (
+    <FlatList
+      data={notes}
+      keyExtractor={(n) => n.id}
+      renderItem={({ item }) => <NoteRow title={item.title} onDelete={() => onDelete(item.id)} />}
+    />
+  );
+}
+```
+
+Fíjate en qué **no** hacen: no llaman a casos de uso, no leen stores, no hacen `fetch`. Reciben datos y funciones por props. Eso los hace fáciles de reutilizar y de probar. Solo la página, en la cima, conecta la interfaz con la lógica.
+
+### Dónde viven
+
+Combina atomic design con las carpetas por feature de la lección anterior:
+
+```text
+src/
+├── shared/ui/
+│   ├── atoms/        # Button, TextField, Badge: know nothing about the app
+│   ├── molecules/    # generic combos, e.g. SearchBar
+│   └── templates/    # ScreenLayout with safe area and header
+└── features/notes/ui/
+    ├── NoteRow.tsx       # molecule that knows what a note is
+    ├── NoteList.tsx      # organism
+    └── NotesScreen.tsx   # page: calls use cases, fills the template
+```
+
+Los átomos genéricos van a `shared`. Las moléculas y organismos que conocen una entidad de negocio viven en su feature. Esta plataforma usa una variante de la misma idea: sus componentes están en `src/ui/atoms`, `src/ui/molecules`, `src/ui/organisms`, `src/ui/templates` y `src/ui/pages`, y un átomo como `Button.tsx` se reutiliza en todas las páginas.
+
+### No te obsesiones con la clasificación
+
+La pregunta "¿esto es molécula u organismo?" a veces no tiene una respuesta clara, y no pasa nada. Lo que importa es la dirección: los niveles bajos no conocen a los altos, y los estilos base viven en un solo lugar.
+
+## Práctica
+
+El Snack arma la pantalla de notas con los cinco niveles en un solo archivo. Agrega y borra notas. Después cambia el color de `primary` en el átomo `Button` y observa que todos los botones principales cambian a la vez.
+
+<Snack
+  platform="ios"
+  sdkVersion="56.0.0"
+  code={`import { useState } from "react";
+import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+
+// atom
+function Button({ label, onPress, variant = "primary" }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.button, styles[variant], pressed && styles.pressed]}
+    >
+      <Text style={styles.buttonLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
+// molecule
+function NoteRow({ title, onDelete }) {
+  return (
+    <View style={styles.row}>
+      <Text style={styles.rowTitle}>{title}</Text>
+      <Button label="Borrar" variant="danger" onPress={onDelete} />
+    </View>
+  );
+}
+
+// organism
+function NoteList({ notes, onDelete }) {
+  if (notes.length === 0) return <Text style={styles.empty}>Todavía no tienes notas.</Text>;
+  return (
+    <FlatList
+      data={notes}
+      keyExtractor={(n) => n.id}
+      renderItem={({ item }) => <NoteRow title={item.title} onDelete={() => onDelete(item.id)} />}
+    />
+  );
+}
+
+// template
+function ScreenLayout({ title, children }) {
+  return (
+    <View style={styles.screen}>
+      <Text style={styles.header}>{title}</Text>
+      {children}
+    </View>
+  );
+}
+
+// page
+export default function App() {
+  const [notes, setNotes] = useState([{ id: "1", title: "Comprar pan" }]);
+  const [title, setTitle] = useState("");
+  const add = () => {
+    if (title.trim() === "") return;
+    setNotes([...notes, { id: String(Date.now()), title: title.trim() }]);
+    setTitle("");
+  };
+  const remove = (id) => setNotes(notes.filter((n) => n.id !== id));
+
+  return (
+    <ScreenLayout title="Mis notas">
+      <View style={styles.row}>
+        <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="Nueva nota" />
+        <Button label="Agregar" onPress={add} />
+      </View>
+      <NoteList notes={notes} onDelete={remove} />
+    </ScreenLayout>
+  );
+}
+
+const styles = StyleSheet.create({
+  button: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8 },
+  primary: { backgroundColor: "#2563eb" },
+  danger: { backgroundColor: "#dc2626" },
+  pressed: { opacity: 0.7 },
+  buttonLabel: { color: "#fff", fontWeight: "600" },
+  row: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 6 },
+  rowTitle: { flex: 1, fontSize: 16 },
+  empty: { color: "#666" },
+  screen: { flex: 1, paddingTop: 64, paddingHorizontal: 16, gap: 12 },
+  header: { fontSize: 24, fontWeight: "700" },
+  input: { flex: 1, borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 8 },
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Una molécula de búsqueda"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="56.0.0"
+      code={`import { useState } from "react";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+
+// atoms
+function Button({ label, onPress }) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={styles.button}>
+      <Text style={styles.buttonLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function TextField({ value, onChangeText, placeholder }) {
+  return <TextInput style={styles.input} value={value} onChangeText={onChangeText} placeholder={placeholder} />;
+}
+
+// molecule
+function SearchBar({ value, onChangeText }) {
+  return (
+    <View style={styles.row}>
+      <TextField value={value} onChangeText={onChangeText} placeholder="Buscar notas" />
+      <Button label="Limpiar" onPress={() => onChangeText("")} />
+    </View>
+  );
+}
+
+// page
+const NOTES = ["Comprar pan", "Llamar a Ana", "Pan integral", "Pagar la luz"];
+
+export default function App() {
+  const [query, setQuery] = useState("");
+  const visible = NOTES.filter((n) => n.toLowerCase().includes(query.toLowerCase()));
+  return (
+    <View style={styles.screen}>
+      <SearchBar value={query} onChangeText={setQuery} />
+      {visible.map((n) => (
+        <Text key={n} style={styles.note}>{n}</Text>
+      ))}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, paddingTop: 64, paddingHorizontal: 16, gap: 8 },
+  row: { flexDirection: "row", alignItems: "center", gap: 8 },
+  input: { flex: 1, borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 8 },
+  button: { backgroundColor: "#2563eb", paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8 },
+  buttonLabel: { color: "#fff", fontWeight: "600" },
+  note: { fontSize: 16, paddingVertical: 4 },
+});`}
+    />
+  }
+>
+  Crea un átomo `TextField` que envuelva un `TextInput` con los estilos de la app, y una molécula `SearchBar` que combine `TextField` con el átomo `Button` para limpiar la búsqueda. `SearchBar` recibe `value` y `onChangeText` por props y no guarda estado propio. En la página, usa `SearchBar` para filtrar una lista fija de cuatro notas sin distinguir mayúsculas y minúsculas.
+</Challenge>
+
+## Errores comunes
+
+**Átomos que conocen el negocio.** Se ve como un `Button` que importa el store de notas o un `TextField` que valida títulos de notas. Pasa porque es cómodo resolverlo en el componente que ya existe. El átomo deja de servir en otras pantallas. Se detecta cuando un átomo importa algo de `features/`. Solución: el átomo recibe todo por props y la lógica sube a la página.
+
+**Organismos que hacen `fetch` o llaman a casos de uso.** Se ve como un `NoteList` con un `useQuery` adentro. Ocurre porque "la lista necesita las notas". El organismo queda atado a una fuente de datos y no puedes mostrarlo con datos de ejemplo. Se detecta porque no puedes renderizarlo sin red o sin base de datos. Solución: la página obtiene los datos y los pasa por props.
+
+**Estilos copiados en cada pantalla.** Se ve como tres pantallas con `backgroundColor: "#2563eb"` en su propio botón. Pasa por copiar y pegar para avanzar rápido. Se detecta buscando un color en el proyecto y encontrando muchas coincidencias. Solución: un átomo con variantes y un único lugar para los estilos base.
+
+<Flashcards
+  cards={[
+    { front: "¿Cuáles son los cinco niveles de atomic design?", back: "Átomos, moléculas, organismos, plantillas y páginas." },
+    { front: "En atomic design, ¿qué diferencia a un átomo de una molécula?", back: "El átomo es la pieza mínima y genérica, como un botón; la molécula combina varios átomos para una tarea, como una fila de nota con botón de borrar." },
+    { front: "En atomic design con React Native, ¿qué nivel conecta la interfaz con los casos de uso?", back: "La página, que obtiene los datos y los pasa por props a plantillas y organismos." },
+    { front: "¿Dónde viven los átomos genéricos en una organización por feature?", back: "En src/shared/ui/atoms; las moléculas y organismos que conocen una entidad viven en su feature." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Un componente muestra el título de una nota junto a un botón de borrar. ¿Qué nivel es?",
+      options: [
+        { text: "Átomo", correct: false, feedback: "Combina dos piezas, así que ya no es la mínima." },
+        { text: "Molécula", correct: true, feedback: "Correcto: unos pocos átomos que juntos hacen una tarea." },
+        { text: "Plantilla", correct: false, feedback: "La plantilla define la disposición de una pantalla entera." }
+      ]
+    },
+    {
+      prompt: "¿Qué componente debería llamar al caso de uso que lista las notas?",
+      options: [
+        { text: "El átomo Button", correct: false, feedback: "Los átomos no conocen el negocio." },
+        { text: "El organismo NoteList", correct: false, feedback: "El organismo recibe las notas por props para poder reutilizarse." },
+        { text: "La página NotesScreen", correct: true, feedback: "Correcto: la página conecta la lógica con la interfaz." }
+      ]
+    },
+    {
+      prompt: "Quieres cambiar el color de todos los botones principales. Con atomic design bien aplicado, ¿cuántos archivos tocas?",
+      options: [
+        { text: "Uno: el átomo Button", correct: true, feedback: "Correcto: los estilos base viven en un solo lugar." },
+        { text: "Uno por pantalla", correct: false, feedback: "Eso ocurre cuando cada pantalla define su propio botón." },
+        { text: "Todos los organismos", correct: false, feedback: "Los organismos usan el átomo; no definen su color." }
+      ]
+    }
+  ]}
+/>
