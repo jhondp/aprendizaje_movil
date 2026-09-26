@@ -29,7 +29,7 @@ describe('demo lesson', () => {
       </LessonProvider>,
     );
     expect(screen.getAllByRole('note')).toHaveLength(3); // Callout
-    expect(screen.getAllByRole('button', { name: 'Ejecutar' }).length).toBeGreaterThan(0); // Playground
+    expect(screen.getAllByRole('button', { name: 'Ejecutar' })).toHaveLength(2); // Playground
     expect(screen.getByTestId('sandpack')).toHaveTextContent('/App.tsx'); // Sandpack
     expect(screen.getByTitle('Expo Snack')).toBeInTheDocument(); // Snack
     expect(screen.getByRole('button', { name: 'Siguiente paso' })).toBeInTheDocument(); // Terminal
