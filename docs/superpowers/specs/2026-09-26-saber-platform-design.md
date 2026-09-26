@@ -67,9 +67,13 @@ Every lesson MDX file contains, in this order:
 1. Frontmatter (see section 5.2).
 2. `## Objetivo` — one sentence plus prerequisites (lesson ids).
 3. `## Concepto` — explanation with at least one analogy, 5 to 10 minutes of reading.
-4. `## Práctica` — at least one interactive component appropriate to the stage
-   (`Playground` for stages 0 to 2, `Sandpack` for stage 3, `Snack` for stages
-   4 to 11, plus `Terminal` or `Checklist` where the topic is operational).
+4. `## Práctica` — at least one of `Playground`, `Sandpack`, `Snack`,
+   `Terminal` or `Checklist`. Preferred by stage: `Playground` for stages 0 to
+   2, `Sandpack` for stage 3, `Snack` for stages 4 to 11; `Terminal` or
+   `Checklist` alone is fine when the topic is operational (installing tools,
+   release steps); `Playground` stays valid in any stage for pure logic. The
+   validator enforces only the hard limits: no `Sandpack` or `Snack` in stages
+   0 to 2, no `Snack` in stage 3.
 5. `## Ejercicio` — a `Challenge` with a hidden solution.
 6. `## Errores comunes` — at least two mistakes and how to detect them.
 7. `<Flashcards>` — 3 to 5 cards.
@@ -135,7 +139,7 @@ All live in `src/ui/organisms/interactive/` and are injected through
 | --- | --- | --- |
 | `Playground` | Run JS/TS in the browser, show console output | Transpile with Sucrase, execute inside a sandboxed `iframe` (`sandbox="allow-scripts"`), capture `console.*` via `postMessage`. Works offline. Props: `code`, `lang` (`js` \| `ts`), optional `expected`. |
 | `Sandpack` | React examples with live preview | `@codesandbox/sandpack-react`, template `react-ts`. Needs network. Props: `files`. |
-| `Snack` | Real React Native code with device preview | `iframe` to `https://snack.expo.dev/embedded` with `platform`, `theme` and code encoded in the URL. Needs network. Props: `code`, `dependencies`, `platform`. |
+| `Snack` | Real React Native code with device preview | `iframe` to `https://snack.expo.dev/embedded` with `platform`, `theme` and code encoded in the URL. Needs network. Props: `code: string`, `dependencies?: Record<string, string>` (serialized as `name@version` joined by commas), `platform?: "ios" \| "android" \| "web"`. |
 | `Quiz` | 3 multiple-choice questions | Props: `questions[{ prompt, options[{ text, correct, feedback }] }]`. Records score in progress store. |
 | `Flashcards` | Lesson cards fed into the review deck | Props: `cards[{ front, back }]`. Registers cards under the lesson id. |
 | `Challenge` | Exercise with hidden solution | Props: `title`, children as statement, `solution` as MDX slot. |
@@ -238,7 +242,10 @@ Light theme only for now; tokens make a dark theme a later addition.
   build on every push and PR. `deploy.yml` publishes `dist/` to GitHub Pages on
   `main`.
 - **Formal review**: the repository's bounded review lifecycle runs once after
-  implementation, before the first commit of the platform.
+  all four waves are complete, before the branch is pushed. Per-task commits
+  during implementation are expected and do not trigger it.
+- **Formatting**: `prettier --write` runs before every commit; `prettier --check`
+  is part of `pnpm lint`. Hex colours in CSS are written lowercase.
 
 ## 10. Orchestration plan (20 subagents)
 
