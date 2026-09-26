@@ -1,0 +1,374 @@
+---
+id: "06-calidad-ci/04-testing-hooks-y-mocks"
+title: "Testing de hooks y mocks"
+stage: 6
+module: "Testing"
+order: 4
+minutes: 15
+prereqs: ["06-calidad-ci/03-jest-y-rntl"]
+summary: "Prueba hooks con renderHook y aísla tus componentes de la base de datos con repositorios falsos y jest.mock."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás probar un hook personalizado con `renderHook` y reemplazar un repositorio real por uno falso, ya sea inyectándolo o con `jest.mock`.
+
+**Prerrequisitos:** `06-calidad-ci/03-jest-y-rntl`
+
+## Concepto
+
+Un piloto no aprende a aterrizar con tormenta en un avión real con pasajeros: usa un simulador. El simulador responde a los mandos igual que el avión, pero el clima, la pista y las fallas los controla el instructor. En las pruebas pasa lo mismo: no quieres que una prueba de pantalla dependa de SQLite, de la red o del reloj. Reemplazas esas piezas por **dobles de prueba** que se comportan como tú decides.
+
+### Por qué la arquitectura ayuda
+
+En la etapa anterior separaste la app de notas en capas y definiste un puerto `NotesRepository`. Esa decisión rinde frutos ahora: si la interfaz de usuario solo conoce el puerto, en las pruebas puedes darle cualquier implementación.
+
+```ts
+// src/features/notes/domain/NotesRepository.ts
+export type Note = { id: string; title: string };
+
+export interface NotesRepository {
+  list(): Promise<Note[]>;
+  add(title: string): Promise<Note>;
+}
+```
+
+```ts
+// src/features/notes/ui/useNotes.ts
+import { useEffect, useState } from "react";
+import type { Note, NotesRepository } from "../domain/NotesRepository";
+
+export function useNotes(repository: NotesRepository) {
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    repository.list().then((loaded) => {
+      if (active) {
+        setNotes(loaded);
+        setIsLoading(false);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [repository]);
+
+  const addNote = async (title: string) => {
+    const note = await repository.add(title);
+    setNotes((current) => [...current, note]);
+  };
+
+  return { notes, isLoading, addNote };
+}
+```
+
+### Funciones simuladas con jest.fn
+
+`jest.fn()` crea una función que registra cada llamada y devuelve lo que le indiques. Sirve para dos cosas: controlar respuestas (`mockResolvedValue` para promesas) y verificar interacciones (`toHaveBeenCalledWith`).
+
+```ts
+const list = jest.fn().mockResolvedValue([{ id: "1", title: "Comprar pan" }]);
+await list();
+expect(list).toHaveBeenCalledTimes(1);
+```
+
+### Probar un hook con renderHook
+
+Un hook solo puede ejecutarse dentro de un componente. `renderHook` crea ese componente por ti y expone el valor devuelto en `result.current`. Como el hook carga datos de forma asíncrona, usas `waitFor` para esperar a que termine la carga, y `act` para envolver una acción que actualiza estado. En React Native Testing Library 14, `renderHook` y `act` también se usan con `await`.
+
+```ts
+// src/features/notes/ui/useNotes.test.ts
+import { act, renderHook, waitFor } from "@testing-library/react-native";
+import type { NotesRepository } from "../domain/NotesRepository";
+import { useNotes } from "./useNotes";
+
+function createFakeRepository(): NotesRepository {
+  return {
+    list: jest.fn().mockResolvedValue([{ id: "1", title: "Comprar pan" }]),
+    add: jest.fn(async (title: string) => ({ id: "2", title })),
+  };
+}
+
+describe("useNotes", () => {
+  test("loads notes from the repository", async () => {
+    const repository = createFakeRepository();
+    const { result } = await renderHook(() => useNotes(repository));
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.notes).toEqual([{ id: "1", title: "Comprar pan" }]);
+  });
+
+  test("adds a note through the repository", async () => {
+    const repository = createFakeRepository();
+    const { result } = await renderHook(() => useNotes(repository));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(() => result.current.addNote("Llamar a Luis"));
+
+    expect(repository.add).toHaveBeenCalledWith("Llamar a Luis");
+    expect(result.current.notes).toHaveLength(2);
+  });
+});
+```
+
+Esta prueba no toca SQLite. El repositorio falso se **inyecta** como argumento: es la forma más simple de aislar código y no necesita ninguna magia de Jest.
+
+### Reemplazar un módulo con jest.mock
+
+A veces el componente importa directamente el adaptador real y no puedes pasarle otro. Por ejemplo, la pantalla principal:
+
+```tsx
+// src/features/notes/ui/NotesScreen.tsx
+import { FlatList, Text } from "react-native";
+import { sqliteNotesRepository } from "../infrastructure/sqliteNotesRepository";
+import { useNotes } from "./useNotes";
+
+export function NotesScreen() {
+  const { notes, isLoading } = useNotes(sqliteNotesRepository);
+  if (isLoading) return <Text>Cargando...</Text>;
+  return (
+    <FlatList
+      data={notes}
+      keyExtractor={(note) => note.id}
+      renderItem={({ item }) => <Text>{item.title}</Text>}
+    />
+  );
+}
+```
+
+`jest.mock(ruta, fábrica)` reemplaza el módulo completo en esa suite de pruebas. Jest eleva la llamada al inicio del archivo, antes de los `import`, así que la pantalla recibe la versión falsa:
+
+```tsx
+// src/features/notes/ui/NotesScreen.test.tsx
+import { render, screen } from "@testing-library/react-native";
+import { NotesScreen } from "./NotesScreen";
+
+jest.mock("../infrastructure/sqliteNotesRepository", () => ({
+  sqliteNotesRepository: {
+    list: jest.fn().mockResolvedValue([{ id: "1", title: "Comprar pan" }]),
+    add: jest.fn(),
+  },
+}));
+
+test("shows the notes stored in the repository", async () => {
+  await render(<NotesScreen />);
+
+  expect(await screen.findByText("Comprar pan")).toBeOnTheScreen();
+});
+```
+
+`findByText` espera a que la promesa del repositorio se resuelva y el texto aparezca. Para que los contadores de llamadas no pasen de una prueba a otra, agrega `"clearMocks": true` a la sección `jest` de `package.json`.
+
+### Módulos nativos
+
+`jest-expo` ya simula los módulos nativos del SDK de Expo, pero muchas bibliotecas de terceros publican su propio mock. AsyncStorage, por ejemplo, documenta este:
+
+```ts
+jest.mock("@react-native-async-storage/async-storage", () =>
+  require("@react-native-async-storage/async-storage/jest/async-storage-mock"),
+);
+```
+
+Regla práctica: inyecta dependencias cuando puedas y usa `jest.mock` para lo que no controlas. Cuantos más `jest.mock` necesita una prueba, más acoplado está el código que prueba. Referencias: https://jestjs.io/docs/mock-functions y https://oss.callstack.com/react-native-testing-library/docs/api/misc/render-hook
+
+## Práctica
+
+La pantalla recibe su repositorio como prop. Aquí se usa uno en memoria con una demora artificial, el mismo tipo de doble que usarías en una prueba. Agrega notas y observa el estado de carga inicial.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  code={`import { useEffect, useState } from "react";
+import { Button, StyleSheet, Text, View } from "react-native";
+
+type Note = { id: string; title: string };
+
+interface NotesRepository {
+  list(): Promise<Note[]>;
+  add(title: string): Promise<Note>;
+}
+
+function createInMemoryRepository(initial: Note[]): NotesRepository {
+  const notes = [...initial];
+  const wait = () => new Promise((resolve) => setTimeout(resolve, 600));
+  return {
+    async list() {
+      await wait();
+      return [...notes];
+    },
+    async add(title) {
+      const note = { id: String(notes.length + 1), title };
+      notes.push(note);
+      return note;
+    },
+  };
+}
+
+function useNotes(repository: NotesRepository) {
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    repository.list().then((loaded) => {
+      if (active) {
+        setNotes(loaded);
+        setIsLoading(false);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [repository]);
+
+  const addNote = async (title: string) => {
+    const note = await repository.add(title);
+    setNotes((current) => [...current, note]);
+  };
+
+  return { notes, isLoading, addNote };
+}
+
+const repository = createInMemoryRepository([{ id: "1", title: "Comprar pan" }]);
+
+export default function App() {
+  const { notes, isLoading, addNote } = useNotes(repository);
+  if (isLoading) return <Text style={styles.center}>Cargando...</Text>;
+  return (
+    <View style={styles.container}>
+      {notes.map((note) => (
+        <Text key={note.id}>{note.title}</Text>
+      ))}
+      <Button title="Agregar nota" onPress={() => addNote("Nota " + (notes.length + 1))} />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, paddingTop: 80, paddingHorizontal: 24, gap: 8 },
+  center: { marginTop: 120, textAlign: "center" },
+});`}
+/>
+
+Ejecuta las dos suites de esta lección.
+
+<Terminal
+  steps={[
+    {
+      cmd: "npx jest src/features/notes",
+      out: " PASS  src/features/notes/ui/useNotes.test.ts\n  useNotes\n    ✓ loads notes from the repository (27 ms)\n    ✓ adds a note through the repository (9 ms)\n PASS  src/features/notes/ui/NotesScreen.test.tsx\n  ✓ shows the notes stored in the repository (35 ms)\n\nTest Suites: 2 passed, 2 total\nTests:       3 passed, 3 total\nSnapshots:   0 total\nTime:        1.87 s",
+    },
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Probar un caso de uso con un repositorio falso"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type Note = { id: string; title: string };
+
+interface NotesRepository {
+  list(): Promise<Note[]>;
+  add(title: string): Promise<Note>;
+}
+
+function createInMemoryNotesRepository(initial: Note[] = []): NotesRepository {
+  const notes = [...initial];
+  return {
+    async list() {
+      return [...notes];
+    },
+    async add(title) {
+      const note = { id: String(notes.length + 1), title };
+      notes.push(note);
+      return note;
+    },
+  };
+}
+
+async function addNote(repository: NotesRepository, title: string): Promise<Note> {
+  const clean = title.trim();
+  if (clean === "") throw new Error("Title is required");
+  return repository.add(clean);
+}
+
+function check(name: string, condition: boolean): void {
+  console.log((condition ? "PASS " : "FAIL ") + name);
+}
+
+async function main(): Promise<void> {
+  const repository = createInMemoryNotesRepository();
+  await addNote(repository, "  Comprar pan  ");
+  const notes = await repository.list();
+  check("stores a trimmed title", notes.length === 1 && notes[0].title === "Comprar pan");
+
+  let message = "";
+  try {
+    await addNote(repository, "   ");
+  } catch (error) {
+    message = (error as Error).message;
+  }
+  check("rejects an empty title", message === "Title is required");
+  check("does not store the empty note", (await repository.list()).length === 1);
+}
+
+main();`}
+      expected={`PASS stores a trimmed title
+PASS rejects an empty title
+PASS does not store the empty note`}
+    />
+  }
+>
+  Escribe un repositorio en memoria `createInMemoryNotesRepository` que cumpla la interfaz `NotesRepository` y un caso de uso `addNote(repository, title)` que recorte espacios y rechace títulos vacíos con el error `"Title is required"`. Después escribe tres comprobaciones: el título se guarda recortado, un título vacío se rechaza y el repositorio no guarda la nota rechazada. Usa una función `check(name, condition)` que imprima `PASS` o `FAIL`.
+</Challenge>
+
+## Errores comunes
+
+**Crear el doble dentro del callback de `renderHook`.** Escribes `renderHook(() => useNotes(createFakeRepository()))` y la prueba entra en un bucle o nunca termina de cargar. Ocurre porque cada render crea un repositorio nuevo, cambia la dependencia del efecto y el efecto vuelve a ejecutarse. Se detecta porque `list` aparece llamada muchas veces; la solución es crear el repositorio una vez, fuera del callback.
+
+**Mockear lo que estás probando.** Una prueba de `useNotes` que hace `jest.mock("./useNotes")` siempre pasa, porque verifica el mock y no el código. Pasa al copiar mocks entre archivos sin pensar. Se detecta rompiendo a propósito el código real: si la prueba no falla, no lo está ejecutando.
+
+**Estado de mocks que se filtra entre pruebas.** Una prueba pasa sola pero falla cuando se ejecuta con las demás, porque `toHaveBeenCalledTimes(1)` cuenta llamadas de la prueba anterior. Ocurre sin `clearMocks`. Se detecta ejecutando la prueba aislada con `npx jest -t "nombre de la prueba"` y comparando.
+
+<Flashcards
+  cards={[
+    { front: "¿Para qué sirve renderHook en React Native Testing Library?", back: "Ejecuta un hook dentro de un componente de prueba y expone su valor en result.current." },
+    { front: "¿Qué hace jest.mock(ruta, fábrica)?", back: "Reemplaza el módulo completo por lo que devuelve la fábrica en esa suite, antes de los import." },
+    { front: "¿Qué ventaja tiene inyectar un repositorio en lugar de usar jest.mock?", back: "No depende de la magia de Jest: pasas un doble como argumento y el código queda desacoplado." },
+    { front: "¿Qué hace mockResolvedValue en una función de jest.fn()?", back: "Hace que la función devuelva una promesa resuelta con ese valor." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Un hook carga datos de forma asíncrona. ¿Cómo esperas a que termine en la prueba?",
+      options: [
+        { text: "await waitFor(() => expect(result.current.isLoading).toBe(false))", correct: true, feedback: "Correcto: waitFor reintenta la afirmación hasta que se cumple o vence el tiempo." },
+        { text: "Leer result.current.isLoading justo después de renderHook", correct: false, feedback: "La carga todavía no terminó; verías true." },
+        { text: "Agregar un setTimeout de 5 segundos", correct: false, feedback: "Hace la prueba lenta y frágil." },
+      ],
+    },
+    {
+      prompt: "¿Qué verifica expect(repository.add).toHaveBeenCalledWith(\"Llamar a Luis\")?",
+      options: [
+        { text: "Que la nota se guardó en SQLite", correct: false, feedback: "El repositorio es falso; no hay SQLite." },
+        { text: "Que el hook llamó al repositorio con ese título", correct: true, feedback: "Correcto: verifica la interacción con el puerto." },
+        { text: "Que la nota aparece en pantalla", correct: false, feedback: "Eso se comprueba con una consulta como getByText." },
+      ],
+    },
+    {
+      prompt: "¿Cuándo es más adecuado jest.mock que la inyección de dependencias?",
+      options: [
+        { text: "Siempre, porque es más corto", correct: false, feedback: "Muchos mocks indican código acoplado." },
+        { text: "Cuando el código importa directamente un módulo que no puedes pasarle como argumento", correct: true, feedback: "Correcto: por ejemplo, un adaptador o una biblioteca nativa." },
+        { text: "Nunca, jest.mock está obsoleto", correct: false, feedback: "Es una herramienta vigente y útil en su lugar." },
+      ],
+    },
+  ]}
+/>

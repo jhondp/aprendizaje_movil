@@ -1,0 +1,268 @@
+---
+id: "06-calidad-ci/00-eslint-prettier-y-ts-strict"
+title: "ESLint, Prettier y TypeScript strict"
+stage: 6
+module: "Herramientas"
+order: 0
+minutes: 12
+prereqs: ["05-estado-datos-arquitectura/10-proyecto-app-con-api"]
+summary: "Configura ESLint, Prettier y TypeScript en modo strict para que tu app de Expo detecte errores antes de ejecutarse."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás configurar ESLint, Prettier y TypeScript strict en un proyecto de Expo y ejecutar las tres verificaciones desde la terminal.
+
+**Prerrequisitos:** `05-estado-datos-arquitectura/10-proyecto-app-con-api`
+
+## Concepto
+
+Piensa en cómo se publica un libro. Antes de imprimirlo pasan tres revisiones distintas: el **corrector de estilo** detecta frases confusas y errores que cambian el sentido; el **maquetador** decide márgenes, tipografía y sangrías para que todas las páginas se vean iguales; y el **verificador de datos** comprueba que cada fecha y cada cifra sea coherente con el resto del libro. Ninguno reemplaza al otro. En un proyecto de JavaScript, esas tres revisiones son ESLint, Prettier y TypeScript.
+
+### ESLint: el corrector de estilo
+
+ESLint lee tu código sin ejecutarlo y aplica **reglas**. Cada regla describe un patrón sospechoso: una variable que nunca se usa, un `useEffect` al que le falta una dependencia, una comparación con `==` que puede sorprenderte. Muchas de esas reglas no son de gusto personal: señalan bugs reales antes de que llegues a abrir el simulador.
+
+Expo trae una configuración lista. Un solo comando instala las dependencias y crea el archivo de configuración:
+
+```bash
+npx expo lint
+```
+
+Desde el SDK 53, Expo genera un archivo `eslint.config.js` con el formato "flat config" de ESLint 9:
+
+```js
+// eslint.config.js
+const { defineConfig } = require("eslint/config");
+const expoConfig = require("eslint-config-expo/flat");
+
+module.exports = defineConfig([
+  expoConfig,
+  {
+    ignores: ["dist/*"],
+  },
+]);
+```
+
+`eslint-config-expo` ya incluye las reglas de React, de los hooks (`react-hooks/rules-of-hooks` y `react-hooks/exhaustive-deps`) y de TypeScript. Documentación oficial: https://docs.expo.dev/guides/using-eslint/
+
+### Prettier: el maquetador
+
+Prettier no busca errores: reescribe tu código con un formato único. Comillas, punto y coma, ancho de línea y sangrías quedan decididos por una herramienta, no por discusiones en cada pull request. Se instala junto con dos paquetes que lo integran con ESLint:
+
+```bash
+npx expo install prettier eslint-config-prettier eslint-plugin-prettier --dev
+```
+
+Luego agregas su configuración recomendada a `eslint.config.js`. Así ESLint desactiva las reglas de formato que chocarían con Prettier y reporta las diferencias de formato como problemas:
+
+```js
+// eslint.config.js
+const { defineConfig } = require("eslint/config");
+const expoConfig = require("eslint-config-expo/flat");
+const eslintPluginPrettierRecommended = require("eslint-plugin-prettier/recommended");
+
+module.exports = defineConfig([
+  expoConfig,
+  eslintPluginPrettierRecommended,
+  {
+    ignores: ["dist/*"],
+  },
+]);
+```
+
+Si quieres ajustar alguna opción, crea un archivo `.prettierrc` en la raíz del proyecto. Cambia pocas cosas: el valor de Prettier está en que nadie discute el formato.
+
+```json
+{
+  "singleQuote": true,
+  "printWidth": 100
+}
+```
+
+Documentación oficial: https://prettier.io/docs/en/
+
+### TypeScript strict: el verificador de datos
+
+Ya escribes TypeScript, pero Metro, el bundler de Expo, **no revisa tipos**: elimina las anotaciones y ejecuta el JavaScript resultante. Si un tipo está mal, la app arranca igual. Por eso necesitas ejecutar el compilador aparte, sin generar archivos:
+
+```bash
+npx tsc --noEmit
+```
+
+El modo `strict` activa las comprobaciones que más errores atrapan, como prohibir parámetros con tipo `any` implícito o avisar cuando un valor puede ser `null`. En un proyecto de Expo, `tsconfig.json` queda así:
+
+```json
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true
+  }
+}
+```
+
+### Scripts en package.json
+
+Para no memorizar comandos, declara un script por verificación. Más adelante el pipeline de integración continua ejecutará exactamente estos mismos scripts:
+
+```json
+{
+  "scripts": {
+    "lint": "expo lint --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit"
+  }
+}
+```
+
+La opción `--max-warnings 0` convierte cualquier advertencia en un fallo. Sin ella, ESLint termina con éxito aunque reporte veinte advertencias, y las advertencias que nadie arregla se acumulan hasta que todos las ignoran.
+
+### El orden importa poco, la constancia mucho
+
+Las tres herramientas son rápidas y complementarias. Lo importante es ejecutarlas siempre, no solo cuando te acuerdas. Configura tu editor para formatear al guardar y para mostrar los errores de ESLint en línea: así corriges cada problema en el momento en que lo escribes, cuando todavía tienes el contexto en la cabeza.
+
+## Práctica
+
+Recorre las tres verificaciones sobre un proyecto con problemas. Observa qué detecta cada herramienta.
+
+<Terminal
+  steps={[
+    {
+      cmd: "npx expo lint",
+      out: "/home/ana/notes/app/index.tsx\n   8:9  warning  'unused' is assigned a value but never used  @typescript-eslint/no-unused-vars\n  12:6  warning  React Hook useEffect has a missing dependency: 'query'. Either include it or remove the dependency array  react-hooks/exhaustive-deps\n\n✖ 2 problems (0 errors, 2 warnings)",
+    },
+    {
+      cmd: "npx prettier --check .",
+      out: "Checking formatting...\n[warn] app/index.tsx\n[warn] Code style issues found in the above file. Run Prettier with --write to fix.",
+    },
+    {
+      cmd: "npx tsc --noEmit",
+      out: "app/index.tsx(15,23): error TS7006: Parameter 'text' implicitly has an 'any' type.\n\nFound 1 error in app/index.tsx:15",
+    },
+    {
+      cmd: "npx prettier --write . && npx expo lint && npx tsc --noEmit",
+      out: "app/index.tsx 42ms\n\n✔ No problems found",
+    },
+  ]}
+/>
+
+El siguiente componente funciona, pero tiene exactamente el bug que ESLint señaló con `react-hooks/exhaustive-deps`. Escribe en el campo de texto y observa que el contador nunca cambia.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  code={`import { useEffect, useState } from "react";
+import { StyleSheet, Text, TextInput, View } from "react-native";
+
+export default function App() {
+  const [query, setQuery] = useState("");
+  const [length, setLength] = useState(0);
+  const unused = 42;
+
+  useEffect(() => {
+    setLength(query.length);
+  }, []); // missing dependency: query
+
+  return (
+    <View style={styles.container}>
+      <TextInput
+        style={styles.input}
+        placeholder="Buscar notas"
+        value={query}
+        onChangeText={setQuery}
+      />
+      <Text>Caracteres: {length}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", padding: 24, gap: 12 },
+  input: { borderWidth: 1, borderColor: "#999", borderRadius: 8, padding: 12 },
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Deja el componente sin advertencias"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="55.0.0"
+      code={`import { useState } from "react";
+import { StyleSheet, Text, TextInput, View } from "react-native";
+
+export default function App() {
+  const [query, setQuery] = useState("");
+  const length = query.length;
+
+  return (
+    <View style={styles.container}>
+      <TextInput
+        style={styles.input}
+        placeholder="Buscar notas"
+        value={query}
+        onChangeText={setQuery}
+      />
+      <Text>Caracteres: {length}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", padding: 24, gap: 12 },
+  input: { borderWidth: 1, borderColor: "#999", borderRadius: 8, padding: 12 },
+});`}
+    />
+  }
+>
+  Corrige el componente de la práctica para que `npx expo lint` no reporte ninguna advertencia y el contador se actualice al escribir. Elimina la variable sin uso y resuelve la dependencia faltante. Pista: el número de caracteres se puede calcular a partir de `query` en cada render, sin estado adicional ni efecto.
+</Challenge>
+
+## Errores comunes
+
+**Confiar en que Metro revisa tipos.** La app arranca sin errores aunque `tsc` reporte diez. Ocurre porque Metro solo transpila y descarta los tipos. Se detecta ejecutando `npx tsc --noEmit`: si nunca lo ejecutas, tus tipos son decoración.
+
+**Silenciar `exhaustive-deps` con un comentario.** Aparece como `// eslint-disable-next-line react-hooks/exhaustive-deps` encima de un efecto. Suele ocurrir porque agregar la dependencia provoca un bucle, y el comentario "lo arregla". En realidad oculta un valor desactualizado. Se detecta buscando `eslint-disable` en el repositorio; la solución habitual es calcular el valor en el render o mover la lógica dentro del efecto.
+
+**ESLint y Prettier peleando por el formato.** Guardas el archivo, Prettier lo formatea y ESLint marca error en la misma línea. Pasa cuando falta `eslint-config-prettier` o la configuración recomendada no está incluida. Se detecta porque `prettier --check` pasa pero `expo lint` reporta reglas de formato como `indent` o `quotes`.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué comando de Expo configura y ejecuta ESLint en un proyecto?", back: "npx expo lint" },
+    { front: "¿Por qué hay que ejecutar tsc --noEmit si Metro ya compila la app?", back: "Porque Metro elimina los tipos sin revisarlos; solo tsc verifica que sean correctos." },
+    { front: "¿Qué diferencia hay entre ESLint y Prettier?", back: "ESLint detecta patrones de código sospechosos; Prettier solo reescribe el formato." },
+    { front: "¿Para qué sirve la opción --max-warnings 0 de ESLint?", back: "Hace que cualquier advertencia cuente como fallo, para que no se acumulen." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué herramienta detecta que a un useEffect le falta una dependencia?",
+      options: [
+        { text: "ESLint", correct: true, feedback: "Correcto: la regla react-hooks/exhaustive-deps lo reporta." },
+        { text: "Prettier", correct: false, feedback: "Prettier solo cambia el formato, no analiza la lógica." },
+        { text: "Metro", correct: false, feedback: "Metro empaqueta el código, no aplica reglas de análisis." },
+      ],
+    },
+    {
+      prompt: "Una función tiene un parámetro sin tipo y strict está activo. ¿Qué pasa al ejecutar la app con Expo?",
+      options: [
+        { text: "La app no arranca", correct: false, feedback: "Metro descarta los tipos y la app arranca igual." },
+        { text: "La app arranca, pero tsc --noEmit reporta el error", correct: true, feedback: "Correcto: la verificación de tipos es un paso aparte." },
+        { text: "Prettier agrega el tipo automáticamente", correct: false, feedback: "Prettier no infiere ni agrega tipos." },
+      ],
+    },
+    {
+      prompt: "¿Qué hace npx prettier --check .?",
+      options: [
+        { text: "Reescribe todos los archivos", correct: false, feedback: "Eso lo hace --write." },
+        { text: "Informa qué archivos no cumplen el formato sin modificarlos", correct: true, feedback: "Correcto: por eso es la opción adecuada para CI." },
+        { text: "Ejecuta las pruebas", correct: false, feedback: "Prettier no ejecuta pruebas." },
+      ],
+    },
+  ]}
+/>
