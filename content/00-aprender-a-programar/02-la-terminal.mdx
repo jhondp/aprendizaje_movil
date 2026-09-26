@@ -1,0 +1,121 @@
+---
+id: "00-aprender-a-programar/02-la-terminal"
+title: "La terminal"
+stage: 0
+module: "Tu entorno"
+order: 2
+minutes: 15
+prereqs: ["00-aprender-a-programar/01-como-piensa-una-computadora"]
+summary: "Aprende a moverte por carpetas y archivos desde la terminal con pwd, ls, cd, mkdir y touch."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a poder abrir una terminal, ver en qué carpeta estás, moverte entre carpetas y crear carpetas y archivos nuevos.
+
+**Prerrequisitos:** `00-aprender-a-programar/01-como-piensa-una-computadora`
+
+## Concepto
+
+Hasta ahora, probablemente usaste tu computadora haciendo clic en íconos y carpetas. Eso funciona, pero programar requiere otra herramienta: la **terminal**, una ventana donde le escribes órdenes a la computadora en forma de texto y ella te responde con texto. Es más rápida y más precisa que hacer clic, y es la forma en que vas a instalar herramientas, ejecutar tu código y usar Git durante todo el curso.
+
+Antes de escribir el primer comando, dos definiciones que vas a usar constantemente:
+
+- **Ruta (path)**: la dirección de una carpeta o un archivo dentro de tu computadora, igual que una dirección postal. Se escribe encadenando nombres de carpetas separados por `/` (barra), por ejemplo `usuarios/ana/proyectos`. Una ruta puede ser relativa (a partir de donde estás parado ahora) o absoluta (desde el punto más alto del sistema de archivos).
+- **Extensión de archivo**: el sufijo después del punto en el nombre de un archivo, como `.txt` o `.js`. Le dice a la computadora (y a ti) qué tipo de contenido tiene el archivo y qué programa debería abrirlo, igual que una etiqueta de comida indica qué hay adentro del envase.
+
+### Los comandos básicos
+
+En macOS y Linux, la terminal usa una familia de comandos llamada shell Unix. En Windows, PowerShell entiende los mismos comandos para casi todo lo que vas a usar en esta lección, con una excepción que vas a ver más abajo.
+
+- `pwd` (**p**rint **w**orking **d**irectory): muestra la ruta completa de la carpeta en la que estás parado ahora mismo.
+- `ls` (**l**i**s**t): muestra el contenido (carpetas y archivos) de la carpeta actual.
+- `cd <ruta>` (**c**hange **d**irectory): te mueve a la carpeta indicada. `cd ..` te mueve a la carpeta contenedora (un nivel hacia arriba).
+- `mkdir <nombre>` (**m**a**k**e **dir**ectory): crea una carpeta nueva con ese nombre dentro de la carpeta actual.
+- `touch <nombre.ext>`: crea un archivo vacío con ese nombre. Este comando existe en macOS y Linux, pero **no en Windows**. En PowerShell, el equivalente es `New-Item <nombre.ext>`.
+
+Un comando en la terminal tiene esta forma: primero el nombre del comando, después (opcionalmente) argumentos, que son los datos sobre los que actúa. En `mkdir practica`, `mkdir` es el comando y `practica` es el argumento: el nombre de la carpeta que quieres crear.
+
+Puedes consultar la guía oficial de introducción de MDN, que incluye una sección sobre herramientas de línea de comandos: [MDN: Primeros pasos en la web](https://developer.mozilla.org/es/docs/Learn/Getting_started_with_the_web).
+
+<Callout kind="tip">
+  Si escribes un comando y la terminal responde algo como "command not found" o "no se reconoce como un comando", casi siempre es un error de tipeo o estás en el sistema operativo equivocado para ese comando.
+</Callout>
+
+## Práctica
+
+Sigue esta secuencia de comandos, paso por paso. Estos ejemplos usan macOS o Linux; si estás en Windows con PowerShell, reemplaza `touch` por `New-Item`.
+
+<Terminal
+  steps={[
+    { cmd: "pwd", out: "/home/ana" },
+    { cmd: "mkdir practica", out: "" },
+    { cmd: "cd practica", out: "" },
+    { cmd: "pwd", out: "/home/ana/practica" },
+    { cmd: "touch notas.txt", out: "" },
+    { cmd: "ls", out: "notas.txt" },
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Crea tu primera carpeta de trabajo"
+  solution={
+    <Terminal
+      steps={[
+        { cmd: "mkdir mi-primer-proyecto", out: "" },
+        { cmd: "cd mi-primer-proyecto", out: "" },
+        { cmd: "touch README.md", out: "" },
+        { cmd: "ls", out: "README.md" },
+      ]}
+    />
+  }
+>
+  Desde tu carpeta de usuario, crea una carpeta llamada `mi-primer-proyecto`, entra en ella, crea un archivo vacío llamado `README.md` y confirma que existe listando el contenido de la carpeta.
+</Challenge>
+
+## Errores comunes
+
+- **Ejecutar `touch` en Windows.** PowerShell responde que el comando no existe. Cómo detectarlo: el error menciona que `touch` no se reconoce; la solución es usar `New-Item` en su lugar.
+- **Crear una carpeta o archivo sin saber dónde estás parado.** Si ejecutas `mkdir` sin haber revisado `pwd` antes, la carpeta puede aparecer en un lugar inesperado. Cómo detectarlo: ejecuta `pwd` y luego `ls` para confirmar la ubicación antes de crear algo.
+- **Escribir mal la ruta al usar `cd`.** Un solo carácter de diferencia hace que el comando falle con "no such file or directory". Cómo detectarlo: usa `ls` primero para copiar el nombre exacto de la carpeta a la que quieres moverte.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué muestra el comando pwd?", back: "La ruta completa de la carpeta en la que estás parado." },
+    { front: "¿Qué es una ruta (path)?", back: "La dirección de una carpeta o archivo, escrita como nombres separados por barras." },
+    { front: "¿Qué es la extensión de un archivo?", back: "El sufijo después del punto en el nombre, como .txt o .js, que indica su tipo." },
+    { front: "¿Qué comando de PowerShell reemplaza a touch?", back: "New-Item" },
+    { front: "¿Qué comando crea una carpeta nueva?", back: "mkdir" },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué hace el comando ls?",
+      options: [
+        { text: "Muestra el contenido de la carpeta actual", correct: true, feedback: "Correcto: lista archivos y carpetas." },
+        { text: "Crea una carpeta nueva", correct: false, feedback: "Eso lo hace mkdir." },
+        { text: "Cambia de carpeta", correct: false, feedback: "Eso lo hace cd." },
+      ],
+    },
+    {
+      prompt: "¿Cuál de estas es una extensión de archivo?",
+      options: [
+        { text: "/home/ana", correct: false, feedback: "Eso es una ruta, no una extensión." },
+        { text: ".txt", correct: true, feedback: "Correcto: el sufijo después del punto indica el tipo de archivo." },
+        { text: "pwd", correct: false, feedback: "Eso es el nombre de un comando." },
+      ],
+    },
+    {
+      prompt: "Estás en Windows con PowerShell y quieres crear un archivo vacío llamado nota.txt. ¿Qué comando usas?",
+      options: [
+        { text: "touch nota.txt", correct: false, feedback: "touch no existe en PowerShell." },
+        { text: "New-Item nota.txt", correct: true, feedback: "Correcto: es el equivalente de touch en PowerShell." },
+        { text: "cd nota.txt", correct: false, feedback: "cd cambia de carpeta, no crea archivos." },
+      ],
+    },
+  ]}
+/>

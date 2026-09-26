@@ -1,0 +1,135 @@
+---
+id: "00-aprender-a-programar/04-git-y-github"
+title: "Git y GitHub"
+stage: 0
+module: "Tu entorno"
+order: 4
+minutes: 20
+prereqs: ["00-aprender-a-programar/03-vs-code-y-node"]
+summary: "Crea tu primer repositorio Git, haz tu primer commit y súbelo a GitHub con HTTPS."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a poder crear un repositorio Git, guardar cambios en commits y subirlos a un repositorio remoto en GitHub.
+
+**Prerrequisitos:** `00-aprender-a-programar/03-vs-code-y-node`
+
+## Concepto
+
+Imagina que escribes un documento y cada tanto guardas una copia con fecha, para poder volver atrás si algo sale mal. Eso es, en esencia, lo que hace **Git**: una herramienta que guarda "fotografías" del estado de tu proyecto a lo largo del tiempo, para que puedas ver qué cambió, cuándo y por qué, y volver a una versión anterior si lo necesitas.
+
+Cuatro palabras que vas a usar todo el curso:
+
+- **Repositorio**: una carpeta cuyos cambios Git está rastreando. Se crea con `git init`.
+- **Commit**: una fotografía del proyecto en un momento dado, con un mensaje que explica qué cambió. Los commits son la unidad básica de historia en Git.
+- **Rama (branch)**: una línea de historia dentro del repositorio. La rama por defecto se llama `main`, y en este curso vas a trabajar siempre sobre ella salvo que se indique lo contrario.
+- **Remoto (remote)**: una copia del repositorio alojada en otro lugar, normalmente en un servidor. **GitHub** es el sitio donde vas a alojar tus remotos: además de guardar una copia de respaldo en internet, te permite mostrar tu trabajo y, más adelante en el curso, colaborar con otras personas.
+
+### El flujo básico
+
+1. `git init` crea un repositorio Git nuevo en la carpeta actual.
+2. `git add <archivo>` marca los cambios de ese archivo para que entren en el próximo commit (a esto se lo llama "staging", preparar los cambios).
+3. `git commit -m "mensaje"` guarda esos cambios preparados como un commit, con el mensaje que describe qué hiciste.
+4. `git remote add origin <url>` conecta tu repositorio local con uno remoto en GitHub, y lo llama `origin` (el nombre por convención del remoto principal).
+5. `git push -u origin main` sube tus commits al remoto. El flag `-u` (upstream) recuerda esa conexión, así que las próximas veces alcanza con `git push`.
+
+### Autenticarte con GitHub
+
+Cuando subes cambios por HTTPS (la URL empieza con `https://`), GitHub ya no acepta la contraseña de tu cuenta como método de autenticación. En su lugar, usas un **token de acceso personal** (personal access token): una clave que generas desde la configuración de tu cuenta de GitHub y que pegas cuando se te pida la contraseña. En este curso vas a usar siempre remotos HTTPS con token, no SSH, porque no requiere configurar claves adicionales en tu computadora. Puedes ver el paso a paso oficial para crear un token en [docs.github.com/es/get-started](https://docs.github.com/es/get-started) y repasar el flujo completo de Git en el [Pro Git Book](https://git-scm.com/book/es/v2).
+
+<Callout kind="warning">
+  Guarda tu token de acceso personal en un lugar seguro apenas lo generes: GitHub solo lo muestra una vez.
+</Callout>
+
+## Práctica
+
+Sigue esta secuencia dentro de una carpeta que ya tenga al menos un archivo:
+
+<Terminal
+  steps={[
+    { cmd: "git init", out: "Initialized empty Git repository in /home/ana/proyecto/.git/" },
+    { cmd: "git add .", out: "" },
+    { cmd: 'git commit -m "Initial commit"', out: "[main (root-commit) a1b2c3d] Initial commit\n 1 file changed, 2 insertions(+)" },
+    { cmd: "git remote add origin https://github.com/ana/proyecto.git", out: "" },
+    { cmd: "git push -u origin main", out: "Enumerating objects: 3, done.\nWriting objects: 100% (3/3), done.\nBranch 'main' set up to track remote branch 'main' from 'origin'." },
+  ]}
+/>
+
+Marca cada paso a medida que lo completes en tu propio proyecto:
+
+<Checklist
+  id="00-aprender-a-programar/04-git-y-github-primer-commit"
+  items={[
+    "Inicialicé el repositorio con git init",
+    "Preparé mis cambios con git add",
+    "Escribí un mensaje de commit claro y en inglés",
+    "Conecté el repositorio remoto con git remote add origin",
+    "Subí mis cambios con git push -u origin main",
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Tu primer repositorio con Git"
+  solution={
+    <Terminal
+      steps={[
+        { cmd: "mkdir mi-repo && cd mi-repo", out: "" },
+        { cmd: "git init", out: "Initialized empty Git repository in /home/ana/mi-repo/.git/" },
+        { cmd: "echo hola > archivo.txt", out: "" },
+        { cmd: "git add .", out: "" },
+        { cmd: 'git commit -m "Add archivo.txt"', out: "[main (root-commit) f9e8d7c] Add archivo.txt\n 1 file changed, 1 insertion(+)" },
+      ]}
+    />
+  }
+>
+  Crea una carpeta nueva, inicializa un repositorio Git, crea un archivo de texto con cualquier contenido y haz tu primer commit con un mensaje que describa el cambio.
+</Challenge>
+
+## Errores comunes
+
+- **Hacer `git commit` sin haber hecho `git add` antes.** Git responde algo como "nothing to commit, working tree clean" aunque hayas editado archivos. Cómo detectarlo: ejecuta `git status` antes del commit para ver qué está preparado (en verde) y qué no (en rojo).
+- **Configurar un remoto SSH sin tener una clave SSH generada.** El push falla con un error de permisos ("Permission denied (publickey)"). Cómo detectarlo: si tu URL remota empieza con `git@github.com:`, es SSH; cámbiala por la versión HTTPS (`https://github.com/...`).
+- **Escribir mensajes de commit que no dicen nada, como "cambios" o "fix".** Dentro de unas semanas no vas a recordar qué se corrigió. Cómo detectarlo: si el mensaje no te permite adivinar qué cambió sin mirar el código, reescríbelo.
+- **Olvidar `-u` en el primer push.** Los próximos `git push` fallan pidiendo que especifiques la rama remota. Cómo detectarlo: el mensaje sugiere ejecutar `git push --set-upstream origin main`; hazlo una vez y los próximos push funcionan sin el flag.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué comando crea un repositorio Git en la carpeta actual?", back: "git init" },
+    { front: "¿Qué es un commit?", back: "Una fotografía del proyecto en un momento dado, guardada con un mensaje que explica el cambio." },
+    { front: "¿Qué usas para autenticarte por HTTPS al hacer push a GitHub, en lugar de tu contraseña?", back: "Un token de acceso personal." },
+    { front: "¿Cómo se llama la rama principal por defecto?", back: "main" },
+    { front: "¿Qué hace git remote add origin <url>?", back: "Conecta el repositorio local con un repositorio remoto llamado origin." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Cuál es el nombre por defecto de la rama principal en este curso?",
+      options: [
+        { text: "master", correct: false, feedback: "Este curso usa main como rama principal." },
+        { text: "main", correct: true, feedback: "Correcto: main es la rama principal en este curso." },
+        { text: "origin", correct: false, feedback: "origin es el nombre habitual del remoto, no de una rama." },
+      ],
+    },
+    {
+      prompt: "¿Qué usas en lugar de tu contraseña para hacer push por HTTPS a GitHub?",
+      options: [
+        { text: "Un token de acceso personal", correct: true, feedback: "Correcto: GitHub ya no acepta la contraseña de la cuenta para esto." },
+        { text: "Tu correo electrónico", correct: false, feedback: "El correo no funciona como credencial de push." },
+        { text: "Una clave SSH", correct: false, feedback: "SSH es otro método de autenticación, pero este curso usa HTTPS con token." },
+      ],
+    },
+    {
+      prompt: "Editaste un archivo pero al ejecutar git commit Git dice que no hay nada para guardar. ¿Qué falta?",
+      options: [
+        { text: "Ejecutar git push antes del commit", correct: false, feedback: "git push sube commits que ya existen; no resuelve esto." },
+        { text: "Ejecutar git add antes del commit", correct: true, feedback: "Correcto: hay que preparar los cambios con git add antes de poder confirmarlos." },
+        { text: "Ejecutar git init de nuevo", correct: false, feedback: "El repositorio ya existe; volver a inicializarlo no soluciona el problema." },
+      ],
+    },
+  ]}
+/>
