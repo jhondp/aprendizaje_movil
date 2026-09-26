@@ -361,10 +361,66 @@ describe('validateLesson', () => {
   it('skips section and stage checks for hidden lessons', () => {
     const src = good
       .replace('summary: "Resumen."', 'summary: "Resumen."\nhidden: true')
-      .replace(/## Concepto[\s\S]*/, '<Snack code={`x`} />\n');
+      .replace(/## Concepto[\s\S]*/, '<Snack sdkVersion="55.0.0" code={`x`} />\n');
     const result = validateLesson(src, '01-javascript/00-variables.mdx', stages);
     expect(result.errors).toEqual([]);
     expect(result.hidden).toBe(true);
+  });
+
+  it('requires an sdkVersion on every Snack, hidden or not', () => {
+    const src = good
+      .replace('summary: "Resumen."', 'summary: "Resumen."\nhidden: true')
+      .replace(/## Concepto[\s\S]*/, '<Snack code={`x`} />\n');
+    const { errors } = validateLesson(src, '01-javascript/00-variables.mdx', stages);
+    expect(errors).toContain('01-javascript/00-variables.mdx: Snack is missing "sdkVersion"');
+  });
+
+  it('extracts the sdkVersion of every Snack for the cross-file consistency check', () => {
+    // Stage 4 allows Snack (STAGE_LIMITS only forbids it in stages 0-3).
+    const src = good
+      .replace('id: "01-javascript/00-variables"', 'id: "04-react-native-expo/00-variables"')
+      .replace('stage: 1', 'stage: 4')
+      .replace(
+        '<Playground lang="js" code={`console.log(1)`} />',
+        '<Snack sdkVersion="55.0.0" code={`export default function App() { return null; }`} />',
+      );
+    const { snackSdkVersions } = validateLesson(
+      src,
+      '04-react-native-expo/00-variables.mdx',
+      stages,
+    );
+    expect(snackSdkVersions).toEqual(['55.0.0']);
+  });
+
+  it('rejects an empty Playground "expected" prop', () => {
+    const src = good.replace(
+      '<Playground lang="js" code={`console.log(1)`} />',
+      '<Playground lang="js" code={`console.log(1)`} expected={``} />',
+    );
+    const { errors } = validateLesson(src, '01-javascript/00-variables.mdx', stages);
+    expect(errors).toContain(
+      '01-javascript/00-variables.mdx: Playground "expected" must be a non-empty string when present',
+    );
+  });
+
+  it('rejects a whitespace-only Playground "expected" prop', () => {
+    const src = good.replace(
+      '<Playground lang="js" code={`console.log(1)`} />',
+      '<Playground lang="js" code={`console.log(1)`} expected={`   `} />',
+    );
+    const { errors } = validateLesson(src, '01-javascript/00-variables.mdx', stages);
+    expect(errors).toContain(
+      '01-javascript/00-variables.mdx: Playground "expected" must be a non-empty string when present',
+    );
+  });
+
+  it('accepts a non-empty Playground "expected" prop', () => {
+    const src = good.replace(
+      '<Playground lang="js" code={`console.log(1)`} />',
+      '<Playground lang="js" code={`console.log(1)`} expected={`1`} />',
+    );
+    const { errors } = validateLesson(src, '01-javascript/00-variables.mdx', stages);
+    expect(errors).toEqual([]);
   });
 });
 
@@ -427,6 +483,34 @@ describe('validateContent', () => {
         .replace('order: 0', 'order: 1'),
     );
     expect(validateContent(root).errors).toEqual([]);
+  });
+
+  it('reports a Snack sdkVersion that does not match the rest of the content', () => {
+    const root = makeTmpDir();
+    mkdirSync(path.join(root, '04-react-native-expo'));
+    writeFileSync(path.join(root, 'stages.json'), JSON.stringify(stages));
+    const withSnack = (id: string, sdkVersion: string, order: number): string =>
+      good
+        .replace('id: "01-javascript/00-variables"', `id: "${id}"`)
+        .replace('stage: 1', 'stage: 4')
+        .replace('order: 0', `order: ${order}`)
+        .replace(
+          '<Playground lang="js" code={`console.log(1)`} />',
+          `<Snack sdkVersion="${sdkVersion}" code={\`export default function App() { return null; }\`} />`,
+        );
+    writeFileSync(
+      path.join(root, '04-react-native-expo', '00-a.mdx'),
+      withSnack('04-react-native-expo/00-a', '55.0.0', 0),
+    );
+    writeFileSync(
+      path.join(root, '04-react-native-expo', '01-b.mdx'),
+      withSnack('04-react-native-expo/01-b', '52.0.0', 1),
+    );
+    const result = validateContent(root);
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain(
+      '04-react-native-expo/01-b.mdx: Snack sdkVersion "52.0.0" does not match "55.0.0" used in 04-react-native-expo/00-a.mdx',
+    );
   });
 
   it('returns a validation error instead of crashing when stages.json is missing', () => {

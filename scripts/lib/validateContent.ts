@@ -15,6 +15,9 @@ export interface LessonValidation {
   hidden: boolean;
   prereqs: string[];
   links: string[];
+  /** sdkVersion of every Snack in this lesson, in source order; validateContent checks they all
+   *  share the same value across the whole content directory. */
+  snackSdkVersions: string[];
   errors: string[];
 }
 
@@ -288,6 +291,21 @@ function evalLiteral(raw: string): unknown {
 }
 
 /**
+ * Resolves a prop value extracted by `extractProp` to its real string: a `` `...` `` template
+ * literal is evaluated, a `"..."` string is already unwrapped. Returns null when the value is not
+ * a string (a parse failure counts as "not a string" here, rather than throwing).
+ */
+function evalPropStringLiteral(raw: string): string | null {
+  if (!raw.startsWith('`')) return raw;
+  try {
+    const value = evalLiteral(raw);
+    return typeof value === 'string' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Parses the `questions={[...]}` literal of the first `<Quiz` block. The literal is trusted repo
  * content, so it is evaluated as a JavaScript array expression. Returns [] when absent or invalid;
  * `validateLesson` uses the throwing `evalLiteral` directly so it can report the parse error.
@@ -378,7 +396,16 @@ export function validateLesson(
     body = parsed.content;
   } catch (e) {
     err(`frontmatter could not be parsed (${describeError(e)})`);
-    return { id: null, stage: null, order: null, hidden: false, prereqs: [], links: [], errors };
+    return {
+      id: null,
+      stage: null,
+      order: null,
+      hidden: false,
+      prereqs: [],
+      links: [],
+      snackSdkVersions: [],
+      errors,
+    };
   }
 
   for (const field of FIELDS) {
@@ -506,6 +533,32 @@ export function validateLesson(
     }
   }
 
+  // Every Snack must declare an sdkVersion; validateContent checks they all agree across content.
+  const snackSdkVersions: string[] = [];
+  let snackFrom = 0;
+  for (;;) {
+    const block = extractBlock(body, 'Snack', snackFrom);
+    if (!block) break;
+    snackFrom = block.end;
+    const sdkVersion = extractProp(block.text, 'Snack', 'sdkVersion');
+    if (sdkVersion === null) err('Snack is missing "sdkVersion"');
+    else snackSdkVersions.push(sdkVersion);
+  }
+
+  // Every Playground "expected" prop, when present, must be a non-empty string.
+  let playgroundFrom = 0;
+  for (;;) {
+    const block = extractBlock(body, 'Playground', playgroundFrom);
+    if (!block) break;
+    playgroundFrom = block.end;
+    const raw = extractProp(block.text, 'Playground', 'expected');
+    if (raw === null) continue;
+    const value = evalPropStringLiteral(raw);
+    if (value === null || value.trim() === '') {
+      err('Playground "expected" must be a non-empty string when present');
+    }
+  }
+
   const links: string[] = [];
   for (const match of maskedBody.matchAll(/\]\(\/etapa\/([^)#?\s]+)/g)) {
     links.push(match[1]!.replace(/\/$/, ''));
@@ -518,6 +571,7 @@ export function validateLesson(
     hidden,
     prereqs,
     links,
+    snackSdkVersions,
     errors,
   };
 }
@@ -583,6 +637,18 @@ export function validateContent(rootDir: string): ValidationResult {
       if (!ids.has(p)) errors.push(`${r.relPath}: prereq "${p}" does not exist`);
     for (const l of r.links)
       if (!ids.has(l)) errors.push(`${r.relPath}: link "/etapa/${l}" does not resolve to a lesson`);
+  }
+  let baselineSdkVersion: { value: string; relPath: string } | null = null;
+  for (const r of results) {
+    for (const v of r.snackSdkVersions) {
+      if (!baselineSdkVersion) {
+        baselineSdkVersion = { value: v, relPath: r.relPath };
+      } else if (v !== baselineSdkVersion.value) {
+        errors.push(
+          `${r.relPath}: Snack sdkVersion "${v}" does not match "${baselineSdkVersion.value}" used in ${baselineSdkVersion.relPath}`,
+        );
+      }
+    }
   }
   return { ok: errors.length === 0, errors };
 }
