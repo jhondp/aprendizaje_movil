@@ -8,7 +8,7 @@ de release escrito. Toda la etapa usa el tooling de Expo: EAS Build, EAS Submit 
 
 Componente de práctica principal: `Terminal` (sesiones simuladas de `eas build`, `eas submit`,
 `eas update`) y `Checklist` (pre-release, envío a tiendas). `Playground` para lógica pura
-(resolver `app.config`, bump de semver). `Snack` con `sdkVersion="52.0.0"` solo en la lección
+(resolver `app.config`, bump de semver). `Snack` con `sdkVersion="55.0.0"` solo en la lección
 de monitoreo.
 
 Todos los identificadores de cuenta, bundle id, package name y credenciales son placeholders

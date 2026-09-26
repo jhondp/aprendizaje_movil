@@ -1,10 +1,10 @@
 # Etapa 5 — Estado, datos y arquitectura
 
-Slug: `05-estado-datos-arquitectura` · `stage: 5` · Snack pinned to `sdkVersion="56.0.0"` (the newest SDK Expo Snack supports on 2026-09-26).
+Slug: `05-estado-datos-arquitectura` · `stage: 5` · Snack fijado en `sdkVersion="55.0.0"` (el SDK más reciente que Expo Snack sirve el 2026-09-26).
 
-Builds on `04-react-native-expo/11-proyecto-app-de-notas`.
+Parte de `04-react-native-expo/11-proyecto-app-de-notas`.
 
-| Module                 | File                                    | Title                                            | Min | Practice                                                                                             |
+| Módulo                 | Archivo                                 | Título                                           | Min | Práctica                                                                                             |
 | ---------------------- | --------------------------------------- | ------------------------------------------------ | --- | ---------------------------------------------------------------------------------------------------- |
 | Estado                 | `00-estado-global.mdx`                  | Estado global: Context vs Zustand vs Redux       | 12  | `Snack`: same counter with Context and with Zustand; `Quiz` on when each fits                        |
 | Estado                 | `01-zustand.mdx`                        | Zustand                                          | 15  | `Snack` with `create` store, selectors, actions                                                      |
@@ -18,14 +18,14 @@ Builds on `04-react-native-expo/11-proyecto-app-de-notas`.
 | Formularios y proyecto | `09-react-hook-form-y-zod.mdx`          | react-hook-form y zod                            | 15  | `Snack` with `react-hook-form`, `zod`, `@hookform/resolvers`; validated note form                    |
 | Formularios y proyecto | `10-proyecto-app-con-api.mdx`           | Proyecto: app conectada a una API pública        | 35  | `Snack` skeleton; `Checklist` of layers, persistence, forms                                          |
 
-Total: 168 minutes.
+Total: 168 minutos.
 
-## Closing project
+## Proyecto de cierre
 
-The stage 4 notes app refactored into `src/features/notes/{domain,application,infrastructure,ui}`, notes persisted in `expo-sqlite`, a `quotes` feature fetching a random quote with TanStack Query and cached with `PersistQueryClientProvider` + AsyncStorage, and a note form validated with zod.
+La app de notas de la etapa 4 refactorizada en `src/features/notes/{domain,application,infrastructure,ui}`, con las notas persistidas en `expo-sqlite`, una feature `quotes` que obtiene una cita aleatoria con TanStack Query y la guarda en caché con `PersistQueryClientProvider` + AsyncStorage, y un formulario de nota validado con zod.
 
-Note: the brief named `https://api.quotable.io/random`, but its TLS certificate is expired (checked 2026-09-26), so the project uses `https://dummyjson.com/quotes/random` (same shape idea: `quote`, `author`).
+Nota: el brief nombraba `https://api.quotable.io/random`, pero su certificado TLS está vencido (comprobado el 2026-09-26), así que el proyecto usa `https://dummyjson.com/quotes/random` (misma idea de forma: `quote`, `author`).
 
-## Notes for maintainers
+## Notas para mantenedores
 
-- Snack embeds receive the code through the `code` URL parameter, which Snack treats as a JavaScript `App.js` entry. Snack code in this stage therefore avoids TypeScript-only syntax; typed versions live in the fenced blocks of each `## Concepto`.
+- Los embeds de Snack reciben el código como archivo `App.tsx` a través del parámetro `files` de la URL, así que la sintaxis de TypeScript funciona dentro de los Snacks. Los bloques de código de cada `## Concepto` siguen mostrando las versiones tipadas completas.
