@@ -1,0 +1,245 @@
+---
+id: "11-capstone/01-arquitectura-y-plan"
+title: "Arquitectura y plan de trabajo"
+stage: 11
+module: "Diseño"
+order: 1
+minutes: 20
+prereqs: ["11-capstone/00-elegir-y-definir-tu-app", "05-estado-datos-arquitectura/10-proyecto-app-con-api", "09-seguridad-movil/09-proyecto-auditoria"]
+summary: "Traduce la definición de tu app a carpetas por feature con cuatro capas, un modelo de amenazas, una clasificación de datos y un plan de entregas por rebanadas verticales."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás organizar tu app en carpetas por feature con las capas domain, application, infrastructure y ui, documentar su modelo de amenazas y su clasificación de datos, y planificar el trabajo en entregas verticales.
+
+**Prerrequisitos:** `11-capstone/00-elegir-y-definir-tu-app`, `05-estado-datos-arquitectura/10-proyecto-app-con-api`, `09-seguridad-movil/09-proyecto-auditoria`
+
+## Concepto
+
+En la lección anterior escribiste qué va a hacer tu app. Ahora decides cómo se organiza el código, qué puede salir mal y en qué orden lo construyes. No hay herramientas nuevas: aplicas lo que aprendiste en [Arquitectura hexagonal](/etapa/05-estado-datos-arquitectura/06-arquitectura-hexagonal), [Screaming architecture](/etapa/05-estado-datos-arquitectura/07-screaming-architecture), [Atomic design](/etapa/05-estado-datos-arquitectura/08-atomic-design) y [Modelo de amenazas móvil](/etapa/09-seguridad-movil/00-modelo-de-amenazas-movil).
+
+### La cocina de un restaurante
+
+En la cocina de un restaurante cada estación tiene su tarea: una prepara ensaladas, otra la parrilla, otra los postres. Dentro de cada estación hay un orden fijo: la receta (qué lleva el plato), el procedimiento (en qué orden se hace), los proveedores (de dónde vienen los ingredientes) y el emplatado (cómo llega a la mesa). Si cambias de proveedor de tomates, la receta no cambia.
+
+Tu app funciona igual. Cada **feature** es una estación, y dentro de ella las cuatro capas cumplen los cuatro roles:
+
+| Capa | Rol en la cocina | Qué contiene | Puede importar |
+| --- | --- | --- | --- |
+| `domain` | La receta | Tipos, reglas puras, puertos (interfaces) | Nada externo |
+| `application` | El procedimiento | Casos de uso que orquestan el dominio a través de puertos | `domain` |
+| `infrastructure` | Los proveedores | Adaptadores: Supabase, SQLite, SecureStore, notificaciones | `domain`, librerías |
+| `ui` | El emplatado | Pantallas, componentes y hooks de React | `application`, `domain` |
+
+La regla que no se negocia: **las dependencias apuntan hacia adentro**. El dominio no importa React, React Native, Expo ni Supabase. Así puedes probarlo con pruebas unitarias rápidas y cambiar de proveedor sin tocar las reglas.
+
+### El árbol de carpetas
+
+Con el registro de hábitos como ejemplo, el árbol queda así:
+
+```text
+app/                         # Expo Router routes, thin: they only render screens
+  (tabs)/index.tsx
+  habit/[id].tsx
+src/
+  features/
+    habits/
+      domain/                # Habit, currentStreak, HabitRepository port
+      application/           # completeHabit, createHabit use cases
+      infrastructure/        # SupabaseHabitRepository, InMemoryHabitRepository
+      ui/                    # HabitListScreen, useHabits hook
+    reminders/
+      domain/ application/ infrastructure/ ui/
+    auth/
+      domain/ application/ infrastructure/ ui/
+  shared/
+    ui/atoms/ ui/molecules/ ui/organisms/
+    infrastructure/          # supabase client, secure storage adapter
+```
+
+Las carpetas de primer nivel dentro de `features` gritan qué hace la app: hábitos, recordatorios, autenticación. Los componentes reutilizables viven en `shared/ui` organizados con atomic design, y cada feature arma sus pantallas con ellos.
+
+Un detalle práctico: los archivos de `app/` deben ser delgados. Una ruta solo importa la pantalla de la feature y la renderiza. Si una ruta empieza a tener lógica, esa lógica pertenece a `application` o a un hook en `ui`.
+
+### Modelo de amenazas en media página
+
+Antes de escribir código, recorre tu app con las preguntas de STRIDE-lite que usaste en la etapa 9. No necesitas un documento largo: una tabla con amenaza, activo afectado y mitigación basta.
+
+```text
+Asset: user's habits and reminder times (per-user data in Supabase)
+- Spoofing: someone uses a stolen session -> tokens in SecureStore, short-lived access token
+- Tampering: user edits another user's habit -> RLS policy with auth.uid() on every table
+- Information disclosure: crash report includes the email -> Sentry beforeSend scrubbing
+- Denial of service: notification spam -> one scheduled reminder per habit
+- Elevation of privilege: service key in the bundle -> only the anon key ships, no secrets
+```
+
+### Clasificación de datos
+
+Clasifica cada dato que tu app toca y decide dónde vive, como hiciste en [Almacenamiento seguro](/etapa/09-seguridad-movil/03-almacenamiento-seguro):
+
+| Dato | Clase | Dónde vive |
+| --- | --- | --- |
+| Nombre del hábito, fechas completadas | Personal | Supabase con RLS, caché en SQLite |
+| Token de sesión y refresh token | Sensible | SecureStore |
+| Preferencia de tema | Pública | AsyncStorage |
+| Correo del usuario | Personal | Supabase Auth; nunca en logs ni reportes de errores |
+
+Esta tabla alimenta después las etiquetas de privacidad de las tiendas, así que conviene escribirla ahora.
+
+### Plan de trabajo en rebanadas verticales
+
+Un pastel se corta de arriba abajo: cada porción lleva todas las capas. Planifica igual. En lugar de "semana 1: todo el dominio, semana 2: toda la UI", cada entrega atraviesa las cuatro capas de una historia de usuario y termina funcionando en el teléfono:
+
+1. Esqueleto: proyecto Expo, TypeScript strict, ESLint, CI con lint y typecheck, carpetas vacías.
+2. Historia 1 de punta a punta con un repositorio en memoria y sus pruebas unitarias.
+3. Autenticación y el repositorio de Supabase con RLS reemplazando al de memoria.
+4. Historias 2 y 3, la función nativa y el flujo E2E de Maestro.
+5. Seguridad y release: autoauditoría MASVS, perfiles de EAS, Sentry, publicación.
+
+Cada rebanada tiene su propia definición de terminado: pruebas en verde, CI en verde y la función visible en un development build. La documentación de Expo sobre la estructura de un proyecto está en https://docs.expo.dev/get-started/start-developing/.
+
+## Práctica
+
+Así se crea el esqueleto de carpetas del registro de hábitos. Repite los comandos con los nombres de tus features.
+
+<Terminal
+  steps={[
+    { cmd: "npx create-expo-app@latest habit-tracker", out: "✔ Downloaded and extracted project files.\n✔ Installed JavaScript dependencies.\n✅ Your project is ready!" },
+    { cmd: "cd habit-tracker && mkdir -p src/features/{habits,reminders,auth}/{domain,application,infrastructure,ui}", out: "" },
+    { cmd: "mkdir -p src/shared/ui/{atoms,molecules,organisms} src/shared/infrastructure", out: "" },
+    { cmd: "tree src -d", out: "src\n├── features\n│   ├── auth\n│   │   ├── application\n│   │   ├── domain\n│   │   ├── infrastructure\n│   │   └── ui\n│   ├── habits\n│   │   ├── application\n│   │   ├── domain\n│   │   ├── infrastructure\n│   │   └── ui\n│   └── reminders\n│       ├── application\n│       ├── domain\n│       ├── infrastructure\n│       └── ui\n└── shared\n    ├── infrastructure\n    └── ui\n        ├── atoms\n        ├── molecules\n        └── organisms\n\n21 directories" }
+  ]}
+/>
+
+Marca cada punto cuando esté en el repositorio de tu proyecto.
+
+<Checklist
+  id="11-capstone/01-arquitectura-y-plan/arquitectura"
+  items={[
+    "Cada feature tiene las carpetas domain, application, infrastructure y ui",
+    "domain define las entidades, las reglas puras y los puertos (interfaces de repositorio) de cada feature",
+    "application tiene un caso de uso por cada historia de usuario y solo depende de domain",
+    "infrastructure tiene al menos un adaptador en memoria para pruebas y uno real (Supabase o SQLite)",
+    "ui tiene las pantallas y los hooks; los archivos de app/ solo renderizan pantallas",
+    "shared/ui está organizado en atoms, molecules y organisms",
+    "Escribí el modelo de amenazas STRIDE-lite con una mitigación por amenaza en docs/threat-model.md",
+    "Escribí la tabla de clasificación de datos con la clase y el almacenamiento de cada dato",
+    "Dividí el trabajo en rebanadas verticales, cada una con su definición de terminado"
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Puerto, adaptador y caso de uso"
+  solution={
+    <Playground
+      lang="ts"
+      code={`interface Habit {
+  id: string;
+  name: string;
+  completedOn: string[];
+}
+
+// Port: lives in domain
+interface HabitRepository {
+  findById(id: string): Promise<Habit | undefined>;
+  save(habit: Habit): Promise<void>;
+}
+
+// Adapter: lives in infrastructure
+class InMemoryHabitRepository implements HabitRepository {
+  private items = new Map<string, Habit>();
+
+  async findById(id: string): Promise<Habit | undefined> {
+    return this.items.get(id);
+  }
+
+  async save(habit: Habit): Promise<void> {
+    this.items.set(habit.id, habit);
+  }
+}
+
+// Use case: lives in application
+function makeCompleteHabit(repository: HabitRepository) {
+  return async (id: string, day: string): Promise<Habit> => {
+    const habit = await repository.findById(id);
+    if (!habit) throw new Error("Habit not found: " + id);
+    if (habit.completedOn.includes(day)) return habit;
+    const updated = { ...habit, completedOn: [...habit.completedOn, day] };
+    await repository.save(updated);
+    return updated;
+  };
+}
+
+async function main(): Promise<void> {
+  const repository = new InMemoryHabitRepository();
+  await repository.save({ id: "h1", name: "Read 10 pages", completedOn: [] });
+  const completeHabit = makeCompleteHabit(repository);
+
+  const first = await completeHabit("h1", "2026-09-26");
+  const second = await completeHabit("h1", "2026-09-26");
+  console.log(first.completedOn.length); // 1
+  console.log(second.completedOn.length); // 1
+
+  try {
+    await completeHabit("missing", "2026-09-26");
+  } catch (error) {
+    console.log((error as Error).message); // Habit not found: missing
+  }
+}
+
+main();`}
+    />
+  }
+>
+  Escribe en TypeScript las tres piezas de la historia 1 del registro de hábitos: el puerto `HabitRepository` (con `findById` y `save`), un adaptador `InMemoryHabitRepository` y un caso de uso `makeCompleteHabit(repository)` que marca un hábito como hecho en una fecha. El caso de uso debe cumplir el criterio de aceptación "marcarlo dos veces el mismo día no cuenta doble" y lanzar un error si el hábito no existe. Si tu app es otra, escribe el puerto y el caso de uso de tu historia 1.
+</Challenge>
+
+## Errores comunes
+
+**El dominio importa librerías de infraestructura.** Se ve como `import { supabase } from "../../shared/infrastructure/supabase"` dentro de `domain/` o `application/`. Ocurre porque llamar directamente a Supabase parece más corto que definir un puerto. Se detecta buscando imports prohibidos en las capas internas, por ejemplo con `grep -rE "from ['\"](react|react-native|expo|@supabase)" src/features/*/domain src/features/*/application`; cualquier resultado es una violación.
+
+**Carpetas por tipo en lugar de por feature.** Se ve como `src/screens`, `src/hooks`, `src/services` con archivos de todas las features mezclados. Ocurre por costumbre de proyectos pequeños. Se detecta cuando un cambio en una historia obliga a tocar archivos en cuatro carpetas lejanas; con carpetas por feature, el cambio queda dentro de una sola.
+
+**Planificar por capas horizontales.** Se ve como un plan que dedica semanas enteras al dominio sin nada visible en el teléfono. Ocurre porque parece ordenado terminar una capa antes de la siguiente. Se detecta cuando al final de una entrega no puedes mostrar ninguna historia funcionando; reorganiza el plan para que cada entrega cruce las cuatro capas.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué cuatro capas tiene cada feature en una arquitectura hexagonal con carpetas por feature?", back: "domain, application, infrastructure y ui." },
+    { front: "¿Hacia dónde apuntan las dependencias en una arquitectura hexagonal?", back: "Hacia adentro: ui e infrastructure dependen de application y domain; domain no depende de nada externo." },
+    { front: "¿Qué es una rebanada vertical en un plan de trabajo?", back: "Una entrega que atraviesa todas las capas de una historia de usuario y termina funcionando en el dispositivo." },
+    { front: "¿Dónde se guarda un refresh token según una clasificación de datos típica?", back: "En SecureStore, porque es un dato sensible; nunca en AsyncStorage." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿En qué capa va la función currentStreak, que calcula la racha a partir de fechas?",
+      options: [
+        { text: "domain", correct: true, feedback: "Correcto: es una regla pura, sin dependencias externas." },
+        { text: "infrastructure", correct: false, feedback: "infrastructure contiene adaptadores a servicios externos, no reglas de negocio." },
+        { text: "ui", correct: false, feedback: "Si la pones en ui, no puedes probarla sin renderizar componentes ni reutilizarla." }
+      ]
+    },
+    {
+      prompt: "¿Qué debe contener un archivo de ruta como app/habit/[id].tsx?",
+      options: [
+        { text: "La consulta a Supabase y la lógica de la racha", correct: false, feedback: "Eso pertenece a infrastructure y domain; la ruta debe ser delgada." },
+        { text: "Solo la importación y el renderizado de la pantalla de la feature", correct: true, feedback: "Correcto: las rutas de Expo Router son delgadas y delegan en la feature." },
+        { text: "La definición del puerto HabitRepository", correct: false, feedback: "Los puertos se definen en domain." }
+      ]
+    },
+    {
+      prompt: "¿Cuál es el mejor primer paso de un plan en rebanadas verticales?",
+      options: [
+        { text: "Escribir todo el dominio de todas las features", correct: false, feedback: "Eso es planificar por capas; no tendrás nada funcionando en el teléfono." },
+        { text: "Diseñar todas las pantallas en alta fidelidad", correct: false, feedback: "El diseño final puede esperar; primero necesitas un esqueleto que compile y pase CI." },
+        { text: "Un esqueleto que compila, con lint, typecheck y CI en verde", correct: true, feedback: "Correcto: cada rebanada siguiente se apoya en un pipeline que ya funciona." }
+      ]
+    }
+  ]}
+/>

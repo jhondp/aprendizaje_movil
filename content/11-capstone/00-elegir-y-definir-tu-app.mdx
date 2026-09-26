@@ -1,0 +1,253 @@
+---
+id: "11-capstone/00-elegir-y-definir-tu-app"
+title: "Elegir y definir tu app"
+stage: 11
+module: "Diseño"
+order: 0
+minutes: 20
+prereqs: ["10-build-release-operaciones/11-proyecto-publicar"]
+summary: "Elige la app de tu proyecto final y defínela con un problema, tres historias de usuario, una lista de fuera de alcance y un boceto de baja fidelidad."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás elegir una app de tamaño adecuado para tu proyecto final y dejarla definida por escrito: problema, tres historias de usuario con criterios de aceptación, lista de fuera de alcance y un boceto de la pantalla principal.
+
+**Prerrequisitos:** `10-build-release-operaciones/11-proyecto-publicar`
+
+## Concepto
+
+Llegaste al final del recorrido. En las etapas anteriores construiste, capa por capa, una app de notas: primero local, luego conectada a una API, con pruebas, funciones nativas, usuarios, auditoría de seguridad y publicación en las tiendas. El capstone te pide repetir ese camino completo, esta vez solo y con una app que elijas tú. Estas cuatro lecciones no enseñan APIs nuevas: organizan tu trabajo y fijan cómo se evalúa el resultado.
+
+### El proyecto de cierre
+
+Vas a entregar una app propia, **distinta de la app de notas**, publicada al menos en pruebas internas de ambas tiendas (TestFlight en iOS y el canal de pruebas internas de Google Play) y que apruebe la rúbrica de la lección [Rúbrica y checklist final](/etapa/11-capstone/02-rubrica-y-checklist-final). En resumen, la rúbrica pide:
+
+- Carpetas por feature con arquitectura hexagonal.
+- Pruebas unitarias y un flujo E2E ejecutándose en CI.
+- Una autoauditoría MASVS L1.
+- Perfiles de EAS, un canal de actualizaciones OTA y Sentry configurado.
+- Un README que explique el problema, muestre capturas y diga cómo ejecutar el proyecto.
+
+### Primero el plano, después los ladrillos
+
+Nadie construye una casa comprando ladrillos y viendo qué sale. Primero se acuerda con el arquitecto cuántas habitaciones hacen falta, quién va a vivir ahí y qué no entra en el presupuesto (la piscina puede esperar). Ese acuerdo ocupa pocas páginas, pero evita demoler paredes después. En software pasa lo mismo: una definición breve y escrita te protege de la tentación más común del proyecto final, que es agregar funciones sin terminar ninguna.
+
+La definición tiene cuatro piezas: el problema, las historias de usuario, la lista de fuera de alcance y un boceto.
+
+### Elegir una app del tamaño correcto
+
+La app debe ser lo bastante grande para ejercitar todas las etapas y lo bastante pequeña para terminarla. Una buena medida: **una o dos entidades principales, tres a cinco pantallas y una función nativa**. Si no tienes una idea propia, elige una de estas cinco, todas de tamaño similar:
+
+| Idea | Entidad principal | Función nativa sugerida |
+| --- | --- | --- |
+| Registro de hábitos | `Habit` con días completados | Notificación local diaria |
+| Registro de gastos | `Expense` con monto, categoría y fecha | Cámara para fotografiar el recibo |
+| Lista de lectura | `Book` con estado (pendiente, leyendo, leído) | Deep link para compartir un libro |
+| Temporizador de entrenamiento | `Workout` con series y descansos | Vibración y notificación al terminar |
+| Cuidado de plantas | `Plant` con frecuencia de riego | Cámara para la foto de la planta y recordatorio de riego |
+
+Todas necesitan usuarios, datos por usuario con Row Level Security, persistencia y un formulario validado, así que cubren lo mismo que la app de notas sin repetirla. Evita ideas que dependan de pagos, chat en tiempo real o mapas complejos: son proyectos completos por sí mismos.
+
+### El problema en una frase
+
+Escribe quién tiene el problema, qué le pasa hoy y cómo sabrás que tu app lo resuelve:
+
+```text
+Problem: people who want to build a daily habit forget to do it after the
+first week and have no quick way to see their streak.
+Success: a user can mark today's habit in under 3 seconds and sees the
+current streak on the home screen.
+```
+
+Si no puedes escribirlo en dos o tres líneas, la idea todavía es difusa.
+
+### Tres historias de usuario
+
+Una historia de usuario describe una necesidad desde el punto de vista de quien usa la app. Sigue el formato `Como [rol], quiero [acción], para [beneficio]` y lleva criterios de aceptación verificables, que después se convierten en pruebas:
+
+```text
+Story 1: As a user, I want to mark a habit as done today,
+so that my streak grows.
+  - Given a habit not done today, when I tap it, it shows as done.
+  - Tapping it again the same day does not count twice.
+
+Story 2: As a user, I want to see my current streak,
+so that I stay motivated.
+  - The streak counts consecutive days ending today.
+  - A missed day resets the streak to 0.
+
+Story 3: As a user, I want a daily reminder at a time I choose,
+so that I do not forget.
+  - The reminder asks for notification permission only when I enable it.
+```
+
+Fíjate en el segundo criterio de la primera historia: es una regla de dominio. En la lección [Arquitectura y plan de trabajo](/etapa/11-capstone/01-arquitectura-y-plan) la ubicarás en la capa `domain`, y en esta lección la vas a programar en el ejercicio.
+
+### La lista de fuera de alcance
+
+Tan importante como lo que harás es lo que **no** harás en esta versión. Escríbelo explícitamente: "sin modo tablet", "sin sincronización entre dispositivos sin conexión", "sin estadísticas mensuales". Cuando aparezca una idea nueva a mitad del proyecto, la anotas en esa lista y sigues. La lista no es un rechazo: es la versión 1.1.
+
+### Un boceto de baja fidelidad
+
+Un boceto de baja fidelidad usa cajas grises en lugar de diseño final. Sirve para decidir qué va en cada pantalla antes de pensar en colores o tipografías. Lo construyes con los mismos componentes que ya conoces (`View`, `Text`, `Pressable`, `ScrollView`) y reemplazas cada caja por el componente real cuando la feature esté lista. Si necesitas repasar el arranque del proyecto, la documentación oficial de Expo lo explica en https://docs.expo.dev/.
+
+## Práctica
+
+Este es el boceto de la pantalla principal del registro de hábitos. Cámbialo para que refleje la pantalla principal de tu app: ajusta el título, la cantidad de filas y el botón de acción.
+
+<Snack
+  platform="ios"
+  sdkVersion="52.0.0"
+  code={`import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+
+const placeholders = ["habit-1", "habit-2", "habit-3", "habit-4"];
+
+export default function App() {
+  return (
+    <View style={styles.screen}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Hoy</Text>
+        <View style={styles.avatar} />
+      </View>
+      <View style={styles.summary}>
+        <Text style={styles.label}>[Resumen: racha actual y hábitos de hoy]</Text>
+      </View>
+      <ScrollView contentContainerStyle={styles.list}>
+        {placeholders.map((id) => (
+          <View key={id} style={styles.row}>
+            <View style={styles.check} />
+            <View style={styles.lines}>
+              <View style={styles.lineLong} />
+              <View style={styles.lineShort} />
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+      <Pressable style={styles.fab} accessibilityRole="button" accessibilityLabel="Agregar hábito">
+        <Text style={styles.fabText}>+</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, paddingTop: 56, paddingHorizontal: 16, backgroundColor: "#fafafa" },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  title: { fontSize: 28, fontWeight: "700" },
+  avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#d0d0d0" },
+  summary: { marginTop: 16, height: 96, borderRadius: 12, backgroundColor: "#e4e4e4", justifyContent: "center", alignItems: "center" },
+  label: { color: "#666" },
+  list: { paddingVertical: 16, gap: 12 },
+  row: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, backgroundColor: "#eee" },
+  check: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: "#aaa" },
+  lines: { flex: 1, gap: 6 },
+  lineLong: { height: 12, width: "70%", borderRadius: 6, backgroundColor: "#d0d0d0" },
+  lineShort: { height: 10, width: "40%", borderRadius: 5, backgroundColor: "#dcdcdc" },
+  fab: { position: "absolute", right: 24, bottom: 40, width: 56, height: 56, borderRadius: 28, backgroundColor: "#333", justifyContent: "center", alignItems: "center" },
+  fabText: { color: "#fff", fontSize: 28, lineHeight: 30 },
+});`}
+/>
+
+Cuando tengas tu definición escrita, marca cada punto. Guarda el documento en el repositorio del proyecto (por ejemplo, `docs/definition.md`) para que la definición viaje con el código.
+
+<Checklist
+  id="11-capstone/00-elegir-y-definir-tu-app/definicion"
+  items={[
+    "Elegí una app distinta de la app de notas, con una o dos entidades principales y una función nativa",
+    "Escribí el problema en dos o tres líneas, con un criterio de éxito medible",
+    "Escribí la historia de usuario 1 con al menos dos criterios de aceptación verificables",
+    "Escribí la historia de usuario 2 con al menos dos criterios de aceptación verificables",
+    "Escribí la historia de usuario 3 con al menos un criterio de aceptación verificable",
+    "Escribí una lista de fuera de alcance con al menos tres elementos",
+    "Adapté el boceto de baja fidelidad a la pantalla principal de mi app",
+    "Guardé la definición en docs/definition.md dentro del repositorio del proyecto"
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Tu primera regla de dominio"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type Habit = { id: string; name: string; completedOn: string[] };
+
+function addDays(isoDate: string, days: number): string {
+  const date = new Date(isoDate + "T00:00:00Z");
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function currentStreak(habit: Habit, today: string): number {
+  const done = new Set(habit.completedOn);
+  let streak = 0;
+  let day = today;
+  while (done.has(day)) {
+    streak++;
+    day = addDays(day, -1);
+  }
+  return streak;
+}
+
+const reading: Habit = {
+  id: "h1",
+  name: "Read 10 pages",
+  completedOn: ["2026-09-24", "2026-09-25", "2026-09-26"],
+};
+
+console.log(currentStreak(reading, "2026-09-26")); // 3
+console.log(currentStreak(reading, "2026-09-27")); // 0
+console.log(currentStreak({ ...reading, completedOn: [] }, "2026-09-26")); // 0`}
+    />
+  }
+>
+  Convierte la historia 2 del registro de hábitos en una función pura de TypeScript, sin importar nada de React ni de Expo. Escribe `currentStreak(habit, today)`, que recibe un hábito con las fechas completadas en formato `YYYY-MM-DD` y devuelve cuántos días consecutivos terminan en `today`. Comprueba que un hábito completado el 24, 25 y 26 de septiembre tiene racha 3 el día 26 y racha 0 el día 27. Si elegiste otra app, escribe la regla equivalente de tu dominio (por ejemplo, el total de gastos de un mes).
+</Challenge>
+
+## Errores comunes
+
+**Repetir la app de notas con otro nombre.** Se ve como una app de "recetas" o "ideas" cuya única entidad es un texto con título. Ocurre porque es lo que ya sabes construir y parece seguro. Se detecta comparando tus entidades con `Note`: si tienen los mismos campos y las mismas pantallas, cambia de idea o agrega la regla de dominio que la distingue (rachas, montos por categoría, frecuencia de riego).
+
+**Elegir una app demasiado grande.** Se ve como una definición con diez historias, pagos, chat y mapas. Ocurre porque la ambición inicial no considera que publicar y auditar también lleva tiempo. Se detecta contando: más de cinco pantallas o más de dos entidades principales es una señal de que debes mover funciones a la lista de fuera de alcance.
+
+**Criterios de aceptación que no se pueden verificar.** Se ve como "la app debe ser rápida" o "fácil de usar". Ocurre porque se describen deseos en lugar de comportamientos. Se detecta intentando escribir la prueba: si no puedes imaginar un `expect` o un paso de Maestro que lo compruebe, reescribe el criterio con una condición observable ("marcar un hábito toma un toque").
+
+<Flashcards
+  cards={[
+    { front: "¿Qué cuatro piezas forman la definición de una app antes de programarla?", back: "El problema con un criterio de éxito, las historias de usuario, la lista de fuera de alcance y un boceto de baja fidelidad." },
+    { front: "¿Qué formato sigue una historia de usuario?", back: "Como [rol], quiero [acción], para [beneficio], acompañada de criterios de aceptación verificables." },
+    { front: "¿Para qué sirve una lista de fuera de alcance en un proyecto?", back: "Para dejar por escrito lo que no entra en esta versión y evitar agregar funciones sin terminar las planeadas." },
+    { front: "¿Qué tamaño es adecuado para un proyecto final de React Native?", back: "Una o dos entidades principales, tres a cinco pantallas y una función nativa." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Cuál de estos criterios de aceptación es verificable?",
+      options: [
+        { text: "La app debe sentirse rápida", correct: false, feedback: "Es un deseo, no un comportamiento observable. No puedes escribir una prueba para él." },
+        { text: "Marcar un hábito dos veces el mismo día no suma dos días a la racha", correct: true, feedback: "Correcto: describe una entrada y un resultado que una prueba unitaria puede comprobar." },
+        { text: "La app debe ser fácil de usar", correct: false, feedback: "Es subjetivo. Reescríbelo con una condición observable, como el número de toques." }
+      ]
+    },
+    {
+      prompt: "A mitad del proyecto se te ocurre agregar estadísticas mensuales. ¿Qué haces?",
+      options: [
+        { text: "La agregas de inmediato porque mejora la app", correct: false, feedback: "Cada función nueva retrasa la entrega de las que ya planeaste." },
+        { text: "La anotas en la lista de fuera de alcance y sigues con las historias planeadas", correct: true, feedback: "Correcto: la lista de fuera de alcance guarda las ideas para la siguiente versión." },
+        { text: "Reemplazas una historia de usuario por la nueva idea", correct: false, feedback: "Cambiar el alcance a mitad del camino invalida el plan y las pruebas escritas." }
+      ]
+    },
+    {
+      prompt: "¿Qué propuesta de capstone cumple mejor las reglas del proyecto final?",
+      options: [
+        { text: "Una app de notas con otro color y otro nombre", correct: false, feedback: "El capstone debe ser una app distinta de la app de notas." },
+        { text: "Un registro de gastos con categorías, foto del recibo y datos por usuario", correct: true, feedback: "Correcto: tiene una entidad clara, una regla de dominio y una función nativa." },
+        { text: "Una red social con chat en tiempo real, pagos y mapas", correct: false, feedback: "Es demasiado grande para terminarla, auditarla y publicarla con calidad." }
+      ]
+    }
+  ]}
+/>
