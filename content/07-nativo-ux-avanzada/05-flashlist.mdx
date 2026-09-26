@@ -1,0 +1,257 @@
+---
+id: "07-nativo-ux-avanzada/05-flashlist"
+title: "Listas de alto rendimiento con FlashList"
+stage: 7
+module: "Movimiento"
+order: 5
+minutes: 12
+prereqs: ["07-nativo-ux-avanzada/04-gestos"]
+summary: "Sustituye FlatList por FlashList v2 para reciclar filas, entiende qué cambió respecto a estimatedItemSize y separa tipos de fila con getItemType."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás renderizar una lista larga con `FlashList`, explicar cómo recicla las filas y usar `getItemType` cuando la lista mezcla filas de distinto tipo.
+
+**Prerrequisitos:** `07-nativo-ux-avanzada/04-gestos`
+
+## Concepto
+
+En la etapa 4 usaste `FlatList` para mostrar notas. `FlatList` es virtualizada: solo monta las filas que están cerca de la pantalla y desmonta las que se alejan. Funciona bien con decenas o cientos de elementos, pero cuando el usuario hace scroll rápido por miles de notas, montar y desmontar componentes sin parar cuesta tiempo, y aparecen huecos en blanco antes de que las filas lleguen.
+
+`FlashList`, de Shopify, cambia la estrategia: en lugar de destruir una fila que sale de la pantalla, la **recicla**. Toma ese mismo componente ya montado y le pasa los datos de la fila que va a entrar.
+
+La analogía: piensa en los platos de un restaurante. `FlatList` tira cada plato a la basura cuando el cliente termina y fabrica uno nuevo para el siguiente. `FlashList` lava el plato y lo vuelve a servir con otra comida. Fabricar platos es caro; lavarlos es barato. Por eso el resultado es un scroll más fluido con menos trabajo del hilo de JavaScript.
+
+Documentación oficial: https://shopify.github.io/flash-list/ y https://shopify.github.io/flash-list/docs/v2-changes
+
+### Instalar y usar
+
+```bash
+npx expo install @shopify/flash-list
+```
+
+La API imita a `FlatList`, así que el cambio suele ser de una línea:
+
+```tsx
+import { FlashList } from "@shopify/flash-list";
+
+type Note = { id: string; title: string };
+
+export function NoteList({ notes }: { notes: Note[] }) {
+  return (
+    <FlashList
+      data={notes}
+      keyExtractor={(note) => note.id}
+      renderItem={({ item }) => <NoteRow note={item} />}
+    />
+  );
+}
+```
+
+`data`, `renderItem`, `keyExtractor`, `ListEmptyComponent`, `onEndReached` y `ItemSeparatorComponent` funcionan igual que en `FlatList`.
+
+### `estimatedItemSize` ya no existe en v2
+
+Si lees artículos sobre FlashList, casi todos te piden pasar `estimatedItemSize`, un número con la altura aproximada de cada fila. Eso era obligatorio en FlashList v1. Expo SDK 55 instala FlashList v2, que mide las filas por sí sola gracias a la New Architecture y **ya no lee esa prop**. Si la escribes, no pasa nada útil: solo es ruido que confunde a quien lee el código.
+
+<Callout kind="tip">
+  FlashList v2 solo funciona con la New Architecture, que es la opción por defecto en los proyectos Expo actuales. Si algún día trabajas en un proyecto antiguo con la arquitectura clásica, tendrás que usar FlashList v1 y entonces sí necesitarás `estimatedItemSize`.
+</Callout>
+
+### Tipos de fila con `getItemType`
+
+El reciclaje funciona mejor cuando las filas que se intercambian se parecen. Si tu lista mezcla encabezados de fecha y notas, reciclar un encabezado para convertirlo en nota obliga a React a reconstruir casi todo. `getItemType` le dice a FlashList qué filas son del mismo tipo, y solo recicla entre filas del mismo grupo:
+
+```tsx
+type Row = { kind: "header"; id: string; label: string } | { kind: "note"; id: string; title: string };
+
+<FlashList
+  data={rows}
+  keyExtractor={(row) => row.id}
+  getItemType={(row) => row.kind}
+  renderItem={({ item }) =>
+    item.kind === "header" ? <DateHeader label={item.label} /> : <NoteRow title={item.title} />
+  }
+/>;
+```
+
+Es el mismo principio de los platos: el restaurante lava los platos hondos para servir sopa y los planos para servir carne. No sirve sopa en un plato plano.
+
+### Cuidado con el estado dentro de una fila
+
+Como la fila se reutiliza, un `useState` dentro de `NoteRow` **sobrevive** cuando la fila pasa a mostrar otra nota. Si una fila tenía `expanded = true` y se recicla, la nota siguiente aparece expandida sin que nadie la haya tocado. Tienes dos salidas:
+
+- Guardar ese estado fuera de la fila, por ejemplo en un objeto indexado por `id` en el componente padre o en tu store.
+- Usar `useRecyclingState` de FlashList, que se reinicia cuando cambian sus dependencias:
+
+```tsx
+import { useRecyclingState } from "@shopify/flash-list";
+
+function NoteRow({ note }: { note: Note }) {
+  const [expanded, setExpanded] = useRecyclingState(false, [note.id]);
+  // expanded goes back to false whenever this row shows a different note.
+}
+```
+
+Por el mismo motivo, no pongas una prop `key` en el componente raíz de la fila: obligaría a React a desmontarlo y perderías el reciclaje. El `keyExtractor` de la lista es suficiente.
+
+### Cuándo usar cada una
+
+- Lista corta (menos de unas cien filas) y simple: `FlatList` está bien y no añade dependencias.
+- Lista larga, filas con imágenes o scroll muy rápido: `FlashList`.
+- Pocos elementos que siempre caben en pantalla: ni siquiera necesitas una lista virtualizada; un `ScrollView` basta.
+
+Mide antes de cambiar. En la lección de performance verás cómo detectar si la lista es realmente el cuello de botella.
+
+## Práctica
+
+El Snack genera 5000 notas agrupadas por día, con encabezados y filas de nota. Haz scroll rápido. Después cambia `getItemType` por una función que devuelva siempre `"row"` y observa si notas diferencia en tu teléfono.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  dependencies={{ '@shopify/flash-list': '2.0.2' }}
+  code={`import { StyleSheet, Text, View } from "react-native";
+import { FlashList } from "@shopify/flash-list";
+
+type Row =
+  | { kind: "header"; id: string; label: string }
+  | { kind: "note"; id: string; title: string };
+
+const ROWS: Row[] = [];
+for (let i = 0; i < 5000; i++) {
+  if (i % 20 === 0) {
+    ROWS.push({ kind: "header", id: "h" + i, label: "Día " + (i / 20 + 1) });
+  }
+  ROWS.push({ kind: "note", id: "n" + i, title: "Nota número " + (i + 1) });
+}
+
+export default function App() {
+  return (
+    <View style={styles.container}>
+      <FlashList
+        data={ROWS}
+        keyExtractor={(row) => row.id}
+        getItemType={(row) => row.kind}
+        renderItem={({ item }) =>
+          item.kind === "header" ? (
+            <Text style={styles.header}>{item.label}</Text>
+          ) : (
+            <View style={styles.note}>
+              <Text style={styles.title}>{item.title}</Text>
+            </View>
+          )
+        }
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, paddingTop: 48 },
+  header: { fontSize: 14, fontWeight: "700", padding: 12, backgroundColor: "#efe6da" },
+  note: { padding: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: "#cccccc" },
+  title: { fontSize: 16 }
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Filas expandibles sin estado fantasma"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="55.0.0"
+      dependencies={{ '@shopify/flash-list': '2.0.2' }}
+      code={`import { Pressable, StyleSheet, Text, View } from "react-native";
+import { FlashList, useRecyclingState } from "@shopify/flash-list";
+
+type Note = { id: string; title: string; body: string };
+
+const NOTES: Note[] = Array.from({ length: 2000 }, (_, i) => ({
+  id: String(i),
+  title: "Nota " + (i + 1),
+  body: "Contenido completo de la nota " + (i + 1)
+}));
+
+function NoteRow({ note }: { note: Note }) {
+  const [expanded, setExpanded] = useRecyclingState(false, [note.id]);
+  return (
+    <Pressable style={styles.row} onPress={() => setExpanded(!expanded)}>
+      <Text style={styles.title}>{note.title}</Text>
+      {expanded && <Text style={styles.body}>{note.body}</Text>}
+    </Pressable>
+  );
+}
+
+export default function App() {
+  return (
+    <View style={styles.container}>
+      <FlashList
+        data={NOTES}
+        keyExtractor={(note) => note.id}
+        renderItem={({ item }) => <NoteRow note={item} />}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, paddingTop: 48 },
+  row: { padding: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: "#cccccc" },
+  title: { fontSize: 16, fontWeight: "600" },
+  body: { marginTop: 8, fontSize: 14 }
+});`}
+    />
+  }
+>
+  Crea una lista de 2000 notas con `FlashList` en la que tocar una fila la expande y muestra su contenido. Primero hazlo con `useState` dentro de la fila, expande la nota 1 y haz scroll rápido: verás otras notas expandidas sin haberlas tocado. Después corrígelo con `useRecyclingState` usando `note.id` como dependencia.
+</Challenge>
+
+## Errores comunes
+
+**Copiar `estimatedItemSize` de tutoriales de v1.** Se ve como una prop numérica que nadie sabe de dónde salió y que no cambia nada. Ocurre porque la mayoría de artículos se escribieron para FlashList v1. Se detecta revisando la versión en `package.json`: si es 2.x, la prop no se usa. Solución: bórrala.
+
+**Estado local que "salta" entre filas.** Una fila aparece marcada, expandida o con un texto escrito que pertenecía a otra nota. Ocurre porque FlashList reutiliza el componente y su `useState` sobrevive al reciclaje. Se detecta al hacer scroll después de cambiar el estado de una fila. Solución: mueve el estado al padre indexado por `id` o usa `useRecyclingState`.
+
+**Poner `key` en la raíz de la fila.** El scroll se siente igual o peor que con `FlatList`. Ocurre porque una `key` distinta en cada fila obliga a React a desmontar y montar el componente, justo lo que el reciclaje evita. Se detecta buscando `key=` dentro de `renderItem`. Solución: quítala y deja que `keyExtractor` identifique las filas.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué diferencia principal hay entre FlatList y FlashList?", back: "FlatList desmonta y monta filas; FlashList recicla los componentes ya montados y les pasa datos nuevos." },
+    { front: "¿Necesita FlashList v2 la prop estimatedItemSize?", back: "No. Era obligatoria en v1; v2 mide las filas por sí sola y la ignora." },
+    { front: "¿Para qué sirve getItemType en FlashList?", back: "Para agrupar filas por tipo y reciclar solo entre filas del mismo tipo." },
+    { front: "¿Por qué un useState dentro de una fila de FlashList puede mostrar datos de otra fila?", back: "Porque la fila se recicla y su estado sobrevive; se resuelve con useRecyclingState o moviendo el estado al padre." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Tu lista mezcla encabezados de fecha y notas. ¿Qué prop de FlashList mejora el reciclaje?",
+      options: [
+        { text: "getItemType", correct: true, feedback: "Correcto: separa los tipos para reciclar encabezados con encabezados y notas con notas." },
+        { text: "estimatedItemSize", correct: false, feedback: "En v2 esa prop no se usa." },
+        { text: "keyExtractor", correct: false, feedback: "keyExtractor identifica filas, no las agrupa por tipo." }
+      ]
+    },
+    {
+      prompt: "Después de hacer scroll, una nota aparece expandida aunque nadie la tocó. ¿Cuál es la causa más probable?",
+      options: [
+        { text: "Un error en keyExtractor", correct: false, feedback: "Las claves duplicadas causan otros problemas, pero no heredan estado de otra fila." },
+        { text: "El useState de la fila sobrevivió al reciclaje", correct: true, feedback: "Correcto: la fila reutilizada conserva su estado local." },
+        { text: "FlashList no admite Pressable", correct: false, feedback: "Pressable funciona sin problema dentro de FlashList." }
+      ]
+    },
+    {
+      prompt: "Una pantalla muestra siempre 6 opciones fijas que caben en pantalla. ¿Qué conviene usar?",
+      options: [
+        { text: "FlashList", correct: false, feedback: "Con tan pocos elementos, el reciclaje no aporta nada." },
+        { text: "FlatList", correct: false, feedback: "La virtualización no tiene sentido si todo cabe en pantalla." },
+        { text: "Un View o ScrollView con los elementos", correct: true, feedback: "Correcto: sin virtualización, el código es más simple." }
+      ]
+    }
+  ]}
+/>
