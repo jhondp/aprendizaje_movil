@@ -1,0 +1,44 @@
+.root {
+  display: flex;
+  gap: 16px;
+  background: var(--color-sand);
+  border-radius: 20px;
+  padding: 24px 26px;
+  margin: 40px 0;
+}
+
+.icon {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.body {
+  flex: 1;
+}
+
+.label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.textarea {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  resize: vertical;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-teal);
+  outline: none;
+}
