@@ -1,0 +1,113 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 40px;
+}
+
+.card {
+  width: min(640px, 100%);
+  min-height: 380px;
+  border-radius: 32px;
+  padding: 48px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  text-align: left;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.3);
+  transition: background 0.3s;
+  background: var(--color-ink);
+  color: var(--color-sand);
+}
+
+.card[data-side='back'] {
+  background: var(--color-sand);
+  color: var(--color-ink);
+}
+
+.side,
+.hint {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--color-lime);
+}
+
+.card[data-side='front'] .side::before {
+  content: 'Pregunta';
+}
+
+.card[data-side='back'] .side::before {
+  content: 'Respuesta';
+}
+
+.card[data-side='back'] .side,
+.card[data-side='back'] .hint {
+  color: var(--color-accent);
+}
+
+.hint {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+
+.text {
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.grades {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.grade {
+  width: 160px;
+  height: 56px;
+  border-radius: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.grade[data-grade='again'] {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.grade[data-grade='good'] {
+  background: var(--color-sand);
+  color: var(--color-ink);
+}
+
+.grade[data-grade='easy'] {
+  background: var(--color-lime);
+  color: var(--color-ink);
+}
+
+.gradeLabel {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.gradeWhen {
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+@media (max-width: 900px) {
+  .card {
+    padding: 28px;
+    min-height: 280px;
+  }
+  .text {
+    font-size: 24px;
+  }
+}
