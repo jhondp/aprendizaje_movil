@@ -45,7 +45,7 @@ Trabajas sobre el repositorio que terminaste en [el proyecto de la etapa 5](/eta
 }
 ```
 
-Usa en `packageManager` la versión que muestra `pnpm --version` en tu máquina.
+Usa en `packageManager` la versión que muestra `pnpm --version` en tu máquina. Si tu proyecto todavía tiene `package-lock.json`, haz primero la migración a pnpm de la lección de GitHub Actions (`pnpm import`, borrar `package-lock.json` y confirmar `pnpm-lock.yaml`); sin ella, `pnpm install --frozen-lockfile` falla en CI porque no hay lockfile de pnpm.
 
 **2. Pruebas unitarias.** Al menos cinco pruebas con Jest y React Native Testing Library, repartidas así como mínimo:
 
@@ -127,7 +127,7 @@ Marca cada punto cuando esté cumplido en tu repositorio.
   solution={
     <Terminal
       steps={[
-        { cmd: "cat .github/workflows/e2e.yml", out: "name: E2E\n\non:\n  pull_request:\n\njobs:\n  maestro-android:\n    runs-on: ubuntu-latest\n    timeout-minutes: 45\n    steps:\n      - uses: actions/checkout@v4\n      - uses: pnpm/action-setup@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 22\n          cache: pnpm\n      - uses: actions/setup-java@v4\n        with:\n          distribution: temurin\n          java-version: 17\n      - run: pnpm install --frozen-lockfile\n      - name: Install Maestro\n        run: |\n          curl -fsSL \"https://get.maestro.mobile.dev\" | bash\n          echo \"$HOME/.maestro/bin\" >> \"$GITHUB_PATH\"\n      - name: Enable KVM for the emulator\n        run: |\n          echo 'KERNEL==\"kvm\", GROUP=\"kvm\", MODE=\"0666\", OPTIONS+=\"static_node=kvm\"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules\n          sudo udevadm control --reload-rules\n          sudo udevadm trigger --name-match=kvm\n      - name: Build, install and run flows\n        uses: reactivecircus/android-emulator-runner@v2\n        with:\n          api-level: 34\n          arch: x86_64\n          script: npx expo run:android --variant release --no-bundler && maestro test flows/" },
+        { cmd: "cat .github/workflows/e2e.yml", out: "name: E2E\n\non:\n  pull_request:\n\njobs:\n  maestro-android:\n    runs-on: ubuntu-latest\n    timeout-minutes: 45\n    steps:\n      - uses: actions/checkout@v7\n      - uses: pnpm/action-setup@v6\n      - uses: actions/setup-node@v7\n        with:\n          node-version: 22\n          cache: pnpm\n      - uses: actions/setup-java@v6\n        with:\n          distribution: temurin\n          java-version: 17\n      - run: pnpm install --frozen-lockfile\n      - name: Install Maestro\n        run: |\n          curl -fsSL \"https://get.maestro.mobile.dev\" | bash\n          echo \"$HOME/.maestro/bin\" >> \"$GITHUB_PATH\"\n      - name: Enable KVM for the emulator\n        run: |\n          echo 'KERNEL==\"kvm\", GROUP=\"kvm\", MODE=\"0666\", OPTIONS+=\"static_node=kvm\"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules\n          sudo udevadm control --reload-rules\n          sudo udevadm trigger --name-match=kvm\n      - name: Build, install and run flows\n        uses: reactivecircus/android-emulator-runner@v2\n        with:\n          api-level: 34\n          arch: x86_64\n          script: npx expo run:android --variant release --no-bundler && maestro test flows/" },
         { cmd: "gh run watch", out: "✓ feat/e2e-ci E2E · 1210\nTriggered via pull_request about 21 minutes ago\n\nJOBS\n✓ maestro-android in 19m32s (ID 3390)" },
       ]}
     />

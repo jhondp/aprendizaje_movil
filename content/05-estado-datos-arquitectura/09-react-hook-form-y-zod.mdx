@@ -267,7 +267,7 @@ export default function App() {
 
 **Usar `register` con `TextInput`.** Se ve como `<TextInput {...register("title")} />`, copiado de un ejemplo web. Pasa porque la documentación empieza por la web. El campo no actualiza el formulario y `handleSubmit` siempre recibe valores vacíos. Se detecta porque los errores de "obligatorio" aparecen aunque escribiste algo. Solución: `Controller` con `onChangeText={onChange}`.
 
-**Olvidar `defaultValues`.** Se ve como `useForm({ resolver })` sin valores iniciales. Ocurre porque en la web parece opcional. El `TextInput` arranca con `value={undefined}` y React avisa que un componente pasó de no controlado a controlado; además `reset()` no sabe a qué volver. Se detecta por esa advertencia en la consola. Solución: declarar un valor inicial para cada campo.
+**Olvidar `defaultValues`.** Se ve como `useForm({ resolver })` sin valores iniciales. Ocurre porque en la web parece opcional. El `TextInput` arranca con `value={undefined}` y `reset()` no sabe a qué volver. Se detecta porque, después de `reset()`, el campo sigue mostrando el texto anterior, o porque TypeScript marca `undefined` en funciones que esperan un `string` (por ejemplo, al llamar `value.trim()`). Solución: declarar un valor inicial para cada campo.
 
 **Validar dos veces a mano.** Se ve como un `if (title.trim() === "")` dentro de `onSubmit` además del esquema. Pasa por desconfiar de la librería. Las reglas se duplican y terminan diciendo cosas distintas. Se detecta cuando cambias un límite en el esquema y el formulario sigue aplicando el antiguo. Solución: la regla del formulario vive en el esquema; `onSubmit` solo recibe datos válidos.
 

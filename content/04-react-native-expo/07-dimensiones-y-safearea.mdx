@@ -222,7 +222,7 @@ const styles = StyleSheet.create({
 
 ## Errores comunes
 
-**Usar useSafeAreaInsets en el mismo componente que crea el provider.** Los insets valen siempre `0`. Ocurre porque un hook lee el provider más cercano **por encima** del componente, y el `SafeAreaProvider` que ese componente renderiza está por debajo. Se detecta imprimiendo los insets en un dispositivo con notch. Solución: usa el hook en un componente hijo, como `Info` en la práctica.
+**Usar useSafeAreaInsets en el mismo componente que crea el provider.** La app se detiene con el error "No safe area value available. Make sure you are rendering `<SafeAreaProvider>` at the top of your app." Ocurre porque un hook lee el provider más cercano **por encima** del componente, y el `SafeAreaProvider` que ese componente renderiza está por debajo, así que para el hook no hay ningún provider. Se detecta por ese mensaje de error en la pantalla roja y en la consola de Metro. Solución: usa el hook en un componente hijo, como `Info` en la práctica.
 
 **Importar SafeAreaView desde react-native.** En iOS parece funcionar, pero en Android el contenido queda debajo de la barra de estado, y el editor muestra una advertencia de deprecación. Ocurre porque ese componente solo existía para iOS. Se detecta probando en Android. Solución: importa `SafeAreaView` de `react-native-safe-area-context`.
 

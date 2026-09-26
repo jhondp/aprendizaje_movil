@@ -32,6 +32,22 @@ GitHub Actions es el servicio de CI integrado en GitHub. Documentación oficial 
 - **Job**: un conjunto de pasos que se ejecuta en una máquina virtual nueva, llamada **runner**. Los jobs de un workflow corren en paralelo salvo que declares dependencias.
 - **Step**: un paso dentro del job. Puede ser un comando de terminal (`run`) o una **action** reutilizable publicada por otra persona (`uses`).
 
+### De npm a pnpm
+
+Hasta ahora creaste e instalaste la app con npm, que deja un `package-lock.json`. El pipeline de esta etapa usa **pnpm**, un gestor de paquetes más rápido y estricto con las dependencias que no declaraste. Cambiar de gestor es como mudar la despensa a estantes nuevos: primero pasas el inventario tal cual, después tiras la lista vieja para no tener dos. Hazlo una sola vez, en una rama propia:
+
+```bash
+npm install -g pnpm          # or: corepack enable pnpm
+pnpm import                  # creates pnpm-lock.yaml from package-lock.json
+rm -rf package-lock.json node_modules
+pnpm install
+pnpm pkg set packageManager="pnpm@$(pnpm --version)"
+git add pnpm-lock.yaml package.json && git rm --cached package-lock.json
+git commit -m "build: switch package manager to pnpm"
+```
+
+`pnpm import` respeta las versiones exactas que ya tenías en `package-lock.json`, así que la app sigue usando las mismas dependencias. Desde aquí instalas con `pnpm add` y `npx expo install`, que detecta `pnpm-lock.yaml` y usa pnpm por su cuenta. Si prefieres quedarte con npm, el mismo workflow funciona si eliminas el paso `pnpm/action-setup` y cambias `cache: pnpm` por `cache: npm` y `pnpm install --frozen-lockfile` por `npm ci`. Documentación: https://pnpm.io/cli/import
+
 ### El workflow completo
 
 Este es el archivo completo para la app de notas. Asume que `package.json` tiene los scripts `lint`, `format:check`, `typecheck` y `test` que definiste en lecciones anteriores:
@@ -56,13 +72,13 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Set up Node.js with the pnpm cache
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm

@@ -24,8 +24,11 @@ Un piloto no aprende a aterrizar con tormenta en un avión real con pasajeros: u
 En la etapa anterior separaste la app de notas en capas y definiste un puerto `NotesRepository`. Esa decisión rinde frutos ahora: si la interfaz de usuario solo conoce el puerto, en las pruebas puedes darle cualquier implementación.
 
 ```ts
-// src/features/notes/domain/NotesRepository.ts
+// src/features/notes/domain/Note.ts
 export type Note = { id: string; title: string };
+
+// src/features/notes/application/NotesRepository.ts (the port lives in application, as in stage 5)
+import type { Note } from "../domain/Note";
 
 export interface NotesRepository {
   list(): Promise<Note[]>;
@@ -36,7 +39,8 @@ export interface NotesRepository {
 ```ts
 // src/features/notes/ui/useNotes.ts
 import { useEffect, useState } from "react";
-import type { Note, NotesRepository } from "../domain/NotesRepository";
+import type { Note } from "../domain/Note";
+import type { NotesRepository } from "../application/NotesRepository";
 
 export function useNotes(repository: NotesRepository) {
   const [notes, setNotes] = useState<Note[]>([]);
@@ -81,7 +85,7 @@ Un hook solo puede ejecutarse dentro de un componente. `renderHook` crea ese com
 ```ts
 // src/features/notes/ui/useNotes.test.ts
 import { act, renderHook, waitFor } from "@testing-library/react-native";
-import type { NotesRepository } from "../domain/NotesRepository";
+import type { NotesRepository } from "../application/NotesRepository";
 import { useNotes } from "./useNotes";
 
 function createFakeRepository(): NotesRepository {

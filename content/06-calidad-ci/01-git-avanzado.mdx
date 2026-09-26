@@ -136,7 +136,7 @@ Antes de continuar el rebase del paso 6, el archivo se editó a mano para dejar 
   solution={
     <Terminal
       steps={[
-        { cmd: "git rebase origin/main", out: "CONFLICT (content): Merge conflict in app/index.tsx\nerror: could not apply c19d2a0... feat(notes): add empty state" },
+        { cmd: "git rebase origin/main", out: "CONFLICT (content): Merge conflict in src/app/index.tsx\nerror: could not apply c19d2a0... feat(notes): add empty state" },
         { cmd: "git rebase --abort", out: "" },
         { cmd: "git status", out: "On branch feat/notes-empty-state\nnothing to commit, working tree clean" },
         { cmd: "git log --oneline -1", out: "c19d2a0 (HEAD -> feat/notes-empty-state) feat(notes): add empty state" },
@@ -144,7 +144,7 @@ Antes de continuar el rebase del paso 6, el archivo se editó a mano para dejar 
     />
   }
 >
-  Estás a mitad de un rebase con un conflicto en `app/index.tsx` y no sabes qué versión es la correcta. Escribe la secuencia de comandos que devuelve la rama al estado exacto anterior al rebase y comprueba con `git status` y `git log` que no perdiste tu commit.
+  Estás a mitad de un rebase con un conflicto en `src/app/index.tsx` y no sabes qué versión es la correcta. Escribe la secuencia de comandos que devuelve la rama al estado exacto anterior al rebase y comprueba con `git status` y `git log` que no perdiste tu commit.
 </Challenge>
 
 ## Errores comunes

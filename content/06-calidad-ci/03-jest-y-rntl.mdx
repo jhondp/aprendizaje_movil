@@ -25,8 +25,10 @@ Cuando pruebas un auto antes de comprarlo, no desarmas el motor para contar pist
 
 ```bash
 npx expo install jest-expo jest @types/jest --dev
-npx expo install @testing-library/react-native --dev
+npx expo install @testing-library/react-native test-renderer --dev
 ```
+
+React Native Testing Library 14 renderiza los componentes con el paquete `test-renderer`, que declara como dependencia par (peer). Instálalo de forma explícita: su versión tiene que coincidir con la versión menor de React de tu proyecto (por ejemplo, React 19.2 usa `test-renderer` 1.2), y si dejas que npm lo resuelva solo puede elegir una línea que no coincida y las pruebas fallan al renderizar.
 
 En `package.json`:
 

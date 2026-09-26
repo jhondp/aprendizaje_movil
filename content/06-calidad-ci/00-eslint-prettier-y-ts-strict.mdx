@@ -130,19 +130,19 @@ Recorre las tres verificaciones sobre un proyecto con problemas. Observa qué de
   steps={[
     {
       cmd: "npx expo lint",
-      out: "/home/ana/notes/app/index.tsx\n   8:9  warning  'unused' is assigned a value but never used  @typescript-eslint/no-unused-vars\n  12:6  warning  React Hook useEffect has a missing dependency: 'query'. Either include it or remove the dependency array  react-hooks/exhaustive-deps\n\n✖ 2 problems (0 errors, 2 warnings)",
+      out: "/home/ana/notes/src/app/index.tsx\n   8:9  warning  'unused' is assigned a value but never used  @typescript-eslint/no-unused-vars\n  12:6  warning  React Hook useEffect has a missing dependency: 'query'. Either include it or remove the dependency array  react-hooks/exhaustive-deps\n\n✖ 2 problems (0 errors, 2 warnings)",
     },
     {
       cmd: "npx prettier --check .",
-      out: "Checking formatting...\n[warn] app/index.tsx\n[warn] Code style issues found in the above file. Run Prettier with --write to fix.",
+      out: "Checking formatting...\n[warn] src/app/index.tsx\n[warn] Code style issues found in the above file. Run Prettier with --write to fix.",
     },
     {
       cmd: "npx tsc --noEmit",
-      out: "app/index.tsx(15,23): error TS7006: Parameter 'text' implicitly has an 'any' type.\n\nFound 1 error in app/index.tsx:15",
+      out: "src/app/index.tsx(15,23): error TS7006: Parameter 'text' implicitly has an 'any' type.\n\nFound 1 error in src/app/index.tsx:15",
     },
     {
       cmd: "npx prettier --write . && npx expo lint && npx tsc --noEmit",
-      out: "app/index.tsx 42ms\n\n✔ No problems found",
+      out: "src/app/index.tsx 42ms\n\n✔ No problems found",
     },
   ]}
 />

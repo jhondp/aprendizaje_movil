@@ -84,7 +84,7 @@ Para fuentes de Google Fonts existen paquetes listos, como `@expo-google-fonts/i
 
 ### @expo/vector-icons: íconos
 
-Los íconos vectoriales se escalan a cualquier tamaño sin perder nitidez y se colorean con una prop. `@expo/vector-icons` viene incluido en los proyectos de Expo y agrupa familias populares como Ionicons, MaterialIcons y FontAwesome:
+Los íconos vectoriales se escalan a cualquier tamaño sin perder nitidez y se colorean con una prop. `@expo/vector-icons` agrupa familias populares como Ionicons, MaterialIcons y FontAwesome. Desde Expo SDK 56 el paquete `expo` ya no lo incluye, así que en un proyecto creado con `create-expo-app@latest` lo instalas con `npx expo install @expo/vector-icons` (en los Snack de esta etapa, con SDK 55, se declara en `dependencies`). Para proyectos nuevos, Expo recomienda además migrar a los paquetes `@react-native-vector-icons/*` (por ejemplo `@react-native-vector-icons/ionicons`, con una API casi idéntica) o, para íconos del sistema, a `expo-symbols`:
 
 ```tsx
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -99,7 +99,7 @@ export default function Star() {
 - Importar cada familia desde su propia ruta (`@expo/vector-icons/Ionicons`) evita incluir en el bundle familias que no usas.
 
 <Callout kind="tip">
-  A partir de Expo SDK 56, Expo recomienda migrar a los paquetes `@react-native-vector-icons/*` (por ejemplo `@react-native-vector-icons/ionicons`), que ofrecen los mismos íconos con una API casi idéntica. Los Snack de esta etapa usan SDK 55, donde `@expo/vector-icons` es la opción estándar.
+  Los Snack de esta etapa usan SDK 55, donde `@expo/vector-icons` sigue siendo la opción estándar. En tu proyecto local con SDK 56 o posterior, instálalo explícitamente o usa `@react-native-vector-icons/*`; el código de los íconos cambia solo en la ruta del import.
 </Callout>
 
 ## Práctica
