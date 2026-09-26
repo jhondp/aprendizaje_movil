@@ -24,6 +24,36 @@ describe('LessonPage', () => {
     expect(await screen.findByText('Cuerpo de La terminal')).toBeInTheDocument();
   });
 
+  it('scrolls to the top when moving to another lesson', async () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    renderApp('/etapa/00-intro/00-a');
+    await screen.findByText('Cuerpo de Qué es un programa');
+    scrollTo.mockClear();
+    await userEvent.click(screen.getByRole('button', { name: 'Completar y seguir ›' }));
+    await screen.findByText('Cuerpo de La terminal');
+    expect(scrollTo).toHaveBeenCalledWith(0, 0);
+    scrollTo.mockRestore();
+  });
+
+  it('closes the lesson index with Escape', async () => {
+    renderApp('/etapa/00-intro/00-a');
+    await screen.findByText('Cuerpo de Qué es un programa');
+    const toggle = screen.getByRole('button', { name: 'Ver índice' });
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await userEvent.keyboard('{Escape}');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('links the index toggle to the sidebar it controls', async () => {
+    renderApp('/etapa/00-intro/00-a');
+    await screen.findByText('Cuerpo de Qué es un programa');
+    const toggle = screen.getByRole('button', { name: 'Ver índice' });
+    const id = toggle.getAttribute('aria-controls');
+    expect(id).toBeTruthy();
+    expect(document.getElementById(id ?? '')).toHaveTextContent('‹ Biblioteca');
+  });
+
   it('on the last lesson the button returns to the library', async () => {
     renderApp('/etapa/01-js/00-a');
     await screen.findByText('Cuerpo de Variables');

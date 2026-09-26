@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useCourse } from '@/application/CourseContext';
 import { useNotes } from '@/application/hooks/useNotes';
@@ -26,9 +26,12 @@ export function LessonPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showNote, setShowNote] = useState(false);
+  const sidebarId = useId();
 
   useEffect(() => {
     if (!lesson) return;
+    window.scrollTo(0, 0);
+    setSidebarOpen(false);
     openLesson(lesson.id);
     setShowNote(Boolean(notes[lesson.id]?.text));
     let cancelled = false;
@@ -69,9 +72,12 @@ export function LessonPage() {
   return (
     <LessonLayout
       sidebarOpen={sidebarOpen}
+      sidebarId={sidebarId}
       onToggleSidebar={() => setSidebarOpen((o) => !o)}
+      onCloseSidebar={() => setSidebarOpen(false)}
       sidebar={
         <Sidebar
+          id={sidebarId}
           stage={stage}
           currentLessonId={lesson.id}
           completed={state.completed}

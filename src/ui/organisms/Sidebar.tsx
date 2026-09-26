@@ -8,6 +8,7 @@ import { ROUTES } from '@/ui/routes';
 import styles from './Sidebar.module.css';
 
 export function Sidebar({
+  id,
   stage,
   currentLessonId,
   completed,
@@ -15,6 +16,7 @@ export function Sidebar({
   open,
   onClose,
 }: {
+  id?: string;
   stage: Stage;
   currentLessonId: LessonId;
   completed: Record<LessonId, string>;
@@ -25,8 +27,8 @@ export function Sidebar({
   const stateOf = (id: LessonId): LessonState =>
     id === currentLessonId ? 'active' : id in completed ? 'done' : 'pending';
   return (
-    <aside className={styles.root} data-open={open}>
-      <Link to={ROUTES.library} className={styles.back}>
+    <aside id={id} className={styles.root} data-open={open}>
+      <Link to={ROUTES.library} className={styles.back} onClick={onClose}>
         ‹ Biblioteca
       </Link>
       <div className={styles.kicker}>Etapa {stage.id}</div>
