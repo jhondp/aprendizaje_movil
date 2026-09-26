@@ -17,7 +17,7 @@ Al terminar esta lección vas a poder escribir JSX con expresiones dinámicas, r
 
 ## Concepto
 
-Piensa en una plantilla de carta que usas para combinar correspondencia: "Estimado/a {nombre}: tu pedido {numeroDePedido} llega el {fecha}." El texto fijo se mantiene igual para todas las cartas, pero las palabras entre llaves se reemplazan con datos reales antes de imprimir. JSX funciona igual: es una plantilla de HTML con espacios en blanco, escritos entre llaves `{}`, que se rellenan con valores calculados en JavaScript.
+Piensa en una plantilla de carta que usas para combinar correspondencia: "Estimado/a `{nombre}`: tu pedido `{numeroDePedido}` llega el `{fecha}`." El texto fijo se mantiene igual para todas las cartas, pero las palabras entre llaves se reemplazan con datos reales antes de imprimir. JSX funciona igual: es una plantilla de HTML con espacios en blanco, escritos entre llaves `{}`, que se rellenan con valores calculados en JavaScript.
 
 ```tsx
 function Greeting({ name, orderId }: { name: string; orderId: number }) {
