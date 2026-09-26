@@ -1,0 +1,267 @@
+---
+id: "04-react-native-expo/07-dimensiones-y-safearea"
+title: "Dimensiones y SafeArea"
+stage: 4
+module: "Estilos"
+order: 7
+minutes: 12
+prereqs: ["04-react-native-expo/06-stylesheet-y-flexbox"]
+summary: "Adapta el layout al tamaño de la pantalla con useWindowDimensions y evita el notch y las barras del sistema con react-native-safe-area-context."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás adaptar un layout al ancho de la pantalla con `useWindowDimensions` y proteger el contenido de las zonas del sistema con `SafeAreaView` de `react-native-safe-area-context`.
+
+**Prerrequisitos:** `04-react-native-expo/06-stylesheet-y-flexbox`
+
+## Concepto
+
+Los teléfonos no son rectángulos perfectos. Tienen notch o isla dinámica arriba, una barra de gestos abajo, esquinas redondeadas y, en Android, barras de estado y de navegación que tu app dibuja por debajo. Además, el mismo código se ejecuta en un teléfono pequeño, en uno grande, en una tableta y en horizontal. En esta lección resuelves dos preguntas: cuánto espacio tengo y qué parte de ese espacio es segura para poner contenido.
+
+Documentación oficial: https://reactnative.dev/docs/usewindowdimensions y https://docs.expo.dev/versions/latest/sdk/safe-area-context/
+
+### Una analogía: el marco de un cuadro
+
+Cuando enmarcas una foto, el marco tapa unos milímetros de cada borde. Si la cara de la persona está justo en el borde, queda oculta. Por eso los fotógrafos dejan un margen de seguridad. La pantalla del teléfono tiene un marco irregular (el notch, la barra de gestos), y el **área segura** es la parte de la foto que el marco nunca tapa.
+
+### useWindowDimensions: cuánto espacio hay
+
+`useWindowDimensions` es un hook que devuelve el tamaño de la ventana de la app en puntos:
+
+```tsx
+import { Text, useWindowDimensions } from "react-native";
+
+export default function SizeInfo() {
+  const { width, height, fontScale } = useWindowDimensions();
+  return (
+    <Text>
+      {Math.round(width)} x {Math.round(height)} · escala de fuente {fontScale}
+    </Text>
+  );
+}
+```
+
+- `width` y `height` cambian cuando el usuario gira el teléfono, divide la pantalla en una tableta o redimensiona la ventana. Como es un hook, tu componente se vuelve a renderizar con los valores nuevos.
+- `fontScale` refleja el tamaño de letra que el usuario eligió en los ajustes de accesibilidad.
+
+Existe también la API `Dimensions.get("window")`, pero devuelve un valor fijo en el momento en que la llamas y no se actualiza al girar la pantalla. Dentro de componentes, prefiere siempre el hook.
+
+Un uso típico es cambiar el número de columnas según el ancho:
+
+```tsx
+const { width } = useWindowDimensions();
+const columns = width >= 600 ? 3 : 2;
+```
+
+Úsalo para decisiones de estructura (columnas, mostrar u ocultar un panel). Para tamaños relativos simples, Flexbox y los porcentajes suelen bastar, y no requieren código.
+
+### El área segura
+
+Las zonas que el sistema ocupa se llaman **insets**: cuántos puntos de cada borde (`top`, `right`, `bottom`, `left`) están tapados. En un iPhone con isla dinámica, `top` ronda los 59 puntos y `bottom` los 34. En Android, `top` es la altura de la barra de estado.
+
+La librería `react-native-safe-area-context` calcula esos valores en cada dispositivo. Viene incluida en Expo Go y se instala en tu proyecto con:
+
+```bash
+npx expo install react-native-safe-area-context
+```
+
+Tiene tres piezas:
+
+- `SafeAreaProvider`: va una sola vez en la raíz de la app y mide los insets. Expo Router ya lo agrega por ti; en una app sin Expo Router, como los Snack de esta etapa, lo pones tú.
+- `SafeAreaView`: un `View` que agrega automáticamente padding igual a los insets.
+- `useSafeAreaInsets`: un hook que devuelve `{ top, right, bottom, left }` para aplicarlos tú donde necesites.
+
+```tsx
+import { Text } from "react-native";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
+        <Text>Este texto nunca queda bajo el notch</Text>
+      </SafeAreaView>
+    </SafeAreaProvider>
+  );
+}
+```
+
+La prop `edges` elige qué bordes proteger. Por ejemplo, una pantalla con una barra inferior propia puede proteger solo `top` y aplicar el inset inferior a esa barra con `useSafeAreaInsets`.
+
+React Native también exporta un `SafeAreaView` propio, pero solo funciona en iOS y está deprecado. Importa siempre el de `react-native-safe-area-context`.
+
+### Cuándo usar cada pieza
+
+- Una pantalla completa con contenido normal: `SafeAreaView` con `flex: 1`.
+- Un elemento concreto que toca un borde (botón flotante, barra inferior): `useSafeAreaInsets` y suma el inset a su `bottom` o `paddingBottom`.
+- Una imagen de fondo que debe llegar hasta los bordes: no la envuelvas en `SafeAreaView`; protege solo el contenido que va encima.
+
+## Práctica
+
+El Snack muestra el tamaño de la ventana y los insets del dispositivo, y cambia de una a dos columnas según el ancho. Ábrelo en tu teléfono con Expo Go y gíralo, o cambia entre iOS y Android para comparar los insets.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  dependencies={{ "react-native-safe-area-context": "*" }}
+  code={`import { View, Text, StyleSheet, useWindowDimensions } from "react-native";
+import {
+  SafeAreaProvider,
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+
+function Info() {
+  const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const columns = width >= 600 ? 2 : 1;
+
+  const cards = [
+    { label: "Ventana", value: Math.round(width) + " x " + Math.round(height) },
+    { label: "Inset superior", value: String(Math.round(insets.top)) },
+    { label: "Inset inferior", value: String(Math.round(insets.bottom)) },
+    { label: "Columnas", value: String(columns) },
+  ];
+
+  return (
+    <View style={styles.grid}>
+      {cards.map((card) => (
+        <View key={card.label} style={[styles.card, { width: columns === 2 ? "48%" : "100%" }]}>
+          <Text style={styles.label}>{card.label}</Text>
+          <Text style={styles.value}>{card.value}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
+        <Text style={styles.title}>Dimensiones</Text>
+        <Info />
+      </SafeAreaView>
+    </SafeAreaProvider>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, paddingHorizontal: 16, backgroundColor: "#f2f2f7" },
+  title: { fontSize: 28, fontWeight: "700", marginVertical: 16 },
+  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 12 },
+  card: { padding: 16, borderRadius: 12, backgroundColor: "#fff" },
+  label: { fontSize: 13, color: "#666" },
+  value: { fontSize: 22, fontWeight: "600" },
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Botón flotante que respeta la barra de gestos"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="55.0.0"
+      dependencies={{ "react-native-safe-area-context": "*" }}
+      code={`import { View, Text, Pressable, StyleSheet } from "react-native";
+import {
+  SafeAreaProvider,
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+
+function AddButton() {
+  const insets = useSafeAreaInsets();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Agregar nota"
+      style={[styles.fab, { bottom: insets.bottom + 16 }]}
+    >
+      <Text style={styles.fabText}>+</Text>
+    </Pressable>
+  );
+}
+
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <View style={styles.screen}>
+        <SafeAreaView edges={["top"]}>
+          <Text style={styles.title}>Mis notas</Text>
+        </SafeAreaView>
+        <AddButton />
+      </View>
+    </SafeAreaProvider>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: "#fff" },
+  title: { fontSize: 28, fontWeight: "700", padding: 16 },
+  fab: {
+    position: "absolute",
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#007aff",
+  },
+  fabText: { color: "#fff", fontSize: 28, lineHeight: 30 },
+});`}
+    />
+  }
+>
+  Crea una pantalla con el título "Mis notas" protegido solo en el borde superior y un botón circular "+" flotante en la esquina inferior derecha. El botón debe quedar siempre 16 puntos por encima de la barra de gestos, tenga el dispositivo barra o no. Pista: `position: "absolute"` y `useSafeAreaInsets` dentro de un componente hijo del `SafeAreaProvider`.
+</Challenge>
+
+## Errores comunes
+
+**Usar useSafeAreaInsets en el mismo componente que crea el provider.** Los insets valen siempre `0`. Ocurre porque un hook lee el provider más cercano **por encima** del componente, y el `SafeAreaProvider` que ese componente renderiza está por debajo. Se detecta imprimiendo los insets en un dispositivo con notch. Solución: usa el hook en un componente hijo, como `Info` en la práctica.
+
+**Importar SafeAreaView desde react-native.** En iOS parece funcionar, pero en Android el contenido queda debajo de la barra de estado, y el editor muestra una advertencia de deprecación. Ocurre porque ese componente solo existía para iOS. Se detecta probando en Android. Solución: importa `SafeAreaView` de `react-native-safe-area-context`.
+
+**Guardar Dimensions.get en una constante del módulo.** El layout no se adapta al girar el teléfono o al dividir la pantalla. Ocurre porque el valor se lee una sola vez al cargar el archivo. Se detecta girando el dispositivo con la app abierta. Solución: `useWindowDimensions` dentro del componente.
+
+<Flashcards
+  cards={[
+    { front: "¿Por qué preferir useWindowDimensions sobre Dimensions.get?", back: "Porque el hook se actualiza y vuelve a renderizar al girar o redimensionar la ventana." },
+    { front: "¿Qué son los insets del área segura?", back: "Los puntos de cada borde que ocupan el notch, la barra de estado o la barra de gestos." },
+    { front: "¿Qué SafeAreaView debes importar en React Native?", back: "El de react-native-safe-area-context; el de react-native está deprecado y solo funcionaba en iOS." },
+    { front: "¿Para qué sirve la prop edges de SafeAreaView?", back: "Para elegir qué bordes proteger, por ejemplo solo top." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Quieres mostrar tres columnas en tabletas y dos en teléfonos, y que cambie al girar. ¿Qué usas?",
+      options: [
+        { text: "useWindowDimensions dentro del componente", correct: true, feedback: "Correcto: el hook entrega el ancho actualizado en cada cambio." },
+        { text: "Dimensions.get(\"window\") en una constante global", correct: false, feedback: "Ese valor no se actualiza al girar." },
+        { text: "Un porcentaje fijo de 33%", correct: false, feedback: "Siempre mostraría tres columnas, sin importar el ancho." }
+      ]
+    },
+    {
+      prompt: "Un botón fijo en la parte inferior queda tapado por la barra de gestos del iPhone. ¿Cómo lo corriges?",
+      options: [
+        { text: "Sumando insets.bottom de useSafeAreaInsets a su posición", correct: true, feedback: "Correcto: el inset inferior mide exactamente la barra de gestos." },
+        { text: "Poniendo bottom: 34 en todos los dispositivos", correct: false, feedback: "El valor cambia entre dispositivos y es 0 en muchos." },
+        { text: "Usando SafeAreaView de react-native", correct: false, feedback: "Está deprecado y no funciona en Android." }
+      ]
+    },
+    {
+      prompt: "En una app sin Expo Router, ¿dónde va SafeAreaProvider?",
+      options: [
+        { text: "Una vez, en la raíz de la app", correct: true, feedback: "Correcto: mide los insets y los comparte con todos los componentes." },
+        { text: "Dentro de cada pantalla", correct: false, feedback: "Con uno en la raíz basta; repetirlo solo agrega trabajo." },
+        { text: "No hace falta, SafeAreaView funciona solo", correct: false, feedback: "useSafeAreaInsets necesita un provider por encima, y la documentación de la librería pide ponerlo en la raíz." }
+      ]
+    }
+  ]}
+/>
