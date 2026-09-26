@@ -52,7 +52,7 @@
 }
 
 .cmd {
-  color: #fff;
+  color: var(--color-white);
 }
 
 .out {
@@ -74,9 +74,9 @@
   font-weight: 600;
   height: 34px;
   padding: 0 16px;
-  border-radius: 17px;
+  border-radius: var(--radius-pill);
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-white);
 }
 
 .counter {

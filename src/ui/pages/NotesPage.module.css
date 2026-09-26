@@ -23,7 +23,7 @@
 
 .note {
   background: var(--color-sand);
-  border-radius: 20px;
+  border-radius: var(--radius-l);
   padding: 20px 24px;
   margin-bottom: 12px;
 }

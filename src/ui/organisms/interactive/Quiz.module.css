@@ -68,7 +68,7 @@
 
 .option[data-state='wrong'] {
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-white);
 }
 
 .feedback {

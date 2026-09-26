@@ -17,7 +17,7 @@ describe('atoms', () => {
   });
   it('ButtonLink renders a router link', () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <ButtonLink to="/repaso">Repasar</ButtonLink>
       </MemoryRouter>,
     );
@@ -42,7 +42,7 @@ describe('atoms', () => {
   });
   it('Brand shows the name and links home', () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Brand />
       </MemoryRouter>,
     );

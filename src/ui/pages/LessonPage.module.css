@@ -7,5 +7,5 @@
 }
 
 .error {
-  color: #9a2a00;
+  color: var(--color-error);
 }

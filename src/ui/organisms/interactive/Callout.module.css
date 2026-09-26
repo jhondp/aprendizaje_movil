@@ -2,7 +2,7 @@
   display: flex;
   gap: 16px;
   background: var(--color-sand);
-  border-radius: 20px;
+  border-radius: var(--radius-l);
   padding: 20px 24px;
   margin: 24px 0;
   font-size: 15px;
@@ -11,11 +11,11 @@
 }
 
 .root[data-kind='warning'] {
-  background: #fff4e5;
+  background: var(--color-warn-bg);
 }
 
 .root[data-kind='danger'] {
-  background: #ffe8e0;
+  background: var(--color-error-bg);
 }
 
 .icon {
@@ -27,7 +27,7 @@
   place-items: center;
   font-weight: 600;
   font-size: 14px;
-  color: #fff;
+  color: var(--color-white);
   background: var(--color-teal);
 }
 

@@ -61,7 +61,12 @@ const course = buildCourse(
 const stage0 = course.stages[0]!;
 const lesson = course.lessons[0]!;
 
-const wrap = (ui: ReactElement) => render(<MemoryRouter>{ui}</MemoryRouter>);
+const wrap = (ui: ReactElement) =>
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      {ui}
+    </MemoryRouter>,
+  );
 
 describe('molecules', () => {
   it('lessonPath builds the route', () => {

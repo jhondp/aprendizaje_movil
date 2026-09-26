@@ -28,7 +28,7 @@
   margin-top: 12px;
   height: 40px;
   padding: 0 20px;
-  border-radius: 20px;
+  border-radius: var(--radius-l);
   background: var(--color-ink);
   color: var(--color-sand);
   font-weight: 600;

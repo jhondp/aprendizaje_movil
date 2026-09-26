@@ -8,13 +8,13 @@
 .card {
   width: min(640px, 100%);
   min-height: 380px;
-  border-radius: 32px;
+  border-radius: var(--radius-xl);
   padding: 48px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   text-align: left;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-dialog);
   transition: background 0.3s;
   background: var(--color-ink);
   color: var(--color-sand);
@@ -62,7 +62,7 @@
 .grade {
   width: 160px;
   height: 56px;
-  border-radius: 28px;
+  border-radius: var(--radius-xl);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -71,7 +71,7 @@
 
 .grade[data-grade='again'] {
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-white);
 }
 
 .grade[data-grade='good'] {

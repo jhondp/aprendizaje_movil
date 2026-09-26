@@ -30,14 +30,14 @@
 .secondary {
   height: 32px;
   padding: 0 14px;
-  border-radius: 16px;
+  border-radius: var(--radius-m);
   font-size: 13px;
   font-weight: 600;
 }
 
 .primary {
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-white);
 }
 
 .secondary {
@@ -61,8 +61,8 @@
 
 .error {
   padding: 10px 14px;
-  background: #ffe8e0;
-  color: #9a2a00;
+  background: var(--color-error-bg);
+  color: var(--color-error);
   font-size: 13px;
 }
 
@@ -86,11 +86,11 @@
 }
 
 .line[data-level='error'] {
-  color: #ff8a65;
+  color: var(--color-console-warn);
 }
 
 .line[data-level='warn'] {
-  color: #ffd166;
+  color: var(--color-warn);
 }
 
 .verdictOk,
@@ -105,5 +105,5 @@
 }
 
 .verdictBad {
-  color: #ff8a65;
+  color: var(--color-console-warn);
 }

@@ -7,7 +7,7 @@
   justify-content: space-between;
   padding: 0 var(--page-gutter);
   height: var(--topbar-height);
-  background: rgba(246, 241, 234, 0.8);
+  background: var(--paper-80);
   backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--ink-08);
 }
