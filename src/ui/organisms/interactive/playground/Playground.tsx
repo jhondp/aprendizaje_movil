@@ -102,6 +102,7 @@ export function Playground({
   }, [instanceId]);
 
   const execute = () => {
+    clearTimer();
     const result = transpile(source, lang);
     if ('error' in result) {
       runPhase.current = 'closed';
@@ -120,8 +121,8 @@ export function Playground({
     runPhase.current = 'running';
     setSrcdoc(buildSrcdoc(result.code, runId));
     setRenderRun(runCounter.current);
-    clearTimer();
     timer.current = setTimeout(() => {
+      if (activeRunId.current !== runId) return;
       runPhase.current = 'closed';
       setVerdict('timeout');
       setSrcdoc(null);

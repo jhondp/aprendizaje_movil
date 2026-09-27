@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Playground } from './Playground';
 
@@ -126,6 +126,30 @@ describe('Playground', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Ejecutar' }));
     expect(screen.queryByTitle('Resultado del código')).not.toBeInTheDocument();
     expect(screen.getByText(/Error de sintaxis/)).toBeInTheDocument();
+  });
+
+  it('clears a pending timeout when re-running with code that fails to transpile', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      render(<Playground code="while(true){}" lang="ts" />);
+      await userEvent.click(screen.getByRole('button', { name: 'Ejecutar' }));
+      expect(screen.getByTitle('Resultado del código')).toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText('Editor de código'), {
+        target: { value: 'const = ;' },
+      });
+      await userEvent.click(screen.getByRole('button', { name: 'Ejecutar' }));
+      expect(screen.getByText(/Error de sintaxis/)).toBeInTheDocument();
+
+      act(() => {
+        vi.advanceTimersByTime(5001);
+      });
+
+      expect(screen.queryByText('Tiempo de espera agotado (5 s)')).not.toBeInTheDocument();
+      expect(screen.getByText(/Error de sintaxis/)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('shows a sandbox-reported JS syntax error instead of a silent timeout', async () => {
