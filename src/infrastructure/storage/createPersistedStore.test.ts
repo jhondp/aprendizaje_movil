@@ -42,4 +42,40 @@ describe('createPersistedStore', () => {
       if (original) Object.defineProperty(window, 'localStorage', original);
     }
   });
+
+  it('falls back to memory storage when setItem throws during the probe', () => {
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('probe denied');
+    });
+    try {
+      const store = createPersistedStore('probe-fail', 1);
+      store.set(2);
+      expect(store.get()).toBe(2);
+    } finally {
+      setItemSpy.mockRestore();
+    }
+  });
+
+  it('does not throw from set() when setItem starts failing later (quota exceeded)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const store = createPersistedStore('quota', 1);
+    const listener = vi.fn();
+    store.subscribe(listener);
+
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('quota exceeded', 'QuotaExceededError');
+    });
+    try {
+      expect(() => store.set(2)).not.toThrow();
+      expect(store.get()).toEqual(2);
+      expect(listener).toHaveBeenCalledTimes(1);
+
+      expect(() => store.set(3)).not.toThrow();
+      expect(store.get()).toEqual(3);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      setItemSpy.mockRestore();
+      warnSpy.mockRestore();
+    }
+  });
 });
