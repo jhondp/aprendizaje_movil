@@ -1,0 +1,304 @@
+---
+id: "06-calidad-ci/03-jest-y-rntl"
+title: "Jest y React Native Testing Library"
+stage: 6
+module: "Testing"
+order: 3
+minutes: 15
+prereqs: ["06-calidad-ci/02-conventional-commits-y-prs"]
+summary: "Configura Jest con jest-expo y escribe pruebas de componentes que verifican lo que el usuario ve y hace."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás configurar Jest con el preset `jest-expo` y escribir pruebas de componentes con React Native Testing Library que interactúan con la pantalla como lo haría una persona.
+
+**Prerrequisitos:** `06-calidad-ci/02-conventional-commits-y-prs`
+
+## Concepto
+
+Cuando pruebas un auto antes de comprarlo, no desarmas el motor para contar pistones. Te sientas, giras la llave, aceleras, frenas y compruebas que las luces encienden. Si el fabricante cambia una pieza interna y el auto se maneja igual, tu prueba sigue siendo válida. Las buenas pruebas de interfaz funcionan así: **verifican lo que el usuario ve y hace, no cómo está construido el componente por dentro**.
+
+### Jest y jest-expo
+
+**Jest** es el ejecutor de pruebas: encuentra los archivos de prueba, los ejecuta y reporta qué pasó. Por sí solo no sabe nada de React Native ni de los módulos nativos de Expo. Para eso existe **jest-expo**, un preset que configura la transformación del código y simula (mockea) la parte nativa del SDK de Expo. No necesitas escribir configuración de Babel a mano: el preset ya la trae.
+
+```bash
+npx expo install jest-expo jest @types/jest --dev
+npx expo install @testing-library/react-native test-renderer --dev
+```
+
+React Native Testing Library 14 renderiza los componentes con el paquete `test-renderer`, que declara como dependencia par (peer). Instálalo de forma explícita: su versión tiene que coincidir con la versión menor de React de tu proyecto (por ejemplo, React 19.2 usa `test-renderer` 1.2), y si dejas que npm lo resuelva solo puede elegir una línea que no coincida y las pruebas fallan al renderizar.
+
+En `package.json`:
+
+```json
+{
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch"
+  },
+  "jest": {
+    "preset": "jest-expo"
+  }
+}
+```
+
+La documentación de Expo propone `"test": "jest --watchAll"`. Es cómodo mientras desarrollas, pero ese modo nunca termina: en integración continua el proceso se quedaría esperando para siempre. Por eso separamos `test` (se ejecuta una vez y termina) de `test:watch`. Guía oficial: https://docs.expo.dev/develop/unit-testing/
+
+Jest encuentra automáticamente los archivos que terminan en `.test.tsx` o `.test.ts`. La convención más simple es dejar la prueba junto al archivo que prueba: `NoteComposer.tsx` y `NoteComposer.test.tsx` en la misma carpeta.
+
+### Estructura de una prueba
+
+```ts
+describe("formatCount", () => {
+  test("uses the singular for one note", () => {
+    expect(formatCount(1)).toBe("1 nota");
+  });
+});
+```
+
+- `describe` agrupa pruebas relacionadas.
+- `test` (o su alias `it`) define un caso con un nombre que describe el comportamiento esperado.
+- `expect(valor)` seguido de un **matcher** (`toBe`, `toEqual`, `toBeNull`) expresa la afirmación. Si no se cumple, la prueba falla y Jest muestra la diferencia.
+
+### React Native Testing Library
+
+React Native Testing Library (RNTL) renderiza tus componentes en memoria, sin simulador, y te da herramientas para buscarlos e interactuar con ellos. Su filosofía cabe en una frase: cuanto más se parezcan tus pruebas a la forma en que se usa tu app, más confianza te dan. Documentación oficial: https://oss.callstack.com/react-native-testing-library/
+
+En la versión 14, que requiere React 19, `render`, `fireEvent` y las interacciones de usuario son **asíncronas**: siempre se usan con `await`.
+
+```tsx
+// src/features/notes/ui/NoteComposer.test.tsx
+import { render, screen, userEvent } from "@testing-library/react-native";
+import { NoteComposer } from "./NoteComposer";
+
+describe("NoteComposer", () => {
+  test("shows an empty state when there are no notes", async () => {
+    await render(<NoteComposer />);
+
+    expect(screen.getByText("Todavía no hay notas")).toBeOnTheScreen();
+  });
+
+  test("adds a note to the list when the user saves it", async () => {
+    const user = userEvent.setup();
+    await render(<NoteComposer />);
+
+    await user.type(screen.getByPlaceholderText("Título de la nota"), "Comprar pan");
+    await user.press(screen.getByRole("button", { name: "Guardar" }));
+
+    expect(screen.getByText("Comprar pan")).toBeOnTheScreen();
+    expect(screen.getByText("1 nota")).toBeOnTheScreen();
+  });
+
+  test("clears the input after saving", async () => {
+    const user = userEvent.setup();
+    await render(<NoteComposer />);
+    const input = screen.getByPlaceholderText("Título de la nota");
+
+    await user.type(input, "Llamar a Luis");
+    await user.press(screen.getByRole("button", { name: "Guardar" }));
+
+    expect(input).toHaveDisplayValue("");
+  });
+});
+```
+
+Observa que la prueba no menciona `useState`, ni el nombre del estado, ni cuántos `View` hay. Si mañana guardas las notas con `useReducer`, la prueba sigue pasando.
+
+### Qué consulta usar
+
+Elige la consulta más cercana a cómo una persona encuentra el elemento, en este orden:
+
+1. `getByRole("button", { name: "Guardar" })`: el rol de accesibilidad y su nombre. Si esta consulta no funciona, probablemente tu componente tampoco es accesible con un lector de pantalla.
+2. `getByLabelText`, `getByPlaceholderText`, `getByDisplayValue`: para campos de texto.
+3. `getByText`: para contenido visible.
+4. `getByTestId`: último recurso, cuando no hay texto ni rol.
+
+Cada consulta tiene tres variantes. `getBy` falla si no encuentra el elemento. `queryBy` devuelve `null`, útil para afirmar que algo **no** está: `expect(screen.queryByText("Error")).toBeNull()`. `findBy` espera a que el elemento aparezca y devuelve una promesa, útil tras una operación asíncrona.
+
+Los matchers como `toBeOnTheScreen`, `toHaveDisplayValue` o `toBeDisabled` vienen incluidos: están disponibles en cuanto importas desde `@testing-library/react-native`.
+
+### Por qué evitar snapshots de pantallas completas
+
+Un snapshot guarda el árbol renderizado completo en un archivo y falla si cambia cualquier detalle: un margen, un estilo, el orden de dos props. En pantallas completas eso produce fallos constantes que no indican ningún bug. El equipo termina ejecutando `jest -u` para aceptar el nuevo snapshot sin leerlo, y la prueba deja de proteger nada. Una afirmación explícita como "después de guardar, la nota aparece en la lista" solo falla cuando el comportamiento se rompe.
+
+## Práctica
+
+Este es el componente que prueban los tests de arriba. Escribe una nota y guárdala: cada afirmación de la prueba corresponde a algo que puedes ver en la pantalla.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  code={`import { useState } from "react";
+import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+
+function formatCount(count: number): string {
+  return count === 1 ? "1 nota" : count + " notas";
+}
+
+export function NoteComposer() {
+  const [title, setTitle] = useState("");
+  const [notes, setNotes] = useState<string[]>([]);
+
+  const save = () => {
+    setNotes((current) => [...current, title.trim()]);
+    setTitle("");
+  };
+
+  return (
+    <View style={styles.container}>
+      <TextInput
+        style={styles.input}
+        placeholder="Título de la nota"
+        value={title}
+        onChangeText={setTitle}
+      />
+      <Pressable accessibilityRole="button" style={styles.button} onPress={save}>
+        <Text style={styles.buttonText}>Guardar</Text>
+      </Pressable>
+      <Text>{formatCount(notes.length)}</Text>
+      <FlatList
+        data={notes}
+        keyExtractor={(item, index) => index + item}
+        renderItem={({ item }) => <Text style={styles.note}>{item}</Text>}
+        ListEmptyComponent={<Text>Todavía no hay notas</Text>}
+      />
+    </View>
+  );
+}
+
+export default function App() {
+  return <NoteComposer />;
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, paddingTop: 80, paddingHorizontal: 24, gap: 12 },
+  input: { borderWidth: 1, borderColor: "#999", borderRadius: 8, padding: 12 },
+  button: { backgroundColor: "#10484a", padding: 12, borderRadius: 8, alignItems: "center" },
+  buttonText: { color: "#fff", fontWeight: "600" },
+  note: { paddingVertical: 8, fontSize: 16 },
+});`}
+/>
+
+Ejecuta la suite en tu proyecto. En la primera ejecución el componente todavía usaba el placeholder `Título` y la prueba lo detectó; tras corregir el texto, la suite pasa.
+
+<Terminal
+  steps={[
+    {
+      cmd: "npx jest",
+      out: " FAIL  src/features/notes/ui/NoteComposer.test.tsx\n  NoteComposer\n    ✓ shows an empty state when there are no notes (41 ms)\n    ✕ adds a note to the list when the user saves it (18 ms)\n    ✕ clears the input after saving (12 ms)\n\n  ● NoteComposer › adds a note to the list when the user saves it\n\n    Unable to find an element with placeholder: Título de la nota\n\nTests:       2 failed, 1 passed, 3 total",
+    },
+    {
+      cmd: "npx jest",
+      out: " PASS  src/features/notes/ui/NoteComposer.test.tsx\n  NoteComposer\n    ✓ shows an empty state when there are no notes (39 ms)\n    ✓ adds a note to the list when the user saves it (402 ms)\n    ✓ clears the input after saving (298 ms)\n\nTest Suites: 1 passed, 1 total\nTests:       3 passed, 3 total\nSnapshots:   0 total\nTime:        2.91 s",
+    },
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Botón deshabilitado con título vacío"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="55.0.0"
+      code={`import { useState } from "react";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+
+export function NoteComposer() {
+  const [title, setTitle] = useState("");
+  const [notes, setNotes] = useState<string[]>([]);
+  const isEmpty = title.trim() === "";
+
+  const save = () => {
+    setNotes((current) => [...current, title.trim()]);
+    setTitle("");
+  };
+
+  return (
+    <View style={styles.container}>
+      <TextInput
+        style={styles.input}
+        placeholder="Título de la nota"
+        value={title}
+        onChangeText={setTitle}
+      />
+      <Pressable
+        accessibilityRole="button"
+        disabled={isEmpty}
+        style={[styles.button, isEmpty && styles.disabled]}
+        onPress={save}
+      >
+        <Text style={styles.buttonText}>Guardar</Text>
+      </Pressable>
+      {notes.map((note, index) => (
+        <Text key={index + note}>{note}</Text>
+      ))}
+    </View>
+  );
+}
+
+export default function App() {
+  return <NoteComposer />;
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, paddingTop: 80, paddingHorizontal: 24, gap: 12 },
+  input: { borderWidth: 1, borderColor: "#999", borderRadius: 8, padding: 12 },
+  button: { backgroundColor: "#10484a", padding: 12, borderRadius: 8, alignItems: "center" },
+  disabled: { opacity: 0.4 },
+  buttonText: { color: "#fff", fontWeight: "600" },
+});`}
+    />
+  }
+>
+  Agrega esta prueba a `NoteComposer.test.tsx`: renderiza el componente y afirma `expect(screen.getByRole("button", { name: "Guardar" })).toBeDisabled()`. Luego escribe un título y afirma que el botón está habilitado con `toBeEnabled()`. Modifica `NoteComposer` para que ambas afirmaciones pasen. Pista: `Pressable` acepta la prop `disabled` y la expone como estado de accesibilidad.
+</Challenge>
+
+## Errores comunes
+
+**Olvidar `await` con RNTL 14.** La prueba falla con elementos que "no existen" o con advertencias sobre `act`, aunque el componente funciona. Ocurre porque en la versión 14 `render`, `fireEvent` y `userEvent` devuelven promesas. Se detecta revisando que cada `render` y cada interacción tenga `await` y que la función de la prueba sea `async`.
+
+**Probar detalles de implementación.** La prueba busca un `testID` en cada `View`, cuenta cuántas veces se llamó a `setState` o lee el estado interno. Pasa por querer "cubrir" el código en lugar del comportamiento. Se detecta cuando una refactorización que no cambia nada visible rompe varias pruebas.
+
+**Dejar `--watchAll` en el script de prueba.** En CI el paso de pruebas nunca termina y el job se cancela por tiempo. Ocurre al copiar el script de ejemplo sin adaptarlo. Se detecta porque `pnpm test` en tu máquina no devuelve el control a la terminal.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué hace el preset jest-expo?", back: "Configura Jest para un proyecto de Expo y simula la parte nativa del SDK, sin configurar Babel a mano." },
+    { front: "¿Qué consulta de React Native Testing Library conviene usar primero para encontrar un botón?", back: "getByRole(\"button\", { name: \"...\" }), porque refleja cómo lo encuentra una persona y el lector de pantalla." },
+    { front: "¿Qué diferencia hay entre getBy, queryBy y findBy en React Native Testing Library?", back: "getBy falla si no encuentra; queryBy devuelve null; findBy espera de forma asíncrona a que aparezca." },
+    { front: "¿Por qué los snapshots de pantallas completas son frágiles?", back: "Fallan por cualquier cambio visual menor, se aceptan sin leer y dejan de detectar bugs reales." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Cómo compruebas que un mensaje de error NO aparece en pantalla?",
+      options: [
+        { text: "expect(screen.getByText(\"Error\")).toBeNull()", correct: false, feedback: "getBy lanza una excepción antes de llegar al expect si no encuentra el elemento." },
+        { text: "expect(screen.queryByText(\"Error\")).toBeNull()", correct: true, feedback: "Correcto: queryBy devuelve null cuando el elemento no existe." },
+        { text: "await screen.findByText(\"Error\")", correct: false, feedback: "findBy espera a que aparezca, lo contrario de lo que quieres." },
+      ],
+    },
+    {
+      prompt: "Cambiaste useState por useReducer sin alterar lo que se ve. Una prueba bien escrita...",
+      options: [
+        { text: "Falla, porque el estado cambió", correct: false, feedback: "Una prueba de comportamiento no conoce cómo se guarda el estado." },
+        { text: "Sigue pasando", correct: true, feedback: "Correcto: verifica lo que ve el usuario, que no cambió." },
+        { text: "Necesita actualizar su snapshot", correct: false, feedback: "Las pruebas de comportamiento no dependen de snapshots." },
+      ],
+    },
+    {
+      prompt: "¿Qué script de prueba es adecuado para integración continua?",
+      options: [
+        { text: "jest --watchAll", correct: false, feedback: "Nunca termina: el job quedaría bloqueado." },
+        { text: "jest", correct: true, feedback: "Correcto: ejecuta la suite una vez y devuelve un código de salida." },
+        { text: "jest -u", correct: false, feedback: "Actualiza snapshots sin revisar; no es una verificación." },
+      ],
+    },
+  ]}
+/>

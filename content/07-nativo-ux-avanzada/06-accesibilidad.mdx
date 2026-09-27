@@ -1,0 +1,278 @@
+---
+id: "07-nativo-ux-avanzada/06-accesibilidad"
+title: "Accesibilidad"
+stage: 7
+module: "Inclusión"
+order: 6
+minutes: 12
+prereqs: ["07-nativo-ux-avanzada/05-flashlist"]
+summary: "Haz tu app usable con lector de pantalla y letra grande con accessibilityLabel, accessibilityRole, accessibilityState y tamaños de fuente dinámicos."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás describir cada elemento interactivo para un lector de pantalla con `accessibilityLabel`, `accessibilityRole` y `accessibilityState`, y diseñar pantallas que respeten el tamaño de letra que eligió el usuario.
+
+**Prerrequisitos:** `07-nativo-ux-avanzada/05-flashlist`
+
+## Concepto
+
+Una parte importante de las personas que usan tu app no la ven como tú. Algunas tienen baja visión y aumentan el tamaño de letra del sistema. Otras son ciegas y navegan con un **lector de pantalla**: VoiceOver en iOS o TalkBack en Android. El lector recorre los elementos uno por uno y los lee en voz alta; el usuario desliza para pasar al siguiente y toca dos veces para activarlo.
+
+La analogía: un lector de pantalla es como un guía que describe un museo a un visitante por teléfono. Solo puede describir lo que tiene cartel. Si un cuadro no tiene cartel, el guía dice "cuadro" y nada más. Si un botón de tu app es un ícono de papelera sin etiqueta, VoiceOver dice "botón" y el usuario no sabe si va a borrar, archivar o compartir. Las props de accesibilidad son los carteles.
+
+Documentación oficial: https://reactnative.dev/docs/accessibility
+
+### Las tres props básicas
+
+```tsx
+<Pressable
+  onPress={deleteNote}
+  accessibilityRole="button"
+  accessibilityLabel="Borrar nota"
+  accessibilityHint="Elimina la nota de forma permanente"
+>
+  <Ionicons name="trash" size={24} />
+</Pressable>
+```
+
+- `accessibilityLabel`: el texto que se lee. Si el elemento contiene texto visible, React Native lo usa por defecto; en íconos y botones sin texto es obligatorio.
+- `accessibilityRole`: qué es el elemento. `"button"`, `"link"`, `"header"`, `"image"`, `"checkbox"`, `"switch"`, `"search"` y otros. El lector añade la palabra ("Borrar nota, botón") y el usuario sabe que puede activarlo.
+- `accessibilityHint`: qué pasará al activarlo, solo si no es obvio por la etiqueta. Es opcional y el usuario puede desactivar las pistas.
+
+### Estado
+
+Un interruptor o una casilla tienen estado. `accessibilityState` lo comunica:
+
+```tsx
+<Pressable
+  onPress={() => setPinned(!pinned)}
+  accessibilityRole="checkbox"
+  accessibilityLabel="Fijar nota"
+  accessibilityState={{ checked: pinned }}
+>
+  <Text>{pinned ? "Fijada" : "Sin fijar"}</Text>
+</Pressable>
+```
+
+Otros campos útiles son `disabled`, `selected`, `busy` y `expanded`. Si un botón está deshabilitado, pásale `disabled` en el propio `Pressable` y también `accessibilityState={{ disabled: true }}` para que el lector lo anuncie.
+
+React Native acepta además las props equivalentes de la web: `role`, `aria-label`, `aria-checked`, `aria-disabled`. Son intercambiables; elige un estilo y úsalo en todo el proyecto. En este curso usamos las props `accessibility*`.
+
+### Agrupar para no leer de más
+
+Una fila de nota con título, fecha y cantidad de fotos serían tres paradas del lector. Si agrupas el contenedor con `accessible`, se convierte en un solo elemento y puedes darle una etiqueta completa:
+
+```tsx
+<Pressable
+  accessible
+  accessibilityRole="button"
+  accessibilityLabel={`${note.title}, editada el ${note.date}, ${note.photos} fotos`}
+  onPress={() => openNote(note.id)}
+>
+  <Text>{note.title}</Text>
+  <Text>{note.date}</Text>
+</Pressable>
+```
+
+`Pressable` ya es accesible por defecto; `accessible` hace falta sobre todo cuando agrupas con un `View`.
+
+### Letra dinámica
+
+iOS y Android permiten que el usuario aumente el tamaño de letra del sistema. `Text` lo respeta automáticamente (`allowFontScaling` es `true` por defecto). Tu trabajo es que el diseño no se rompa:
+
+- No fijes `height` en contenedores con texto; usa `minHeight` y deja que crezcan.
+- Permite que las filas se vuelvan de varias líneas o que los elementos pasen de fila a columna.
+- Si un texto concreto no puede crecer sin romper el diseño, limita el crecimiento con `maxFontSizeMultiplier={1.5}` en lugar de desactivarlo con `allowFontScaling={false}`.
+
+Para adaptar el diseño puedes leer la escala actual con `useWindowDimensions`:
+
+```tsx
+const { fontScale } = useWindowDimensions();
+const stacked = fontScale > 1.3; // Switch to a vertical layout for large text.
+```
+
+### Tamaño de los objetivos táctiles
+
+Un ícono de 20 puntos es difícil de tocar para cualquiera, y mucho más con temblor en las manos. Las guías de Apple piden al menos 44 × 44 puntos y las de Android 48 × 48 dp. Si el ícono es pequeño, agranda el área táctil con `hitSlop` o con `padding`:
+
+```tsx
+<Pressable hitSlop={12} onPress={close} accessibilityRole="button" accessibilityLabel="Cerrar">
+  <Ionicons name="close" size={20} />
+</Pressable>
+```
+
+### Contraste y color
+
+El texto necesita contraste suficiente con el fondo (4.5:1 para texto normal según WCAG). Nunca uses solo el color para transmitir información: una nota con error no puede distinguirse solo por ser roja; añade un ícono o un texto.
+
+### Gestos con alternativa
+
+En la lección de gestos viste "deslizar para descartar". Un usuario de lector de pantalla no puede deslizar sobre un elemento concreto de la misma manera. Todo gesto necesita una alternativa: un botón visible o una **acción de accesibilidad** con `accessibilityActions` y `onAccessibilityAction`, que el lector ofrece en su menú de acciones.
+
+## Práctica
+
+Activa VoiceOver (Ajustes > Accesibilidad) o TalkBack en tu teléfono y abre el Snack con Expo Go. Recorre la pantalla deslizando. Después aumenta el tamaño de letra del sistema y observa cómo la fila pasa a vertical.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  code={`import { useState } from "react";
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+
+export default function App() {
+  const [pinned, setPinned] = useState(false);
+  const [count, setCount] = useState(3);
+  const { fontScale } = useWindowDimensions();
+  const stacked = fontScale > 1.3;
+
+  return (
+    <View style={styles.container}>
+      <Text accessibilityRole="header" style={styles.header}>Mis notas</Text>
+      <View style={[styles.row, stacked && styles.column]}>
+        <Pressable
+          style={styles.button}
+          onPress={() => setPinned(!pinned)}
+          accessibilityRole="checkbox"
+          accessibilityLabel="Fijar nota"
+          accessibilityState={{ checked: pinned }}
+        >
+          <Text style={styles.text}>{pinned ? "★ Fijada" : "☆ Fijar"}</Text>
+        </Pressable>
+        <Pressable
+          style={styles.button}
+          hitSlop={12}
+          onPress={() => setCount(Math.max(0, count - 1))}
+          accessibilityRole="button"
+          accessibilityLabel="Borrar una nota"
+          accessibilityHint={"Quedan " + count + " notas"}
+          accessibilityState={{ disabled: count === 0 }}
+          disabled={count === 0}
+        >
+          <Text style={styles.text}>🗑</Text>
+        </Pressable>
+      </View>
+      <Text style={styles.text} maxFontSizeMultiplier={2}>
+        Notas: {count} · Escala de letra: {fontScale.toFixed(2)}
+      </Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", padding: 24, gap: 16 },
+  header: { fontSize: 24, fontWeight: "700" },
+  row: { flexDirection: "row", gap: 12 },
+  column: { flexDirection: "column" },
+  button: { minHeight: 48, minWidth: 48, padding: 12, borderRadius: 8, backgroundColor: "#efe6da", justifyContent: "center" },
+  text: { fontSize: 16 }
+});`}
+/>
+
+Antes de dar por terminada una pantalla, revisa esta lista:
+
+<Checklist
+  id="07-nativo-ux-avanzada/06-accesibilidad-pantalla"
+  items={[
+    "Cada botón de solo ícono tiene accessibilityLabel",
+    "Cada elemento interactivo tiene accessibilityRole",
+    "Casillas, interruptores y botones deshabilitados comunican accessibilityState",
+    "Los objetivos táctiles miden al menos 44 × 44 puntos (o usan hitSlop)",
+    "La pantalla funciona con el tamaño de letra del sistema al máximo",
+    "La información no depende solo del color",
+    "Todo gesto tiene una alternativa con botón o acción de accesibilidad",
+    "Recorrí la pantalla con VoiceOver o TalkBack de principio a fin"
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Fila de nota con una sola parada"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="55.0.0"
+      code={`import { useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+
+const NOTE = { id: "1", title: "Lista de compras", date: "3 de mayo", photos: 2 };
+
+export default function App() {
+  const [opened, setOpened] = useState(false);
+
+  return (
+    <View style={styles.container}>
+      <Pressable
+        style={styles.row}
+        onPress={() => setOpened(true)}
+        accessibilityRole="button"
+        accessibilityLabel={NOTE.title + ", editada el " + NOTE.date + ", " + NOTE.photos + " fotos"}
+        accessibilityHint="Abre la nota"
+      >
+        <Text style={styles.title}>{NOTE.title}</Text>
+        <Text style={styles.meta}>{NOTE.date} · 📷 {NOTE.photos}</Text>
+      </Pressable>
+      {opened && <Text accessibilityLiveRegion="polite">Nota abierta</Text>}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", padding: 24, gap: 12 },
+  row: { minHeight: 48, padding: 16, borderRadius: 8, backgroundColor: "#efe6da" },
+  title: { fontSize: 18, fontWeight: "600" },
+  meta: { fontSize: 14, marginTop: 4 }
+});`}
+    />
+  }
+>
+  Crea una fila de nota con título, fecha y un ícono con la cantidad de fotos. Haz que el lector de pantalla la lea como un solo botón con el texto "Lista de compras, editada el 3 de mayo, 2 fotos" y una pista que diga que abre la nota. Comprueba el resultado con VoiceOver o TalkBack.
+</Challenge>
+
+## Errores comunes
+
+**Botones de solo ícono sin etiqueta.** VoiceOver dice "botón" y nada más. Ocurre porque visualmente el ícono es obvio para quien lo diseñó. Se detecta recorriendo la pantalla con el lector o buscando `Pressable` sin `accessibilityLabel` que no contengan `Text`. Solución: añade una etiqueta que diga la acción, no el dibujo ("Borrar nota", no "Papelera").
+
+**Desactivar la letra dinámica para que "no se rompa el diseño".** Se ve como `allowFontScaling={false}` repartido por la app. Ocurre porque es la forma más rápida de que la maqueta quede igual. Se detecta aumentando la letra del sistema: los textos no cambian. Solución: usa `minHeight`, permite varias líneas y, solo donde sea imprescindible, `maxFontSizeMultiplier`.
+
+**Repetir el rol en la etiqueta.** El lector dice "Botón guardar, botón". Ocurre porque se escribe `accessibilityLabel="Botón guardar"` además de `accessibilityRole="button"`. Se detecta al escuchar la palabra duplicada. Solución: la etiqueta describe la acción; el rol lo anuncia el sistema.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué prop de React Native define el texto que lee un lector de pantalla?", back: "accessibilityLabel." },
+    { front: "¿Para qué sirve accessibilityRole?", back: "Para decir qué es el elemento (button, header, checkbox...) y que el lector lo anuncie." },
+    { front: "¿Cómo comunicas que una casilla está marcada a un lector de pantalla?", back: "Con accessibilityState={{ checked: true }} y accessibilityRole=\"checkbox\"." },
+    { front: "¿Qué tamaño mínimo recomiendan Apple y Android para un objetivo táctil?", back: "44 × 44 puntos en iOS y 48 × 48 dp en Android." },
+    { front: "¿Qué es mejor que allowFontScaling={false} cuando un texto grande rompe el diseño?", back: "Adaptar el diseño (minHeight, varias líneas) y, si hace falta, limitar con maxFontSizeMultiplier." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Un botón muestra solo un ícono de papelera. ¿Qué etiqueta es la adecuada?",
+      options: [
+        { text: "accessibilityLabel=\"Papelera\"", correct: false, feedback: "Describe el dibujo, no la acción." },
+        { text: "accessibilityLabel=\"Borrar nota\"", correct: true, feedback: "Correcto: dice qué hace el botón." },
+        { text: "accessibilityLabel=\"Botón borrar\"", correct: false, feedback: "El rol ya se anuncia; repetirlo es ruido." }
+      ]
+    },
+    {
+      prompt: "El usuario tiene la letra del sistema al máximo y el texto de una tarjeta se corta. ¿Qué haces primero?",
+      options: [
+        { text: "Pongo allowFontScaling={false}", correct: false, feedback: "Eso ignora la necesidad del usuario." },
+        { text: "Cambio height por minHeight y dejo que el contenido crezca", correct: true, feedback: "Correcto: el diseño se adapta al texto." },
+        { text: "Reduzco el fontSize base", correct: false, feedback: "Empeora la lectura para todos." }
+      ]
+    },
+    {
+      prompt: "Tu lista permite borrar deslizando. ¿Qué necesita un usuario de lector de pantalla?",
+      options: [
+        { text: "Nada, el gesto funciona igual", correct: false, feedback: "Con el lector activo, los gestos se interpretan distinto." },
+        { text: "Una alternativa: un botón o una acción de accesibilidad", correct: true, feedback: "Correcto: todo gesto necesita una alternativa." },
+        { text: "Un texto que diga que deslice", correct: false, feedback: "Explicar el gesto no lo vuelve posible." }
+      ]
+    }
+  ]}
+/>

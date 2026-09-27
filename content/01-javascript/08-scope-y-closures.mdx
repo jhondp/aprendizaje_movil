@@ -1,0 +1,197 @@
+---
+id: "01-javascript/08-scope-y-closures"
+title: "Scope y closures"
+stage: 1
+module: "Profundizando"
+order: 8
+minutes: 15
+prereqs: ["01-javascript/07-metodos-de-array"]
+summary: "Entiende el scope de bloque y usa closures para que una función recuerde datos entre llamadas."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás explicar dónde vive cada variable según dónde se declaró, y escribir una función que recuerda datos entre una llamada y otra usando un closure.
+
+**Prerrequisitos:** `01-javascript/07-metodos-de-array`
+
+## Concepto
+
+Piensa en el scope como las habitaciones de una casa. Lo que guardas en una habitación (una variable declarada dentro de un bloque) no es visible desde el pasillo ni desde otras habitaciones. Pero alguien de pie en el pasillo puede ver lo que hay en el pasillo mismo: una variable declarada afuera es visible desde adentro. Ese es el scope: la región del código donde una variable existe y puede usarse.
+
+### Scope de bloque
+
+Una variable declarada con `let` o `const` dentro de un bloque `{ }` (un `if`, un `for`, o cualquier par de llaves) solo existe dentro de ese bloque.
+
+```js
+if (true) {
+  let insideBlock = "hola";
+  console.log(insideBlock); // hola
+}
+
+console.log(typeof insideBlock); // undefined: fuera del bloque, la variable no existe
+```
+
+Intentar usar `insideBlock` fuera del `if` con `console.log(insideBlock)` directamente lanza `ReferenceError: insideBlock is not defined`; `typeof` es la única forma segura de preguntar por una variable que podría no existir, porque no lanza error.
+
+### Scope de función
+
+Una variable declarada dentro de una función tampoco es visible desde afuera de esa función, sin importar si está dentro de un bloque o no.
+
+```js
+function calculateArea(width, height) {
+  const area = width * height;
+  return area;
+}
+
+console.log(calculateArea(3, 4)); // 12
+console.log(typeof area); // undefined: area solo existe dentro de calculateArea
+```
+
+### Funciones anidadas ven el scope de afuera
+
+Una función definida dentro de otra función sí puede leer las variables de la función que la contiene. El scope funciona de adentro hacia afuera: una función interna ve las variables externas, pero no al revés.
+
+```js
+function outer() {
+  const message = "hello from outer";
+
+  function inner() {
+    console.log(message); // inner puede leer message, aunque no la declaró
+  }
+
+  inner();
+}
+
+outer(); // hello from outer
+```
+
+### Closures: una función que recuerda su scope
+
+Un closure ocurre cuando una función interna se devuelve o se guarda para usarse después, y esa función conserva acceso a las variables de la función externa aunque esta ya haya terminado de ejecutarse. Es como si la función interna se llevara una copia con permiso de acceso al cuarto donde nació, incluso después de que la puerta original se cerró.
+
+```js
+function createCounter() {
+  let count = 0;
+
+  return () => {
+    count += 1;
+    return count;
+  };
+}
+
+const counter = createCounter();
+console.log(counter()); // 1
+console.log(counter()); // 2
+console.log(counter()); // 3
+```
+
+`createCounter` ya terminó de ejecutarse la primera vez que se llama, pero la función flecha que devuelve sigue teniendo acceso a `count` y la recuerda entre una llamada y otra. Cada llamada a `counter()` no reinicia `count`: lo actualiza sobre el valor que quedó de la vez anterior.
+
+Puedes revisar la referencia completa de closures en MDN: https://developer.mozilla.org/es/docs/Web/JavaScript/Closures.
+
+<Callout kind="tip">
+  Los closures reaparecen en la etapa 3 (React), dentro de los hooks: una función que "recuerda" un valor entre renders usa exactamente esta idea.
+</Callout>
+
+## Práctica
+
+Ejecuta el código. Observa que cada llamada a `counter()` aumenta el número, y que `insideBlock` no existe fuera del bloque donde se declaró.
+
+<Playground
+  lang="js"
+  code={`if (true) {
+  let insideBlock = "hola";
+  console.log(insideBlock);
+}
+console.log(typeof insideBlock);
+
+function createCounter() {
+  let count = 0;
+  return () => {
+    count += 1;
+    return count;
+  };
+}
+
+const counter = createCounter();
+console.log(counter());
+console.log(counter());
+console.log(counter());`}
+  expected={`hola
+undefined
+1
+2
+3`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Contador de mensajes"
+  solution={
+    <Playground
+      lang="js"
+      code={`function createMessageLogger() {
+  let total = 0;
+  return (message) => {
+    total += 1;
+    console.log(\`(\${total}) \${message}\`);
+  };
+}
+
+const log = createMessageLogger();
+log("primer mensaje");
+log("segundo mensaje");
+log("tercer mensaje");`}
+    />
+  }
+>
+  Escribe una función `createMessageLogger` que devuelva una función. Esa función recibe un `message`, lleva la cuenta de cuántas veces se llamó (empezando en 1) e imprime `(n) message`, donde `n` es el número de llamada. Comprueba llamándola tres veces con mensajes distintos.
+</Challenge>
+
+## Errores comunes
+
+**Intentar leer una variable de bloque fuera de su bloque.** `if (ok) { let result = 10; } console.log(result);` lanza `ReferenceError: result is not defined`, porque `result` dejó de existir al cerrarse el bloque. Se detecta por ese mensaje de error exacto; la solución es declarar la variable antes del bloque si necesitas usarla después.
+
+**Pensar que dos closures creados por la misma función comparten el estado.** `const counterA = createCounter(); const counterB = createCounter();` crea dos closures independientes: cada llamada a `createCounter()` genera su propio `count`, así que llamar a `counterA()` no afecta a `counterB()`. Se detecta comparando ambos contadores: si uno avanza y el otro no cambia, están correctamente separados.
+
+**Pensar que un closure copia el valor de una variable en el momento en que se crea.** Un closure guarda una referencia viva a la variable, no una fotografía de su valor. Si la variable cambia después de crear la función interna pero antes de llamarla, la función ve el valor actualizado, no el original. Se detecta ejecutando el código y comparando el resultado real contra lo que se esperaría de una "copia congelada".
+
+<Flashcards
+  cards={[
+    { front: "¿Dónde existe una variable declarada con let dentro de un if?", back: "Solo dentro de ese bloque; fuera de él no existe." },
+    { front: "¿Qué es un closure?", back: "Una función que conserva acceso a las variables de la función donde fue creada, incluso después de que esa función terminó de ejecutarse." },
+    { front: "¿Dos closures creados por la misma función comparten sus variables?", back: "No: cada llamada a la función externa crea un scope independiente." },
+    { front: "¿Un closure copia el valor de una variable o guarda una referencia viva?", back: "Guarda una referencia viva: si la variable cambia, el closure ve el valor actualizado." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué ocurre al ejecutar if (true) { let x = 5; } console.log(x);?",
+      options: [
+        { text: "Imprime 5", correct: false, feedback: "x no existe fuera del bloque donde se declaró." },
+        { text: "Lanza ReferenceError: x is not defined", correct: true, feedback: "Correcto: x solo existe dentro del bloque if." },
+        { text: "Imprime undefined", correct: false, feedback: "No es undefined: la variable directamente no existe en ese scope, y acceder así lanza un error." },
+      ],
+    },
+    {
+      prompt: "const counter = createCounter(); console.log(counter()); console.log(counter()); ¿qué se imprime, si createCounter es el del Concepto?",
+      options: [
+        { text: "1 y luego 1", correct: false, feedback: "El closure recuerda count entre llamadas; no se reinicia." },
+        { text: "1 y luego 2", correct: true, feedback: "Correcto: cada llamada incrementa el count recordado por el closure." },
+        { text: "undefined y luego undefined", correct: false, feedback: "La función devuelve el nuevo valor de count con return." },
+      ],
+    },
+    {
+      prompt: "¿Qué puede leer una función definida dentro de otra función?",
+      options: [
+        { text: "Solo sus propias variables locales", correct: false, feedback: "También puede leer las variables de la función que la contiene." },
+        { text: "Sus propias variables y las de la función que la contiene", correct: true, feedback: "Correcto: el scope interno ve el scope externo." },
+        { text: "Ninguna variable declarada fuera de sí misma", correct: false, feedback: "Sí puede: ese acceso es justamente lo que hace posible un closure." },
+      ],
+    },
+  ]}
+/>

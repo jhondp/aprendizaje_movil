@@ -1,0 +1,52 @@
+.root {
+  border: 1.5px solid var(--ink-10);
+  border-radius: var(--radius-l);
+  padding: 24px 26px;
+  margin: 24px 0;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.badge {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+.title {
+  font-size: 20px;
+}
+
+.toggle {
+  margin-top: 12px;
+  height: 40px;
+  padding: 0 20px;
+  border-radius: var(--radius-l);
+  background: var(--color-ink);
+  color: var(--color-sand);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.solution {
+  margin-top: 16px;
+  padding: 16px 20px;
+  border-radius: var(--radius-m);
+  background: var(--color-paper);
+}
+
+.solutionLabel {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--color-lime);
+  margin-bottom: 6px;
+}

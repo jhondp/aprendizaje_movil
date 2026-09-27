@@ -1,0 +1,295 @@
+---
+id: "05-estado-datos-arquitectura/01-zustand"
+title: "Zustand"
+stage: 5
+module: "Estado"
+order: 1
+minutes: 15
+prereqs: ["05-estado-datos-arquitectura/00-estado-global"]
+summary: "Crea un store de Zustand con estado, acciones y selectores, y úsalo desde varios componentes sin proveedor."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás crear un store de Zustand tipado con estado y acciones, leerlo con selectores y evitar renders innecesarios.
+
+**Prerrequisitos:** `05-estado-datos-arquitectura/00-estado-global`
+
+## Concepto
+
+Zustand es un store global que se consume con hooks. La idea completa cabe en una frase: creas un store con `create`, y `create` te devuelve un hook que cualquier componente puede llamar para leer o modificar ese store. Documentación oficial: https://zustand.docs.pmnd.rs/ y repositorio: https://github.com/pmndrs/zustand
+
+Piensa en el tablero de avisos de una oficina. Está colgado en un solo lugar (el store), tiene reglas sobre quién puede cambiar qué (las acciones) y cada persona mira solo la sección que le interesa (el selector). Si alguien cambia el menú del comedor, quien solo mira la sección de vacaciones no necesita volver a leer el tablero entero.
+
+### Instalar
+
+```bash
+npx expo install zustand
+```
+
+### Crear un store
+
+Un store tiene dos tipos de campos: **estado** (datos) y **acciones** (funciones que cambian el estado). Ambos viven en el mismo objeto.
+
+```ts
+import { create } from "zustand";
+
+export type Note = { id: string; title: string; done: boolean };
+
+type NotesState = {
+  notes: Note[];
+  addNote: (title: string) => void;
+  toggleNote: (id: string) => void;
+  clearDone: () => void;
+};
+
+export const useNotesStore = create<NotesState>()((set) => ({
+  notes: [],
+  addNote: (title) =>
+    set((state) => ({
+      notes: [...state.notes, { id: String(Date.now()), title, done: false }],
+    })),
+  toggleNote: (id) =>
+    set((state) => ({
+      notes: state.notes.map((n) => (n.id === id ? { ...n, done: !n.done } : n)),
+    })),
+  clearDone: () => set((state) => ({ notes: state.notes.filter((n) => !n.done) })),
+}));
+```
+
+Tres detalles importan:
+
+- `create<NotesState>()(...)` lleva **dos pares de paréntesis** en TypeScript. El primero recibe el tipo; el segundo, la función que construye el store. Es la forma que recomienda la documentación para que la inferencia de tipos funcione con middlewares.
+- `set` recibe un objeto parcial y lo **mezcla** con el estado actual. No necesitas copiar `addNote` ni los demás campos: `set({ notes })` deja intacto el resto.
+- Igual que con `useState`, no mutes el estado. `state.notes.push(...)` no avisa a nadie del cambio. Crea arreglos y objetos nuevos con spread, `map` o `filter`.
+
+### Leer con selectores
+
+El hook que devuelve `create` acepta un **selector**: una función que recibe el estado completo y devuelve solo lo que el componente necesita.
+
+```tsx
+function NotesCounter() {
+  const pending = useNotesStore((state) => state.notes.filter((n) => !n.done).length);
+  return <Text>Pendientes: {pending}</Text>;
+}
+
+function AddButton() {
+  const addNote = useNotesStore((state) => state.addNote);
+  return <Button title="Agregar" onPress={() => addNote("Nueva nota")} />;
+}
+```
+
+Zustand compara el resultado del selector antes y después de cada cambio con `Object.is`. Si es igual, el componente no se vuelve a renderizar. `AddButton` selecciona una función que nunca cambia, así que no se renderiza aunque la lista crezca. `NotesCounter` devuelve un número, y solo se renderiza cuando ese número cambia.
+
+### Selectores que devuelven objetos nuevos
+
+Hay una trampa. Este selector crea un objeto nuevo en cada llamada:
+
+```tsx
+// Avoid: a new object on every call
+const { notes, addNote } = useNotesStore((state) => ({ notes: state.notes, addNote: state.addNote }));
+```
+
+Como `{...} !== {...}`, la comparación siempre dice "cambió". En Zustand 5 esto puede provocar un bucle de renders. Tienes dos salidas: llamar al hook una vez por campo, o envolver el selector en `useShallow`, que compara el objeto campo por campo.
+
+```tsx
+import { useShallow } from "zustand/react/shallow";
+
+const { notes, addNote } = useNotesStore(
+  useShallow((state) => ({ notes: state.notes, addNote: state.addNote })),
+);
+```
+
+### Leer y escribir fuera de React
+
+El hook también expone `getState` y `setState`. Sirven en código que no es un componente, como una función utilitaria o un test:
+
+```ts
+useNotesStore.getState().addNote("Desde fuera de React");
+console.log(useNotesStore.getState().notes.length);
+```
+
+Úsalo con moderación: dentro de componentes, los selectores son lo que mantiene la pantalla sincronizada.
+
+### Acciones con lógica asíncrona
+
+Una acción es una función normal, así que puede ser `async`. Llama a `set` cuando tengas el resultado. Para datos que vienen de una API, en la lección siguiente verás una herramienta más adecuada; aquí basta con saber que es posible.
+
+## Práctica
+
+El Snack tiene un store de notas con tres acciones. El contador de pendientes y la lista leen el store con selectores distintos. Agrega notas, márcalas como hechas y limpia las terminadas. Luego agrega una acción `renameNote` que cambie el título de una nota.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  dependencies={{ zustand: '^5.0.0' }}
+  code={`import { useState } from "react";
+import { Button, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { create } from "zustand";
+
+const useNotesStore = create((set) => ({
+  notes: [],
+  addNote: (title) =>
+    set((state) => ({ notes: [...state.notes, { id: String(Date.now()), title, done: false }] })),
+  toggleNote: (id) =>
+    set((state) => ({
+      notes: state.notes.map((n) => (n.id === id ? { ...n, done: !n.done } : n)),
+    })),
+  clearDone: () => set((state) => ({ notes: state.notes.filter((n) => !n.done) })),
+}));
+
+function PendingCounter() {
+  const pending = useNotesStore((state) => state.notes.filter((n) => !n.done).length);
+  return <Text style={styles.counter}>Pendientes: {pending}</Text>;
+}
+
+function AddNoteForm() {
+  const [title, setTitle] = useState("");
+  const addNote = useNotesStore((state) => state.addNote);
+  const submit = () => {
+    if (title.trim() === "") return;
+    addNote(title.trim());
+    setTitle("");
+  };
+  return (
+    <View style={styles.row}>
+      <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="Nueva nota" />
+      <Button title="Agregar" onPress={submit} />
+    </View>
+  );
+}
+
+function NoteList() {
+  const notes = useNotesStore((state) => state.notes);
+  const toggleNote = useNotesStore((state) => state.toggleNote);
+  return (
+    <FlatList
+      data={notes}
+      keyExtractor={(item) => item.id}
+      renderItem={({ item }) => (
+        <Pressable onPress={() => toggleNote(item.id)}>
+          <Text style={[styles.note, item.done && styles.done]}>{item.title}</Text>
+        </Pressable>
+      )}
+    />
+  );
+}
+
+export default function App() {
+  const clearDone = useNotesStore((state) => state.clearDone);
+  return (
+    <View style={styles.container}>
+      <PendingCounter />
+      <AddNoteForm />
+      <NoteList />
+      <Button title="Limpiar terminadas" onPress={clearDone} />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, paddingTop: 64, paddingHorizontal: 16, gap: 12 },
+  counter: { fontSize: 18, fontWeight: "600" },
+  row: { flexDirection: "row", gap: 8 },
+  input: { flex: 1, borderWidth: 1, borderColor: "#ccc", borderRadius: 6, paddingHorizontal: 8 },
+  note: { fontSize: 16, paddingVertical: 8 },
+  done: { textDecorationLine: "line-through", color: "#888" },
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Store de preferencias"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="55.0.0"
+      dependencies={{ zustand: '^5.0.0' }}
+      code={`import { Button, Text, View } from "react-native";
+import { create } from "zustand";
+
+const usePrefsStore = create((set) => ({
+  fontSize: 16,
+  increaseFont: () => set((state) => ({ fontSize: Math.min(state.fontSize + 2, 28) })),
+  decreaseFont: () => set((state) => ({ fontSize: Math.max(state.fontSize - 2, 12) })),
+  reset: () => set({ fontSize: 16 }),
+}));
+
+function Preview() {
+  const fontSize = usePrefsStore((state) => state.fontSize);
+  return <Text style={{ fontSize }}>Texto de ejemplo ({fontSize})</Text>;
+}
+
+function Controls() {
+  const increaseFont = usePrefsStore((state) => state.increaseFont);
+  const decreaseFont = usePrefsStore((state) => state.decreaseFont);
+  const reset = usePrefsStore((state) => state.reset);
+  return (
+    <View style={{ flexDirection: "row", gap: 8 }}>
+      <Button title="A-" onPress={decreaseFont} />
+      <Button title="A+" onPress={increaseFont} />
+      <Button title="Reiniciar" onPress={reset} />
+    </View>
+  );
+}
+
+export default function App() {
+  return (
+    <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 16 }}>
+      <Preview />
+      <Controls />
+    </View>
+  );
+}`}
+    />
+  }
+>
+  Crea un store `usePrefsStore` con un campo `fontSize` (inicia en 16) y tres acciones: `increaseFont` (suma 2, máximo 28), `decreaseFont` (resta 2, mínimo 12) y `reset`. Muestra un texto de ejemplo en un componente `Preview` y los botones en otro componente `Controls`. Cada componente debe leer solo lo que necesita con selectores.
+</Challenge>
+
+## Errores comunes
+
+**Mutar el estado dentro de `set`.** Se ve como `set((state) => { state.notes.push(note); return state; })`. Pasa porque en JavaScript mutar un arreglo es lo más directo. El store no detecta el cambio porque la referencia es la misma, y la pantalla no se actualiza. Se detecta cuando `getState()` muestra el dato nuevo pero la interfaz sigue igual. Solución: devolver arreglos y objetos nuevos.
+
+**Seleccionar un objeto nuevo sin `useShallow`.** Se ve como `useStore((s) => ({ a: s.a, b: s.b }))`. Ocurre por costumbre de desestructurar. En Zustand 5 produce el error "Maximum update depth exceeded" o renders en cada cambio del store. Se detecta por ese error o por un contador de renders que sube sin motivo. Solución: un hook por campo o `useShallow`.
+
+**Leer el store completo sin selector.** Se ve como `const state = useNotesStore()`. Funciona, pero el componente se renderiza con cualquier cambio del store, incluso de campos que no usa. Se detecta con el Profiler cuando un componente sencillo aparece en cada commit. Solución: seleccionar solo lo necesario.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué devuelve la función create de Zustand?", back: "Un hook que los componentes llaman para leer el store, más getState y setState." },
+    { front: "¿Por qué create<T>() lleva dos pares de paréntesis en TypeScript?", back: "El primero fija el tipo del estado y el segundo recibe la función que construye el store; así la inferencia funciona con middlewares." },
+    { front: "¿Qué hace set en un store de Zustand?", back: "Mezcla el objeto parcial que recibe con el estado actual y notifica a los suscriptores." },
+    { front: "¿Para qué sirve useShallow en Zustand?", back: "Compara campo por campo un objeto o arreglo devuelto por un selector para evitar renders cuando su contenido no cambió." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Cuándo se vuelve a renderizar un componente que usa useNotesStore((s) => s.notes.length)?",
+      options: [
+        { text: "Con cualquier cambio en el store", correct: false, feedback: "Zustand compara el resultado del selector; si no cambia, no hay render." },
+        { text: "Solo cuando cambia la cantidad de notas", correct: true, feedback: "Correcto: el selector devuelve un número y se compara con Object.is." },
+        { text: "Nunca, porque los selectores son estáticos", correct: false, feedback: "El selector se evalúa en cada cambio del store." }
+      ]
+    },
+    {
+      prompt: "¿Qué pasa si una acción hace state.notes.push(note) y devuelve state?",
+      options: [
+        { text: "La pantalla se actualiza normalmente", correct: false, feedback: "La referencia del arreglo no cambia, así que los selectores no detectan nada." },
+        { text: "La pantalla no se actualiza porque la referencia es la misma", correct: true, feedback: "Correcto: hay que crear un arreglo nuevo." },
+        { text: "Zustand lanza un error de tipos", correct: false, feedback: "No hay error; el problema es silencioso." }
+      ]
+    },
+    {
+      prompt: "¿Qué necesita un store de Zustand para usarse desde cualquier componente?",
+      options: [
+        { text: "Un Provider que envuelva la app", correct: false, feedback: "Zustand no requiere proveedor, a diferencia de Context." },
+        { text: "Nada más: basta con importar el hook", correct: true, feedback: "Correcto: el store vive en el módulo y el hook se importa donde se necesite." },
+        { text: "Registrarlo en app.json", correct: false, feedback: "Es una librería de JavaScript, no requiere configuración nativa." }
+      ]
+    }
+  ]}
+/>

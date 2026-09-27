@@ -1,0 +1,204 @@
+---
+id: "04-react-native-expo/00-como-funciona-react-native"
+title: "Cómo funciona React Native"
+stage: 4
+module: "Cómo funciona React Native"
+order: 0
+minutes: 15
+prereqs: ["03-react/11-proyecto-tablero-de-tareas"]
+summary: "Entiende qué hace React Native por debajo: vistas nativas reales, el motor Hermes y la New Architecture con JSI, Fabric y TurboModules."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás explicar cómo un componente de React termina convertido en una vista nativa de iOS o Android, y qué papel cumplen Hermes, JSI, Fabric y TurboModules.
+
+**Prerrequisitos:** `03-react/11-proyecto-tablero-de-tareas`
+
+## Concepto
+
+En la etapa anterior escribiste componentes de React que el navegador convertía en elementos del DOM: `div`, `button`, `input`. React Native usa exactamente el mismo React (componentes, props, state, hooks), pero cambia el destino final. En lugar de crear nodos del DOM, crea **vistas nativas reales**: un `UIView` en iOS y un `android.view.View` en Android. No hay navegador ni WebView escondido: lo que ves en pantalla son los mismos controles que usa una app escrita en Swift o Kotlin.
+
+Documentación oficial: https://reactnative.dev/docs/getting-started y https://reactnative.dev/architecture/overview
+
+### Una analogía: el director y el equipo técnico
+
+Piensa en una obra de teatro. El director (tu código JavaScript) decide qué debe verse en el escenario: "una mesa a la izquierda, un actor diciendo este texto". El equipo técnico (la plataforma nativa) es quien realmente mueve la utilería y enciende las luces. React Native es el sistema de comunicación entre ambos.
+
+En las primeras versiones, el director escribía notas en papel, las metía en un sobre y las pasaba por debajo de una puerta. El equipo las leía cuando podía y respondía con otra nota. Ese mecanismo se llamaba **bridge**: todos los mensajes se convertían a JSON y viajaban de forma asíncrona. Funcionaba, pero cada viaje costaba tiempo.
+
+Hoy el director tiene una línea telefónica directa con el equipo: puede preguntar y recibir respuesta al instante. Esa línea directa es la **New Architecture**.
+
+### Las piezas de la New Architecture
+
+La New Architecture es la arquitectura por defecto desde React Native 0.76 y la única disponible desde React Native 0.82 y Expo SDK 55. El bridge es historia: no lo vas a configurar ni a usar. Sus piezas son:
+
+- **JSI (JavaScript Interface)**: una interfaz en C++ que permite a JavaScript tener referencias directas a objetos nativos y llamar a sus métodos, incluso de forma síncrona. Es la línea telefónica de la analogía. Ya no hay que serializar todo a JSON.
+- **Fabric**: el sistema de renderizado. Recibe el árbol de componentes que produce React, calcula el layout con Yoga (el motor de Flexbox de React Native) y aplica los cambios a las vistas nativas. Como está escrito en C++ y se comunica mediante JSI, puede medir y actualizar vistas de forma síncrona y soporta las funciones concurrentes de React, como las transiciones.
+- **TurboModules**: la nueva forma de exponer capacidades nativas (cámara, sensores, almacenamiento) a JavaScript. Se cargan solo cuando los usas por primera vez y se llaman a través de JSI.
+- **Codegen**: una herramienta que lee especificaciones tipadas en TypeScript y genera el código de unión entre JavaScript y el lado nativo. Así, si un módulo nativo espera un número y le envías un texto, el error aparece antes y no en producción.
+
+### Hermes: el motor que ejecuta tu JavaScript
+
+Tu código JavaScript necesita un motor que lo ejecute dentro del teléfono. En el navegador ese motor es V8 (Chrome) o JavaScriptCore (Safari). En React Native es **Hermes**, un motor creado específicamente para apps móviles y el motor por defecto. Su versión más reciente, Hermes V1, es la predeterminada desde Expo SDK 56.
+
+Hermes compila tu JavaScript a **bytecode** durante el build, antes de que la app llegue al teléfono. Cuando el usuario abre la app, el motor no tiene que leer y compilar el código fuente: ejecuta directamente el bytecode. El resultado es un arranque más rápido y menos consumo de memoria.
+
+Puedes comprobar si tu código corre en Hermes buscando un objeto global que solo existe en ese motor:
+
+```tsx
+const isHermes = typeof (globalThis as any).HermesInternal === "object";
+```
+
+Documentación de Hermes: https://reactnative.dev/docs/hermes
+
+### Del componente a la pantalla
+
+Cuando escribes esto:
+
+```tsx
+import { View, Text } from "react-native";
+
+export default function App() {
+  return (
+    <View style={{ padding: 24 }}>
+      <Text>Hola</Text>
+    </View>
+  );
+}
+```
+
+ocurre lo siguiente:
+
+1. Hermes ejecuta tu componente y React produce un árbol de elementos, igual que en la web.
+2. Fabric convierte ese árbol en un árbol interno en C++ y calcula posiciones y tamaños con Yoga.
+3. Fabric crea o actualiza las vistas nativas: un contenedor nativo para `View` y un texto nativo para `Text`.
+4. Cuando cambia el state, React calcula la diferencia y Fabric aplica solo los cambios necesarios.
+
+### Lo que cambia respecto a la web
+
+Como no hay DOM, tampoco hay `div`, `span`, `img` ni CSS. En su lugar usas componentes core: `View` para contenedores, `Text` para cualquier texto, `Image` para imágenes. Los estilos se escriben como objetos de JavaScript y el layout siempre es Flexbox. Todo esto lo verás en las próximas lecciones.
+
+Lo que no cambia es tu forma de pensar: componentes pequeños, props hacia abajo, state local y hooks. Todo lo que aprendiste en la etapa de React sigue siendo válido.
+
+## Práctica
+
+Este Snack muestra una app mínima que indica si el código se ejecuta en Hermes. Pruébalo con la vista iOS o Android y luego cambia a Web: en el navegador el motor es otro y el resultado cambia.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  code={`import { useState } from "react";
+import { View, Text, Button, StyleSheet } from "react-native";
+
+const isHermes = typeof (globalThis as any).HermesInternal === "object";
+
+export default function App() {
+  const [taps, setTaps] = useState(0);
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Hola, React Native</Text>
+      <Text style={styles.info}>
+        Motor Hermes: {isHermes ? "sí" : "no"}
+      </Text>
+      <Text style={styles.info}>Toques: {taps}</Text>
+      <Button title="Tocar" onPress={() => setTaps(taps + 1)} />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12 },
+  title: { fontSize: 24, fontWeight: "600" },
+  info: { fontSize: 16, color: "#444" },
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Resumen de la arquitectura"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="55.0.0"
+      code={`import { View, Text, StyleSheet } from "react-native";
+
+const pieces = [
+  { name: "JSI", role: "JavaScript llama a C++ directamente" },
+  { name: "Fabric", role: "Renderiza vistas nativas y calcula el layout" },
+  { name: "TurboModules", role: "Módulos nativos cargados bajo demanda" },
+  { name: "Hermes", role: "Ejecuta bytecode precompilado" },
+];
+
+export default function App() {
+  return (
+    <View style={styles.container}>
+      {pieces.map((piece) => (
+        <View key={piece.name} style={styles.row}>
+          <Text style={styles.name}>{piece.name}</Text>
+          <Text>{piece.role}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", padding: 24, gap: 16 },
+  row: { gap: 4 },
+  name: { fontSize: 18, fontWeight: "700" },
+});`}
+    />
+  }
+>
+  Crea una app que muestre una lista con cuatro piezas: JSI, Fabric, TurboModules y Hermes. Cada fila debe mostrar el nombre en negrita y, debajo, una frase que explique su función. Usa un arreglo de objetos y `map` con una `key` estable, como en la etapa de React.
+</Challenge>
+
+## Errores comunes
+
+**Pensar que React Native es una página web dentro de una app.** Se nota cuando alguien intenta usar `document.getElementById` o `window.localStorage` y recibe `undefined` o un error. Ocurre porque React Native no tiene DOM: dibuja vistas nativas. Se detecta porque cualquier API del navegador falla en iOS y Android aunque funcione en la vista Web de Snack.
+
+**Buscar configuración del bridge en guías antiguas.** Tutoriales de antes de 2024 hablan de `NativeModules`, del bridge o de desactivar la New Architecture con `newArchEnabled: false`. Ocurre porque internet está lleno de contenido desactualizado. Se detecta porque esas opciones ya no existen en Expo SDK 55 o superior; revisa siempre la fecha del artículo y la documentación oficial.
+
+**Creer que Hermes es opcional o que conviene cambiarlo.** Guías viejas sugieren usar JavaScriptCore. Hermes es el motor por defecto y el que Expo prueba en cada SDK. Se detecta porque `HermesInternal` existe en iOS y Android; si no existe, estás mirando la vista Web.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué es JSI en React Native?", back: "Una interfaz en C++ que permite a JavaScript llamar directamente a objetos nativos, sin serializar a JSON." },
+    { front: "¿Qué hace Fabric en React Native?", back: "Es el renderizador: calcula el layout con Yoga y crea o actualiza las vistas nativas." },
+    { front: "¿Qué ventaja tiene Hermes al arrancar una app?", back: "Ejecuta bytecode compilado durante el build, así que arranca más rápido y usa menos memoria." },
+    { front: "¿Qué son los TurboModules?", back: "Módulos nativos que se cargan bajo demanda y se llaman a través de JSI." },
+    { front: "¿React Native dibuja con un WebView?", back: "No. Crea vistas nativas reales de iOS y Android." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué pieza de la New Architecture permite a JavaScript llamar a código nativo sin convertir los datos a JSON?",
+      options: [
+        { text: "JSI", correct: true, feedback: "Correcto: JSI da a JavaScript referencias directas a objetos en C++." },
+        { text: "El bridge", correct: false, feedback: "El bridge era el mecanismo antiguo y sí serializaba todo a JSON." },
+        { text: "Metro", correct: false, feedback: "Metro es el bundler que empaqueta tu código, no el canal de comunicación." }
+      ]
+    },
+    {
+      prompt: "¿Qué hace Fabric?",
+      options: [
+        { text: "Descarga dependencias de npm", correct: false, feedback: "Eso lo hace el gestor de paquetes." },
+        { text: "Renderiza el árbol de React en vistas nativas y calcula el layout", correct: true, feedback: "Correcto: Fabric es el sistema de renderizado de la New Architecture." },
+        { text: "Compila JavaScript a bytecode", correct: false, feedback: "Eso lo hace Hermes durante el build." }
+      ]
+    },
+    {
+      prompt: "¿Por qué una app con Hermes arranca más rápido?",
+      options: [
+        { text: "Porque usa un WebView optimizado", correct: false, feedback: "React Native no usa WebView para dibujar la interfaz." },
+        { text: "Porque el JavaScript llega precompilado a bytecode", correct: true, feedback: "Correcto: el motor no tiene que compilar el código fuente al abrir la app." },
+        { text: "Porque desactiva la New Architecture", correct: false, feedback: "Hermes y la New Architecture trabajan juntos; la New Architecture no se puede desactivar." }
+      ]
+    }
+  ]}
+/>

@@ -1,0 +1,289 @@
+---
+id: "10-build-release-operaciones/09-monitoreo-sentry"
+title: "Monitoreo con Sentry y métricas"
+stage: 10
+module: "Operar"
+order: 9
+minutes: 12
+prereqs: ["10-build-release-operaciones/08-versionado-y-changelog"]
+summary: "Integra Sentry con el wizard oficial, captura errores manejados con contexto y define una métrica de crash-free rate para saber cuándo actuar."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás instalar Sentry en la app con el wizard y el config plugin de Expo, subir source maps desde EAS Build, capturar un error manejado con contexto útil y definir un objetivo de crash-free rate para producción.
+
+**Prerrequisitos:** `10-build-release-operaciones/08-versionado-y-changelog`
+
+## Concepto
+
+Una vez publicada, la app corre en miles de teléfonos que no puedes ver. Cuando algo falla, el usuario no abre un issue: cierra la app. Sin monitoreo, te enteras por una reseña de una estrella semanas después. **Sentry** es el servicio de monitoreo de errores más usado con React Native: recibe cada excepción con su stack trace, el dispositivo, la versión y el contexto que tú agregues.
+
+Piensa en la caja negra de un avión. No evita el fallo, pero registra todo lo que pasó antes para que se pueda entender y corregir. Sentry es la caja negra de la app, con una diferencia: te avisa mientras el avión sigue volando, para que publiques un rollback antes de que afecte a más gente.
+
+### Instalar con el wizard
+
+Sentry mantiene un asistente que hace la configuración completa (https://docs.expo.dev/guides/using-sentry/):
+
+```sh
+npx @sentry/wizard@latest -i reactNative
+```
+
+El wizard pide iniciar sesión en Sentry, elige o crea el proyecto y hace tres cosas en tu repositorio:
+
+1. Instala `@sentry/react-native` con la versión compatible con tu SDK.
+2. Agrega el **config plugin** `@sentry/react-native/expo` a la configuración. Con `app.config.ts` te mostrará el bloque para que lo agregues a mano:
+
+```ts
+plugins: [
+  [
+    "@sentry/react-native/expo",
+    {
+      organization: "<sentry-org-slug>",
+      project: "<sentry-project-slug>",
+      url: "https://sentry.io/",
+    },
+  ],
+],
+```
+
+3. Añade `Sentry.init` y envuelve el componente raíz. Con Expo Router, el lugar es `src/app/_layout.tsx`:
+
+```tsx
+// src/app/_layout.tsx
+import * as Sentry from "@sentry/react-native";
+import { Stack } from "expo-router";
+import { dropSensitiveBreadcrumb, scrubEvent } from "@/infrastructure/monitoring/scrub";
+
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  environment: process.env.EXPO_PUBLIC_ENVIRONMENT ?? "production",
+  enabled: !__DEV__,
+  sendDefaultPii: false,
+  beforeSend: scrubEvent,
+  beforeBreadcrumb: dropSensitiveBreadcrumb,
+  tracesSampleRate: 0.2,
+});
+
+function RootLayout() {
+  return <Stack />;
+}
+
+export default Sentry.wrap(RootLayout);
+```
+
+El **DSN** es la dirección a la que la app envía eventos. Es pública por diseño (va dentro del bundle), así que puede ir en `EXPO_PUBLIC_SENTRY_DSN` sin problema. El wizard escribe el DSN como texto literal: reemplázalo por la variable, para que preview y production envíen a su propio proyecto o entorno de Sentry. La política de limpieza de la lección de crash reporting de la etapa de seguridad se mantiene (`scrubEvent`, `dropSensitiveBreadcrumb` y `enabled: !__DEV__`); el wizard no la conoce, así que revisa que no la haya borrado. `sendDefaultPii: false` evita enviar datos personales por defecto; `tracesSampleRate` controla qué fracción de sesiones envía datos de rendimiento (0.2 es un 20 %; en producción, empieza bajo).
+
+Como el plugin agrega código nativo, necesitas un build nuevo: es un cambio de los que no viajan por OTA.
+
+### Source maps: leer el stack trace
+
+Un stack trace de producción sin source maps apunta a `index.android.bundle:1:48213`, inútil. El config plugin sube los source maps a Sentry durante `eas build`, pero necesita autenticarse: un token de Sentry con permiso para subir. Ese token es un secreto de build, exactamente el caso de la lección de variables:
+
+```sh
+eas env:create --environment production --name SENTRY_AUTH_TOKEN --value sntrys_xxx --visibility secret
+```
+
+Repítelo para `preview`. Con eso, cada error en Sentry muestra el archivo `.tsx` y la línea real de los builds. Las actualizaciones OTA son otro caso: el plugin no interviene en `eas update`, así que después de cada publicación subes los source maps del bundle exportado en `dist/` con un comando aparte (https://docs.sentry.io/platforms/react-native/sourcemaps/uploading/expo/):
+
+```sh
+eas update --channel production --environment production --message "Fix note title truncation"
+SENTRY_AUTH_TOKEN=<token> npx @sentry/expo-upload-sourcemaps dist
+```
+
+Sin este paso, los errores que produzca el código de la OTA vuelven a apuntar a líneas del bundle minificado.
+
+### Capturar errores manejados
+
+Sentry captura por sí solo los errores no manejados que cierran la app. Pero muchos fallos importantes son **manejados**: un `try/catch` que muestra "no se pudo guardar" y sigue. Esos no llegan a Sentry a menos que los envíes:
+
+```ts
+import * as Sentry from "@sentry/react-native";
+
+export async function saveNote(note: Note): Promise<boolean> {
+  try {
+    await repository.save(note);
+    return true;
+  } catch (error) {
+    Sentry.captureException(error, {
+      tags: { feature: "notes", action: "save" },
+      extra: { noteId: note.id, titleLength: note.title.length },
+    });
+    return false;
+  }
+}
+```
+
+Las **tags** son etiquetas por las que puedes filtrar y agrupar; `extra` es contexto libre. No pongas contenido del usuario (el texto de la nota) en `extra`: es dato personal y termina en un servicio de terceros que declaraste en la política de privacidad. Envía identificadores y medidas, no contenido.
+
+También ayudan las **breadcrumbs**, migas que registran qué hizo el usuario antes del error (`Sentry.addBreadcrumb({ category: "navigation", message: "opened note detail" })`). Sentry agrega varias automáticamente (navegación, peticiones de red, toques).
+
+### La métrica que importa: crash-free rate
+
+Sentry muestra dos porcentajes por versión: **crash-free sessions** (sesiones que terminaron sin crash) y **crash-free users** (usuarios que no sufrieron ningún crash en el periodo). Son la forma más honesta de responder "¿está bien la versión que acabo de publicar?". Define un objetivo antes de lanzar y una acción si no se cumple. Un punto de partida habitual:
+
+- Objetivo: crash-free sessions por encima del 99,5 % en las primeras 24 horas de cada release.
+- Acción si cae por debajo: rollback OTA si el cambio fue JS; si fue nativo, congelar el despliegue en la tienda (Google Play permite lanzamientos graduales por porcentaje de usuarios) y preparar un build de corrección.
+- Alerta: configura en Sentry una alerta por correo o chat cuando un nuevo tipo de error supere un umbral de usuarios afectados.
+
+<Callout kind="tip">
+  Envía un error de prueba desde el build de preview antes del primer release (un botón oculto que ejecute `Sentry.captureException(new Error("Sentry smoke test"))`). Si no aparece en el panel en un minuto, el DSN, el entorno o el build están mal, y es mejor descubrirlo ahora que después de una reseña.
+</Callout>
+
+## Práctica
+
+Sigue el wizard y el alta del token:
+
+<Terminal
+  steps={[
+    { cmd: "npx @sentry/wizard@latest -i reactNative", out: "Sentry React Native Wizard\n\n✔ Logged in as <sentry-user>\n? Select your Sentry project › <sentry-org-slug>/notes\n✔ Installed @sentry/react-native@~7.11.0\n✔ Detected Expo project. Added @sentry/react-native/expo plugin? Your app.config.ts is dynamic; add the plugin block manually (shown above).\n✔ Added Sentry.init and Sentry.wrap to src/app/_layout.tsx\n✔ Created .sentryclirc and added it to .gitignore\n\nNext: run a native build (eas build) so the SDK is included." },
+    { cmd: "eas env:create --environment production --name SENTRY_AUTH_TOKEN --value sntrys_xxxxxxxx --visibility secret", out: "✔ Created a new variable SENTRY_AUTH_TOKEN on project @<account>/notes." },
+    { cmd: "eas env:create --environment preview --name SENTRY_AUTH_TOKEN --value sntrys_xxxxxxxx --visibility secret", out: "✔ Created a new variable SENTRY_AUTH_TOKEN on project @<account>/notes." },
+    { cmd: "eas build --profile preview --platform android", out: "✔ Uploaded to EAS 3s\n...\n[SENTRY] Uploading source maps for release com.example.notes.preview@1.0.0+7\n[SENTRY] Source Map Upload Report: 2 files uploaded\n✔ Build finished" },
+  ]}
+/>
+
+Este Snack reproduce la parte de la lógica que sí puedes ejecutar aquí: un `try/catch` que captura un error manejado con tags y contexto. En lugar de `@sentry/react-native` (que necesita un build nativo), usa una función `captureException` de la misma forma que guarda los eventos en una lista visible. En tu app real, sustituye esa función por `Sentry.captureException`.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  code={`import { useState } from "react";
+import { Button, FlatList, StyleSheet, Text, View } from "react-native";
+
+type Event = { message: string; tags: Record<string, string>; extra: Record<string, number> };
+
+export default function App() {
+  const [events, setEvents] = useState<Event[]>([]);
+
+  // Stand-in for Sentry.captureException: same shape, local inbox instead of the network.
+  function captureException(error: unknown, context: { tags: Record<string, string>; extra: Record<string, number> }) {
+    const message = error instanceof Error ? error.message : String(error);
+    setEvents((prev) => [{ message, ...context }, ...prev]);
+  }
+
+  async function saveNote(title: string): Promise<boolean> {
+    try {
+      if (title.length > 20) throw new Error("Title too long for storage");
+      return true;
+    } catch (error) {
+      captureException(error, { tags: { feature: "notes", action: "save" }, extra: { titleLength: title.length } });
+      return false;
+    }
+  }
+
+  return (
+    <View style={styles.container}>
+      <Button title="Save short note" onPress={() => saveNote("Groceries")} />
+      <Button title="Save very long note" onPress={() => saveNote("A title that is definitely too long")} />
+      <Text style={styles.heading}>Captured events: {events.length}</Text>
+      <FlatList
+        data={events}
+        keyExtractor={(_, i) => String(i)}
+        renderItem={({ item }) => (
+          <Text style={styles.event}>{item.message} · {item.tags.feature}/{item.tags.action} · titleLength={item.extra.titleLength}</Text>
+        )}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, paddingTop: 80, paddingHorizontal: 16, gap: 12 },
+  heading: { fontSize: 18, fontWeight: "600" },
+  event: { paddingVertical: 6 },
+});`}
+/>
+
+Antes del primer release con monitoreo:
+
+<Checklist
+  id="10-build-release-operaciones/09-monitoreo-sentry/objetivo"
+  items={[
+    "El config plugin @sentry/react-native/expo está en app.config.ts con organization y project",
+    "Sentry.init usa el DSN desde EXPO_PUBLIC_SENTRY_DSN, sendDefaultPii es false y enabled es !__DEV__",
+    "beforeSend y beforeBreadcrumb de la lección de crash reporting siguen configurados y probados con un evento de prueba",
+    "SENTRY_AUTH_TOKEN existe como secret en los entornos preview y production de EAS",
+    "El log de eas build muestra la subida de source maps",
+    "Después de cada eas update ejecuto npx @sentry/expo-upload-sourcemaps dist",
+    "Un error de prueba enviado desde el build de preview aparece en el panel de Sentry con archivo y línea reales",
+    "Los errores manejados críticos (guardar, sincronizar) llaman a Sentry.captureException con tags y sin contenido del usuario",
+    "Hay un objetivo escrito de crash-free sessions (por ejemplo, 99,5 % en 24 h) y una acción definida si no se cumple",
+    "La política de privacidad menciona Sentry y los datos de fallo que envía",
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Semáforo de crash-free rate"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type ReleaseHealth = {
+  version: string;
+  crashFreeSessions: number;
+  changeType: "js" | "native";
+};
+
+function decide(h: ReleaseHealth, target: number): string {
+  if (h.crashFreeSessions >= target) return h.version + ": healthy, continue rollout";
+  if (h.changeType === "js") return h.version + ": below target, run eas update:rollback";
+  return h.version + ": below target, halt staged rollout and prepare a fix build";
+}
+
+console.log(decide({ version: "1.1.0", crashFreeSessions: 99.8, changeType: "js" }, 99.5));
+console.log(decide({ version: "1.1.0", crashFreeSessions: 98.9, changeType: "js" }, 99.5));
+console.log(decide({ version: "1.2.0", crashFreeSessions: 97.0, changeType: "native" }, 99.5));`}
+    />
+  }
+>
+  Escribe una función `decide(health, target)` que reciba `{ version, crashFreeSessions, changeType }` y el objetivo en porcentaje, y devuelva la acción: continuar si se cumple el objetivo; `eas update:rollback` si no se cumple y el cambio fue de JS; detener el despliegue gradual y preparar un build de corrección si el cambio fue nativo. Prueba con una versión sana, una OTA por debajo del objetivo y un build nativo por debajo del objetivo.
+</Challenge>
+
+## Errores comunes
+
+**Stack traces sin archivo ni línea.** Los errores llegan pero apuntan a `index.android.bundle`. Ocurre porque faltó `SENTRY_AUTH_TOKEN` en el entorno del build y los source maps no se subieron. Se detecta en el log de `eas build`: no aparece la línea de "Uploading source maps". Crea el token como secret en cada entorno y reconstruye.
+
+**Enviar contenido del usuario en `extra`.** El texto de las notas queda almacenado en Sentry. Ocurre por comodidad al depurar. Se detecta revisando cualquier evento en el panel: si puedes leer datos de un usuario, hay un problema de privacidad y una declaración de datos falsa en la tienda. Envía longitudes, identificadores y estados, nunca contenido.
+
+**Instalar Sentry y publicarlo por OTA.** La actualización llega, `Sentry.init` intenta acceder al módulo nativo que no existe en el build instalado y la app se cierra al arrancar. Ocurre porque el SDK tiene código nativo. Se detecta porque el crash aparece solo tras la actualización. Rollback inmediato y build nuevo con el plugin.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué comando instala y configura Sentry en un proyecto Expo?", back: "npx @sentry/wizard@latest -i reactNative, que instala @sentry/react-native, agrega el config plugin y Sentry.init." },
+    { front: "¿Por qué el DSN de Sentry puede ir en una variable EXPO_PUBLIC_ pero el auth token no?", back: "El DSN es público por diseño (solo permite enviar eventos); el auth token permite subir source maps y modificar el proyecto, así que es un secret de build." },
+    { front: "¿Qué hace Sentry.captureException y cuándo se usa?", back: "Envía un error manejado (dentro de un try/catch) a Sentry con tags y contexto; los no manejados se capturan solos." },
+    { front: "¿Qué es el crash-free sessions rate?", back: "El porcentaje de sesiones de una versión que terminaron sin crash; sirve para decidir si continuar o revertir un release." },
+    { front: "¿Por qué agregar Sentry requiere un build nuevo y no una OTA?", back: "Porque @sentry/react-native incluye código nativo y su config plugin modifica la configuración nativa." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Los errores llegan a Sentry pero el stack trace muestra index.android.bundle:1:48213. ¿Qué falta?",
+      options: [
+        { text: "Activar sendDefaultPii", correct: false, feedback: "Eso controla datos personales, no la legibilidad del stack trace." },
+        { text: "El SENTRY_AUTH_TOKEN en el entorno de EAS para subir source maps", correct: true, feedback: "Correcto: sin token, el plugin no puede subir los source maps durante el build." },
+        { text: "Un tracesSampleRate más alto", correct: false, feedback: "Ese valor afecta al rendimiento monitoreado, no a los errores." },
+      ],
+    },
+    {
+      prompt: "Un try/catch al guardar una nota muestra un aviso al usuario y sigue. ¿Cómo se entera Sentry de ese fallo?",
+      options: [
+        { text: "Automáticamente, como cualquier error", correct: false, feedback: "Sentry captura solo los errores no manejados; el catch los oculta." },
+        { text: "Llamando a Sentry.captureException(error, { tags, extra }) dentro del catch", correct: true, feedback: "Correcto: con tags para filtrar y extra sin contenido del usuario." },
+        { text: "Leyendo el archivo de logs del teléfono", correct: false, feedback: "Sentry no accede a logs del dispositivo; recibe lo que la app envía." },
+      ],
+    },
+    {
+      prompt: "Una OTA baja el crash-free sessions de 99,8 % a 97 %. ¿Cuál es la acción correcta según tu objetivo del 99,5 %?",
+      options: [
+        { text: "Esperar una semana para tener más datos", correct: false, feedback: "El objetivo existe para actuar rápido; cada hora afecta a más usuarios." },
+        { text: "eas update:rollback en el canal production", correct: true, feedback: "Correcto: el cambio fue JS y el rollback OTA llega en minutos." },
+        { text: "Subir tracesSampleRate a 1.0", correct: false, feedback: "Eso aumenta los datos de rendimiento, no reduce los crashes." },
+      ],
+    },
+  ]}
+/>

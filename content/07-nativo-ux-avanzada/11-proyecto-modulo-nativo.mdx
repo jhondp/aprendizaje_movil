@@ -1,0 +1,323 @@
+---
+id: "07-nativo-ux-avanzada/11-proyecto-modulo-nativo"
+title: "Proyecto: módulo nativo en la app"
+stage: 7
+module: "Robustez"
+order: 11
+minutes: 30
+prereqs: ["07-nativo-ux-avanzada/10-performance"]
+summary: "Agrega a la app de notas fotos con la cámara, una animación con resorte, FlashList, etiquetas de accesibilidad y textos en español e inglés."
+---
+
+## Objetivo
+
+Al terminar este proyecto tu app de notas podrá adjuntar fotos tomadas con la cámara, animará cada nota nueva con un resorte, mostrará la lista con `FlashList`, será usable con un lector de pantalla y estará disponible en español e inglés.
+
+**Prerrequisitos:** `07-nativo-ux-avanzada/10-performance`
+
+## Concepto
+
+Hasta ahora la app de notas era correcta: guardaba datos, tenía arquitectura por capas y un pipeline que la protegía. Este proyecto la convierte en una app que se siente nativa. Es como pasar de una casa con planos aprobados y paredes firmes a una casa en la que se vive bien: ventanas que dejan entrar luz (la cámara), puertas que se abren con suavidad (las animaciones), rampas para quien las necesita (la accesibilidad) y carteles en dos idiomas para las visitas.
+
+Documentación de referencia: https://docs.expo.dev/versions/latest/sdk/camera/, https://docs.expo.dev/versions/latest/sdk/filesystem/, https://shopify.github.io/flash-list/ y https://reactnative.dev/docs/accessibility
+
+### Punto de partida
+
+Trabajas sobre el repositorio que terminaste en [el proyecto de la etapa 6](/etapa/06-calidad-ci/07-proyecto-pipeline-verde): la app de notas con carpetas por feature en `src/features/notes/`, el puerto `NotesRepository` con su adaptador de SQLite, pruebas con Jest y un workflow de CI en verde. Crea una rama nueva para este proyecto y abre un pull request al terminar: el pipeline debe seguir en verde.
+
+La cámara y los textos de propósito necesitan una development build o, como mínimo, Expo Go en un teléfono físico. El reproductor web no sirve para este proyecto.
+
+### Qué vas a construir
+
+**1. Foto adjunta con la cámara.** Cada nota puede tener una foto.
+
+- Instala `expo-camera` y `expo-file-system` con `npx expo install`.
+- Crea la ruta `src/app/note/[id]/camera.tsx` con `CameraView` y `useCameraPermissions`, con los tres estados: cargando, sin permiso (con explicación y botón) y con permiso.
+- Al tomar la foto, cópiala de la caché a un directorio permanente antes de guardar su ruta:
+
+```tsx
+import { Directory, File, Paths } from "expo-file-system";
+
+export async function persistPhoto(cacheUri: string): Promise<string> {
+  const photos = new Directory(Paths.document, "photos");
+  if (!photos.exists) photos.create();
+
+  const source = new File(cacheUri);
+  const target = new File(photos, Date.now() + ".jpg");
+  await source.copy(target);
+  return target.uri;
+}
+```
+
+- Agrega a la entidad `Note` un campo opcional `photoUri` y una migración de SQLite que añada la columna `photo_uri`. El dominio no sabe nada de la cámara: solo guarda una ruta.
+- Configura el plugin de `expo-camera` en `app.json` con un texto de propósito que explique para qué sirve la cámara y desactiva el micrófono.
+
+**2. Animación con resorte al agregar una nota.** La nota recién creada entra en la lista con `withSpring`. Como `FlashList` recicla filas, no te fíes de "al montarse": anima cuando cambia el id de la fila y solo si es la nota nueva.
+
+```tsx
+function NoteRow({ note, isNew }: { note: Note; isNew: boolean }) {
+  const translateY = useSharedValue(0);
+
+  useEffect(() => {
+    if (!isNew) return;
+    translateY.value = -30;
+    translateY.value = withSpring(0, { damping: 9 });
+  }, [note.id, isNew, translateY]);
+
+  const style = useAnimatedStyle(() => ({ transform: [{ translateY: translateY.value }] }));
+  return <Animated.View style={style}>{/* row content */}</Animated.View>;
+}
+```
+
+**3. FlashList.** Sustituye el `FlatList` de la pantalla principal por `FlashList`. No uses `estimatedItemSize`. Si alguna fila guarda estado local, usa `useRecyclingState`. Envuelve la fila en `memo` y pasa los manejadores con `useCallback` si el Profiler muestra renders de más.
+
+**4. Accesibilidad.** Todos los elementos interactivos tienen `accessibilityRole` y `accessibilityLabel`. En particular:
+
+- El botón de cámara dice "Adjuntar foto", no "Cámara".
+- La miniatura de la foto tiene una etiqueta como "Foto adjunta a Lista de compras".
+- Cada fila se lee como una sola parada: título, fecha y si tiene foto.
+- Si tu lista tiene "deslizar para borrar", ofrece también una acción de accesibilidad o un botón visible.
+- Revisa la app con la letra del sistema al máximo.
+
+**5. Español e inglés.** Todos los textos visibles y las etiquetas de accesibilidad salen de `i18n-js`:
+
+```text
+src/
+  i18n/
+    index.ts      # creates the I18n instance and reads getLocales()
+    es.json
+    en.json
+```
+
+El idioma inicial es el del dispositivo, con inglés como respaldo. Las fechas de las notas se formatean con `Intl.DateTimeFormat` y el `languageTag` del usuario. Los plurales ("1 nota", "3 notas") usan claves `one` y `other`.
+
+### Pruebas que debes agregar
+
+Tu pipeline de la etapa 6 tiene que seguir protegiendo la app. Añade como mínimo:
+
+- Una prueba de `persistPhoto` o del caso de uso que adjunta la foto, con `expo-file-system` simulado con `jest.mock`.
+- Una prueba de pantalla que busque el botón por su rol y etiqueta: `getByRole("button", { name: "Adjuntar foto" })`. Si la encuentra, la accesibilidad y la prueba se refuerzan mutuamente.
+- Una prueba que cambie `i18n.locale` a `"en"` y compruebe un texto en inglés.
+
+### Qué significa "terminado"
+
+El proyecto está terminado cuando se cumplen todos los puntos de la lista de la práctica, `pnpm lint`, `pnpm typecheck` y `pnpm test` pasan en local, y el pull request tiene el pipeline en verde. Graba un video corto de la app en tu teléfono: crear una nota, adjuntar una foto, ver la animación y cambiar el idioma. Te servirá en la etapa 11 para presentar tu trabajo.
+
+## Práctica
+
+Este Snack reúne tres piezas del proyecto (FlashList, animación con resorte que respeta el reciclaje e i18n) para que veas cómo encajan antes de integrarlas en tu repositorio. Agrega varias notas y cambia el idioma.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  dependencies={{ '@shopify/flash-list': '2.0.2', 'react-native-reanimated': '4.2.1', 'react-native-worklets': '0.7.4', 'i18n-js': '4.5.3' }}
+  code={`import { useEffect, useState } from "react";
+import { Button, StyleSheet, Text, View } from "react-native";
+import { FlashList } from "@shopify/flash-list";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
+import { I18n } from "i18n-js";
+
+const i18n = new I18n({
+  es: { add: "Agregar nota", note: "Nota %{n}", switch: "English", count: { one: "1 nota", other: "%{count} notas" } },
+  en: { add: "Add note", note: "Note %{n}", switch: "Español", count: { one: "1 note", other: "%{count} notes" } }
+});
+
+type Note = { id: string; n: number };
+
+function NoteRow({ note, isNew }: { note: Note; isNew: boolean }) {
+  const translateY = useSharedValue(0);
+
+  useEffect(() => {
+    if (!isNew) return;
+    translateY.value = -30;
+    translateY.value = withSpring(0, { damping: 9 });
+  }, [note.id, isNew, translateY]);
+
+  const style = useAnimatedStyle(() => ({ transform: [{ translateY: translateY.value }] }));
+  const title = i18n.t("note", { n: note.n });
+
+  return (
+    <Animated.View style={[styles.row, style]} accessible accessibilityLabel={title}>
+      <Text style={styles.title}>{title}</Text>
+    </Animated.View>
+  );
+}
+
+export default function App() {
+  const [locale, setLocale] = useState("es");
+  const [notes, setNotes] = useState<Note[]>([]);
+  i18n.locale = locale;
+
+  function add() {
+    setNotes((current) => [{ id: String(Date.now()), n: current.length + 1 }, ...current]);
+  }
+
+  return (
+    <View style={styles.container}>
+      <Text accessibilityRole="header" style={styles.header}>
+        {i18n.t("count", { count: notes.length })}
+      </Text>
+      <View style={styles.bar}>
+        <Button title={i18n.t("add")} onPress={add} />
+        <Button title={i18n.t("switch")} onPress={() => setLocale(locale === "es" ? "en" : "es")} />
+      </View>
+      <FlashList
+        data={notes}
+        extraData={locale}
+        keyExtractor={(note) => note.id}
+        renderItem={({ item, index }) => <NoteRow note={item} isNew={index === 0} />}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, paddingTop: 60, paddingHorizontal: 16, gap: 12 },
+  header: { fontSize: 22, fontWeight: "700" },
+  bar: { flexDirection: "row", justifyContent: "space-between" },
+  row: { padding: 16, marginBottom: 8, borderRadius: 12, backgroundColor: "#efe6da" },
+  title: { fontSize: 16 }
+});`}
+/>
+
+Marca cada punto cuando lo tengas funcionando en tu repositorio:
+
+<Checklist
+  id="07-nativo-ux-avanzada/11-proyecto-modulo-nativo"
+  items={[
+    "La ruta de cámara usa CameraView y useCameraPermissions con los tres estados",
+    "El plugin de expo-camera en app.json tiene un texto de propósito claro y el micrófono desactivado",
+    "La foto se copia de la caché a Paths.document antes de guardar su ruta",
+    "La nota guarda photoUri en SQLite con una migración y la muestra en el detalle",
+    "Cada nota nueva entra en la lista con withSpring, también cuando FlashList recicla la fila",
+    "La lista principal usa FlashList sin estimatedItemSize",
+    "Todos los elementos interactivos tienen accessibilityRole y accessibilityLabel",
+    "Recorrí la app con VoiceOver o TalkBack y con la letra del sistema al máximo",
+    "Todos los textos visibles y etiquetas salen de es.json y en.json",
+    "El idioma inicial es el del dispositivo y las fechas usan Intl.DateTimeFormat",
+    "Agregué pruebas de la foto, de accesibilidad por rol y de un texto en inglés",
+    "lint, typecheck y test pasan y el pull request tiene el pipeline en verde"
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Guardar la foto de forma permanente"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="55.0.0"
+      dependencies={{ 'expo-camera': '~55.0.23', 'expo-file-system': '~55.0.26' }}
+      code={`import { useRef, useState } from "react";
+import { Button, Image, StyleSheet, Text, View } from "react-native";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import { Directory, File, Paths } from "expo-file-system";
+
+async function persistPhoto(cacheUri: string): Promise<string> {
+  const photos = new Directory(Paths.document, "photos");
+  if (!photos.exists) photos.create();
+  const source = new File(cacheUri);
+  const target = new File(photos, Date.now() + ".jpg");
+  await source.copy(target);
+  return target.uri;
+}
+
+export default function App() {
+  const [permission, requestPermission] = useCameraPermissions();
+  const [savedUri, setSavedUri] = useState<string | null>(null);
+  const cameraRef = useRef<CameraView>(null);
+
+  if (!permission) return <View style={styles.center} />;
+  if (!permission.granted) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.text}>La app usa la cámara para adjuntar fotos a tus notas.</Text>
+        <Button title="Permitir cámara" onPress={requestPermission} />
+      </View>
+    );
+  }
+
+  async function capture() {
+    const photo = await cameraRef.current?.takePictureAsync({ quality: 0.7 });
+    if (photo) setSavedUri(await persistPhoto(photo.uri));
+  }
+
+  if (savedUri) {
+    return (
+      <View style={styles.center}>
+        <Image source={{ uri: savedUri }} style={styles.preview} accessibilityLabel="Foto adjunta" />
+        <Text style={styles.small}>{savedUri}</Text>
+        <Button title="Tomar otra" onPress={() => setSavedUri(null)} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <CameraView ref={cameraRef} style={styles.container} />
+      <Button title="Adjuntar foto" accessibilityLabel="Adjuntar foto" onPress={capture} />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  center: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12, padding: 24 },
+  text: { fontSize: 16, textAlign: "center" },
+  small: { fontSize: 11, textAlign: "center" },
+  preview: { width: 240, height: 320, borderRadius: 12 }
+});`}
+    />
+  }
+>
+  Antes de integrarlo en tu repositorio, prueba la parte más delicada del proyecto en un Snack en tu teléfono: toma una foto con `CameraView`, cópiala a `Paths.document/photos` con `expo-file-system` y muestra la foto usando la ruta nueva, no la de la caché. Muestra también la ruta en pantalla para comprobar que ya no contiene `Cache`.
+</Challenge>
+
+## Errores comunes
+
+**Guardar en la base de datos la ruta de la caché.** Las fotos aparecen durante unos días y luego las notas muestran imágenes rotas. Ocurre porque se guarda directamente `photo.uri` de `takePictureAsync`. Se detecta porque la ruta guardada contiene `Cache`. Solución: copia el archivo con `persistPhoto` y guarda la ruta nueva.
+
+**Animar solo al montar con FlashList.** La primera nota se anima, pero las siguientes aparecen sin animación o se anima una fila equivocada. Ocurre porque FlashList recicla filas y el efecto de montaje no vuelve a ejecutarse. Se detecta al agregar varias notas seguidas con la lista llena. Solución: incluye `note.id` en las dependencias del efecto y anima solo la nota nueva.
+
+**Traducir la pantalla pero no las etiquetas de accesibilidad.** En inglés, VoiceOver sigue leyendo "Adjuntar foto". Ocurre porque las etiquetas se escribieron como texto fijo en las props. Se detecta recorriendo la app con el lector en inglés. Solución: las etiquetas también salen de `i18n.t`.
+
+**Romper el pipeline con módulos nativos en las pruebas.** Jest falla con errores de módulos nativos no encontrados al importar `expo-camera` o `expo-file-system`. Ocurre porque las pruebas no corren en un teléfono. Se detecta en la ejecución de CI. Solución: simula esos módulos con `jest.mock` y mantén la lógica en funciones que reciben dependencias.
+
+<Flashcards
+  cards={[
+    { front: "¿Por qué hay que copiar la foto de takePictureAsync antes de guardar su ruta?", back: "Porque está en la caché, que el sistema puede borrar; se copia a Paths.document y se guarda la ruta nueva." },
+    { front: "¿Cómo se anima una fila nueva en FlashList sin que el reciclaje lo impida?", back: "Con un efecto que depende de note.id y que anima solo si la fila es la nota nueva." },
+    { front: "¿Qué deben usar las etiquetas de accesibilidad en una app traducida?", back: "Los mismos diccionarios de i18n que el texto visible, para que el lector hable en el idioma del usuario." },
+    { front: "¿Cómo evitas que Jest falle al importar módulos nativos como expo-camera?", back: "Simulándolos con jest.mock y manteniendo la lógica en funciones con dependencias inyectadas." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué guarda la entidad Note del dominio para la foto adjunta?",
+      options: [
+        { text: "Solo la ruta permanente del archivo, en un campo opcional", correct: true, feedback: "Correcto: el dominio no depende de la cámara ni del sistema de archivos." },
+        { text: "Una referencia a CameraView", correct: false, feedback: "El dominio no debe conocer componentes de interfaz." },
+        { text: "La ruta de la caché que devuelve takePictureAsync", correct: false, feedback: "Esa ruta puede desaparecer cuando el sistema limpia la caché." }
+      ]
+    },
+    {
+      prompt: "Una prueba busca getByRole(\"button\", { name: \"Adjuntar foto\" }) y falla. ¿Qué indica?",
+      options: [
+        { text: "Que Jest no admite botones", correct: false, feedback: "React Native Testing Library consulta roles sin problema." },
+        { text: "Que el botón probablemente no tiene accessibilityRole o accessibilityLabel", correct: true, feedback: "Correcto: la prueba también verifica la accesibilidad." },
+        { text: "Que la cámara no tiene permiso", correct: false, feedback: "En Jest no hay cámara real; el problema está en el botón." }
+      ]
+    },
+    {
+      prompt: "¿Cuándo está terminado este proyecto?",
+      options: [
+        { text: "Cuando la cámara funciona en el teléfono", correct: false, feedback: "Es solo una de las cinco partes." },
+        { text: "Cuando se cumple la lista completa y el pull request tiene el pipeline en verde", correct: true, feedback: "Correcto: funcionalidad, accesibilidad, idiomas y calidad." },
+        { text: "Cuando el Snack de la práctica funciona", correct: false, feedback: "El Snack es un ensayo; el proyecto vive en tu repositorio." }
+      ]
+    }
+  ]}
+/>

@@ -1,0 +1,36 @@
+.root {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--page-gutter);
+  height: var(--topbar-height);
+  background: var(--paper-80);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--ink-08);
+}
+
+.nav {
+  display: flex;
+  gap: 32px;
+  font-size: 13px;
+}
+
+.link,
+.active {
+  text-decoration: none;
+  color: var(--color-teal);
+}
+
+.active {
+  color: var(--color-ink);
+  font-weight: 500;
+}
+
+@media (max-width: 900px) {
+  .nav {
+    gap: 18px;
+  }
+}

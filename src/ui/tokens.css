@@ -1,0 +1,44 @@
+:root {
+  --color-ink: #022a2a;
+  --color-teal: #10484a;
+  --color-accent: #ff3d00;
+  --color-lime: #9bc62b;
+  --color-sand: #efe6da;
+  --color-paper: #f6f1ea;
+  --color-canvas: #e4ddd2;
+  --color-white: #ffffff;
+  --color-error: #9a2a00;
+  --color-error-bg: #ffe8e0;
+  --color-warn: #ffd166;
+  --color-warn-bg: #fff4e5;
+  --color-console-warn: #ff8a65;
+
+  --ink-06: rgba(2, 42, 42, 0.06);
+  --ink-08: rgba(2, 42, 42, 0.08);
+  --ink-10: rgba(2, 42, 42, 0.1);
+  --ink-25: rgba(2, 42, 42, 0.25);
+  --ink-35: rgba(2, 42, 42, 0.35);
+  --ink-55: rgba(2, 42, 42, 0.55);
+  --ink-65: rgba(2, 42, 42, 0.65);
+  --sand-15: rgba(239, 230, 218, 0.15);
+  --sand-70: rgba(239, 230, 218, 0.7);
+  --paper-80: rgba(246, 241, 234, 0.8);
+
+  --radius-xs: 6px;
+  --radius-s: 10px;
+  --radius-m: 14px;
+  --radius-l: 22px;
+  --radius-xl: 28px;
+  --radius-pill: 999px;
+
+  --font: 'Poppins', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, Menlo, Consolas, monospace;
+
+  --shadow-card: 0 20px 60px rgba(2, 42, 42, 0.18);
+  --shadow-chip: 0 1px 3px rgba(2, 42, 42, 0.12);
+  --shadow-dialog: 0 30px 80px rgba(0, 0, 0, 0.3);
+
+  --topbar-height: 56px;
+  --sidebar-width: 320px;
+  --page-gutter: 48px;
+}

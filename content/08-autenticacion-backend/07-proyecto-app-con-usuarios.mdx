@@ -1,0 +1,199 @@
+---
+id: "08-autenticacion-backend/07-proyecto-app-con-usuarios"
+title: "Proyecto: app con usuarios"
+stage: 8
+module: "Login seguro"
+order: 7
+minutes: 35
+prereqs: ["08-autenticacion-backend/06-biometria"]
+summary: "Convierte la app de notas en multiusuario con Supabase: registro, inicio de sesión, Google con PKCE, RLS, sesión en SecureStore y bloqueo biométrico."
+---
+
+## Objetivo
+
+Al terminar este proyecto tu app de notas tendrá usuarios reales: registro, inicio y cierre de sesión con Supabase, notas y fotos visibles solo para su dueño gracias a RLS, la sesión cifrada en SecureStore y un bloqueo biométrico al volver a la app.
+
+**Prerrequisitos:** `08-autenticacion-backend/06-biometria`
+
+## Concepto
+
+Partes de la app que terminaste en [el proyecto de la etapa 7](/etapa/07-nativo-ux-avanzada/11-proyecto-modulo-nativo): notas con foto adjunta, lista animada, accesible y traducida. Hasta ahora todo vivía en un solo teléfono. En este proyecto la app pasa a guardar los datos en Supabase y cada persona ve solo lo suyo.
+
+### La analogía de la mudanza a un edificio con conserjería
+
+Hasta ahora la app era una casa unifamiliar: quien entraba lo veía todo. Ahora te mudas a un edificio con conserje (Supabase Auth), buzones con cerradura (RLS), un trastero privado por vecino (el bucket de fotos), una caja fuerte en tu piso (SecureStore) y un candado extra en el cajón de los documentos (la biometría). Cada pieza ya la conoces; el proyecto consiste en montarlas juntas sin dejar ninguna puerta abierta.
+
+### Qué vas a construir
+
+1. **Backend en Supabase**
+   - Tabla `notes` con `id`, `user_id default auth.uid()`, `title`, `body`, `photo_path` (texto, opcional) y `created_at`.
+   - RLS activo y cuatro políticas (`select`, `insert`, `update`, `delete`) con `(select auth.uid()) = user_id`, usando `with check` en `insert` y `update`.
+   - Bucket privado `photos` con políticas de `insert`, `select` y `delete` limitadas a la carpeta `<user id>/`.
+2. **Cliente**
+   - Un único módulo `src/lib/supabase.ts` que lee `EXPO_PUBLIC_SUPABASE_URL` y `EXPO_PUBLIC_SUPABASE_ANON_KEY` y pasa a `createClient` el adaptador troceado de SecureStore en `auth.storage` y `auth.flowType: "pkce"`, necesario para canjear el código de Google con `exchangeCodeForSession`.
+   - Listener de `AppState` que llama a `startAutoRefresh` y `stopAutoRefresh`.
+3. **Pantallas y flujo**
+   - Registro con email y contraseña que avisa cuando hay que confirmar el correo.
+   - Inicio de sesión con email y contraseña, y cierre de sesión con `signOut`.
+   - Lista de notas que no filtra por usuario en el cliente, porque RLS ya lo hace.
+   - Crear, renombrar y borrar notas; adjuntar una foto que se sube a `photos/<user id>/<timestamp>.jpg` y se muestra con una URL firmada.
+   - Bloqueo biométrico al volver del segundo plano tras 30 segundos, con el código del dispositivo como alternativa.
+4. **Opcional: iniciar sesión con Google.** Usa el flujo Authorization Code con PKCE que viste en la lección de OAuth2.
+
+### Cómo decide la app qué pantalla mostrar
+
+Tres datos deciden la pantalla raíz: si hay sesión, si la app está bloqueada y si la sesión aún se está cargando.
+
+```ts
+type Screen = "loading" | "login" | "locked" | "notes";
+
+function rootScreen(loading: boolean, hasSession: boolean, locked: boolean): Screen {
+  if (loading) return "loading";
+  if (!hasSession) return "login";
+  return locked ? "locked" : "notes";
+}
+```
+
+La sesión llega con el evento `INITIAL_SESSION` de `onAuthStateChange`; hasta entonces muestra la pantalla de carga para no enseñar el login un instante a un usuario que ya tenía sesión. Si no hay sesión, no tiene sentido bloquear: el login ya pide la contraseña.
+
+### Google OAuth con PKCE (código de referencia)
+
+Para Google necesitas activar el proveedor en **Authentication, Providers**, crear las credenciales OAuth en Google Cloud y añadir tu URL de redirección (por ejemplo `notesapp://auth/callback`) en **Authentication, URL Configuration**. La app declara el esquema `notesapp` en `app.json` y usa `expo-auth-session` y `expo-web-browser`:
+
+```ts
+import * as WebBrowser from "expo-web-browser";
+import { makeRedirectUri } from "expo-auth-session";
+import { supabase } from "./supabase"; // createClient(url, anonKey, { auth: { storage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, flowType: "pkce" } })
+
+const redirectTo = makeRedirectUri({ scheme: "notesapp", path: "auth/callback" });
+
+export async function signInWithGoogle(): Promise<string | null> {
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo, skipBrowserRedirect: true },
+  });
+  if (error) return error.message;
+
+  const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+  if (result.type !== "success") return "Inicio de sesión cancelado";
+
+  const code = new URL(result.url).searchParams.get("code");
+  if (!code) return "Respuesta sin código de autorización";
+
+  // The client sends the stored code_verifier; the server checks it against the code_challenge.
+  const exchange = await supabase.auth.exchangeCodeForSession(code);
+  return exchange.error ? exchange.error.message : null;
+}
+```
+
+Con `flowType: "pkce"` el cliente genera el `code_verifier`, lo guarda en tu adaptador de SecureStore y lo envía al canjear el `code`. En ningún momento aparece un token en la URL. Guías oficiales: https://supabase.com/docs/guides/auth/social-login/auth-google y https://supabase.com/docs/guides/auth/native-mobile-deep-linking.
+
+### Cómo sabes que está terminado
+
+- Con dos cuentas distintas en dos dispositivos (o cerrando sesión entre pruebas), ninguna ve ni modifica las notas o fotos de la otra.
+- Al cerrar y reabrir la app no se pide la contraseña, y en el almacenamiento de la app no aparece ningún `refresh_token` en texto plano.
+- Tras más de 30 segundos en segundo plano, la app muestra la pantalla de bloqueo sin enseñar las notas debajo.
+- Cerrar sesión revoca la sesión en el servidor y vuelve al login.
+- En el repositorio no hay ninguna clave distinta de la URL y la anon key, y esas dos viven en `.env`, que está en `.gitignore`.
+
+Referencias: https://supabase.com/docs/guides/auth, https://supabase.com/docs/guides/database/postgres/row-level-security y https://supabase.com/docs/guides/storage.
+
+## Práctica
+
+Marca cada punto cuando lo hayas comprobado en tu app, no cuando lo hayas escrito. La lista se guarda en tu navegador.
+
+<Checklist
+  id="08-autenticacion-backend/07-proyecto-app-con-usuarios-entrega"
+  items={[
+    "Registro con email y contraseña que avisa de confirmar el correo cuando no llega sesión",
+    "Inicio de sesión con email y contraseña que muestra el mensaje de error del servidor",
+    "Cierre de sesión con signOut que vuelve al login",
+    "La tabla notes tiene RLS activo y políticas de select, insert, update y delete con auth.uid()",
+    "Las políticas de insert y update incluyen with check",
+    "Probé con un segundo usuario que no ve ni edita las notas del primero",
+    "Las fotos se suben a un bucket privado bajo la carpeta del id del usuario",
+    "La base de datos guarda la ruta de la foto y la app pide una URL firmada al mostrarla",
+    "La sesión se guarda con un adaptador de SecureStore en auth.storage, nunca en AsyncStorage",
+    "El cliente de Supabase tiene auth.flowType: pkce",
+    "La renovación automática se activa y desactiva con AppState",
+    "La app se bloquea tras 30 segundos en segundo plano y se desbloquea con biometría o código del dispositivo",
+    "La service role key no aparece en ningún archivo de la app ni en el .env"
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Pantalla raíz"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type Screen = "loading" | "login" | "locked" | "notes";
+
+function rootScreen(loading: boolean, hasSession: boolean, locked: boolean): Screen {
+  if (loading) return "loading";
+  if (!hasSession) return "login";
+  return locked ? "locked" : "notes";
+}
+
+console.log(rootScreen(true, false, false));
+console.log(rootScreen(false, false, true));
+console.log(rootScreen(false, true, true));
+console.log(rootScreen(false, true, false));`}
+      expected={`loading
+login
+locked
+notes`}
+    />
+  }
+>
+  Escribe `rootScreen(loading, hasSession, locked)` que devuelva la pantalla raíz de la app: `loading` mientras se restaura la sesión, `login` si no hay sesión (aunque la app esté bloqueada), `locked` si hay sesión y está bloqueada, y `notes` en otro caso. Pruébala con los cuatro casos y úsala después en el componente raíz de tu proyecto.
+</Challenge>
+
+## Errores comunes
+
+**Probar solo con una cuenta.** Todo parece correcto porque el único usuario ve sus propias notas, pero una política mal escrita deja ver las de todos. Ocurre porque el caso positivo no revela fugas. Se detecta creando un segundo usuario y comprobando que su lista está vacía y que no puede borrar una nota del primero por su `id`.
+
+**Mostrar el login un instante al abrir la app.** El usuario con sesión ve el formulario durante medio segundo y luego la lista. Ocurre porque la pantalla raíz decide antes de recibir `INITIAL_SESSION`. Se detecta abriendo la app en frío con una sesión guardada; añade el estado `loading`.
+
+**Olvidar borrar la foto al borrar la nota.** La nota desaparece, pero el archivo sigue ocupando espacio en el bucket. Ocurre porque la tabla y Storage son independientes. Se detecta revisando la carpeta del usuario en **Storage** tras borrar notas; llama a `storage.from("photos").remove([photoPath])` en el mismo flujo.
+
+**Usar una URL de redirección de OAuth sin registrarla.** Tras elegir la cuenta de Google, el navegador vuelve a la URL del sitio por defecto y la app nunca recibe el `code`. Se detecta porque `openAuthSessionAsync` devuelve `dismiss` o `cancel`; añade la URL exacta en **Authentication, URL Configuration**.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué tres datos deciden la pantalla raíz de una app con login y bloqueo biométrico?", back: "Si la sesión se está cargando, si existe sesión y si la app está bloqueada." },
+    { front: "¿Cómo se prueba que las políticas RLS de una tabla aíslan a los usuarios?", back: "Con un segundo usuario que no debe ver ni modificar las filas del primero." },
+    { front: "¿Qué opción de createClient activa el flujo PKCE para OAuth en Supabase?", back: "auth.flowType con el valor pkce." },
+    { front: "¿Qué método de Supabase canjea el code de OAuth por una sesión?", back: "supabase.auth.exchangeCodeForSession(code)." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Al abrir la app con una sesión guardada, el usuario ve el login medio segundo. ¿Qué falta?",
+      options: [
+        { text: "Un estado de carga hasta recibir INITIAL_SESSION", correct: true, feedback: "Correcto: la pantalla raíz decide antes de conocer la sesión." },
+        { text: "Guardar la sesión en AsyncStorage para que cargue antes", correct: false, feedback: "AsyncStorage no es cifrado y el problema es de orden, no de velocidad." },
+        { text: "Desactivar persistSession", correct: false, feedback: "Sin persistencia el usuario tendría que iniciar sesión siempre." }
+      ]
+    },
+    {
+      prompt: "¿Qué guarda la tabla notes para la foto de una nota?",
+      options: [
+        { text: "La ruta del archivo en el bucket", correct: true, feedback: "Correcto: la URL firmada se pide al mostrarla." },
+        { text: "La URL firmada", correct: false, feedback: "Caduca en segundos; la foto se vería rota después." },
+        { text: "La imagen en base64", correct: false, feedback: "Las imágenes van en Storage, no en filas de la tabla." }
+      ]
+    },
+    {
+      prompt: "En el inicio de sesión con Google, ¿qué impide que un code interceptado sirva a otra app?",
+      options: [
+        { text: "El code_verifier que solo conoce tu app (PKCE)", correct: true, feedback: "Correcto: sin él, el servidor rechaza el canje." },
+        { text: "La anon key", correct: false, feedback: "La anon key es pública; cualquiera puede obtenerla." },
+        { text: "El bloqueo biométrico", correct: false, feedback: "La biometría es local y no participa en OAuth." }
+      ]
+    }
+  ]}
+/>

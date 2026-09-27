@@ -1,0 +1,131 @@
+---
+id: "00-aprender-a-programar/07-proyecto-tu-primer-repo"
+title: "Proyecto: tu primer repositorio"
+stage: 0
+module: "Aprender a aprender"
+order: 7
+minutes: 20
+prereqs: ["00-aprender-a-programar/06-ia-con-criterio"]
+summary: "Crea de principio a fin tu primer repositorio en GitHub, con README, .gitignore y al menos dos commits."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a tener un repositorio propio en GitHub, con un README que explica qué quieres construir, un archivo `.gitignore` y al menos dos commits en su historia.
+
+**Prerrequisitos:** `00-aprender-a-programar/06-ia-con-criterio`
+
+## Concepto
+
+Esta lección no enseña un concepto nuevo: junta todo lo que aprendiste en esta etapa (la terminal, VS Code y Node.js, Git y GitHub, leer documentación y usar IA con criterio) en un solo proyecto real. Es como la primera vez que cocinas una receta completa tú solo, sin que nadie te indique cada paso: ya conoces cada ingrediente por separado, ahora los combinas en orden.
+
+Tu proyecto es un repositorio que describe, en un README, qué quieres construir durante el resto del curso. No hace falta que sea una idea original ni definitiva: puedes cambiarla más adelante. Lo que importa ahora es practicar el flujo completo con un contenido real, propio, en lugar de un ejemplo inventado.
+
+### Las tres piezas que te faltan
+
+- **README.md**: el primer archivo que alguien lee al entrar a tu repositorio en GitHub. Se escribe en Markdown (el mismo formato con el que están escritas estas lecciones) y normalmente responde qué es el proyecto, por qué existe y cómo se usa. GitHub lo muestra automáticamente en la página principal del repositorio.
+- **.gitignore**: una lista de archivos y carpetas que Git debe ignorar, es decir, nunca incluir en un commit. Se usa para no subir cosas como dependencias descargadas, archivos temporales o contraseñas. Es un archivo de texto plano, un patrón por línea; por ejemplo, la línea `node_modules/` le dice a Git que ignore esa carpeta completa.
+- **Historia con más de un commit**: un repositorio con un solo commit no demuestra que sabes iterar. Vas a hacer un primer commit con el README, y un segundo commit después de agregar o corregir algo, para practicar el ciclo completo: editar, `git add`, `git commit`.
+
+Puedes repasar la guía oficial de primeros pasos con GitHub en [docs.github.com/es/get-started](https://docs.github.com/es/get-started) si algún paso no te resulta claro.
+
+<Callout kind="tip">
+  Si no tienes todavía una idea de proyecto, describe en el README algo simple y concreto: por ejemplo, "una lista de tareas" o "una calculadora de propinas". La idea puede cambiar; lo que no cambia es el hábito de documentarla desde el primer commit.
+</Callout>
+
+## Práctica
+
+Este es el flujo completo, de principio a fin, para un proyecto nuevo llamado `mi-primer-proyecto`:
+
+<Terminal
+  steps={[
+    { cmd: "mkdir mi-primer-proyecto && cd mi-primer-proyecto", out: "" },
+    { cmd: "git init -b main", out: "Initialized empty Git repository in /home/ana/mi-primer-proyecto/.git/" },
+    { cmd: "touch README.md .gitignore", out: "" },
+    { cmd: "git add README.md .gitignore", out: "" },
+    { cmd: 'git commit -m "Add README and gitignore"', out: "[main (root-commit) 1a2b3c4] Add README and gitignore\n 2 files changed, 0 insertions(+)" },
+    { cmd: "git remote add origin https://github.com/ana/mi-primer-proyecto.git", out: "" },
+    { cmd: "git push -u origin main", out: "Branch 'main' set up to track remote branch 'main' from 'origin'." },
+    { cmd: 'git commit -am "Describe project idea in README"', out: "[main 5d6e7f8] Describe project idea in README\n 1 file changed, 8 insertions(+)" },
+    { cmd: "git push", out: "To https://github.com/ana/mi-primer-proyecto.git\n   1a2b3c4..5d6e7f8  main -> main" },
+  ]}
+/>
+
+Usa esta lista para confirmar que tu propio repositorio está completo:
+
+<Checklist
+  id="00-aprender-a-programar/07-proyecto-tu-primer-repo-entrega"
+  items={[
+    "Creé un repositorio nuevo con git init -b main, así que mi rama se llama main",
+    "Escribí un README.md en español que describe qué quiero construir",
+    "Agregué un archivo .gitignore con al menos una línea",
+    "Hice al menos dos commits, cada uno con un mensaje claro",
+    "Conecté el repositorio a GitHub y subí mis commits con git push",
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Publica tu primer repositorio"
+  solution={
+    <Terminal
+      steps={[
+        { cmd: "mkdir lista-de-tareas && cd lista-de-tareas", out: "" },
+        { cmd: "git init -b main", out: "Initialized empty Git repository in /home/ana/lista-de-tareas/.git/" },
+        { cmd: "touch README.md .gitignore", out: "" },
+        { cmd: "git add README.md .gitignore", out: "" },
+        { cmd: 'git commit -m "Add README and gitignore"', out: "[main (root-commit) 9f8e7d6] Add README and gitignore\n 2 files changed, 0 insertions(+)" },
+        { cmd: "git remote add origin https://github.com/ana/lista-de-tareas.git", out: "" },
+        { cmd: "git push -u origin main", out: "Branch 'main' set up to track remote branch 'main' from 'origin'." },
+      ]}
+    />
+  }
+>
+  Crea un repositorio nuevo con el nombre que quieras para tu proyecto del curso. Escribe un `README.md` en español que describa en dos o tres frases qué quieres construir y por qué. Agrega un `.gitignore` con al menos la línea `node_modules/`. Haz un primer commit con esos dos archivos, crea el repositorio remoto en GitHub y súbelo con `git push -u origin main`. Después, agrega una frase más al README y haz un segundo commit.
+</Challenge>
+
+## Errores comunes
+
+- **Crear el repositorio en GitHub antes que el local, y no saber cómo conectarlos.** El flujo de esta lección crea primero el repositorio local con `git init -b main` y recién después lo conecta con `git remote add origin`. Cómo detectarlo: si ya creaste el repositorio vacío en GitHub, la página te muestra exactamente el comando `git remote add origin` con tu URL; cópialo desde ahí.
+- **Agregar `.gitignore` después de haber subido los archivos que quería ignorar.** Un `.gitignore` solo afecta a archivos que Git todavía no está rastreando; si `node_modules` ya fue subida en un commit anterior, agregar la línea no la elimina del historial. Cómo detectarlo: ejecuta `git ls-files node_modules` después de crear el `.gitignore`; si lista archivos, Git los sigue rastreando y tienes que dejar de rastrearlos con `git rm -r --cached node_modules` y un nuevo commit.
+- **Ejecutar `git init` sin `-b main`.** Git crea la rama `master` y el primer `git push -u origin main` falla con "src refspec main does not match any". Cómo detectarlo: `git branch` muestra `* master`; ejecuta `git branch -M main` antes del push.
+- **Escribir el README en inglés o dejarlo vacío.** El objetivo de esta lección es practicar documentar tu propia idea, no copiar una plantilla. Cómo detectarlo: si el README no menciona qué construye el proyecto ni por qué, todavía no cumple el objetivo de la lección.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué archivo muestra GitHub automáticamente en la página principal de un repositorio?", back: "El README.md." },
+    { front: "¿Para qué sirve un archivo .gitignore?", back: "Para decirle a Git qué archivos o carpetas nunca debe incluir en un commit." },
+    { front: "¿Por qué un repositorio con un solo commit no es suficiente para este proyecto?", back: "Porque no practica el ciclo completo de editar, preparar y confirmar cambios varias veces." },
+    { front: "¿Qué comando conecta un repositorio local con uno remoto en GitHub?", back: "git remote add origin <url>" },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué debe describir el README de tu primer proyecto?",
+      options: [
+        { text: "Qué quieres construir y por qué", correct: true, feedback: "Correcto: es la primera información que alguien lee al entrar al repositorio." },
+        { text: "La lista completa de comandos de Git", correct: false, feedback: "Eso ya lo viste en lecciones anteriores; el README es sobre tu proyecto." },
+        { text: "Nada, puede quedar vacío por ahora", correct: false, feedback: "Un README vacío no cumple su propósito de documentar el proyecto." },
+      ],
+    },
+    {
+      prompt: "Ya subiste la carpeta node_modules en un commit anterior y ahora agregas node_modules/ a .gitignore. ¿Qué ocurre?",
+      options: [
+        { text: "Git la elimina automáticamente del historial", correct: false, feedback: ".gitignore no borra archivos que ya estaban rastreados." },
+        { text: "Git la sigue rastreando: .gitignore no afecta a archivos ya versionados", correct: true, feedback: "Correcto: hay que dejar de rastrearla con git rm -r --cached node_modules y hacer un commit." },
+        { text: "El repositorio deja de funcionar", correct: false, feedback: "No rompe el repositorio, solo no ignora lo que ya estaba rastreado." },
+      ],
+    },
+    {
+      prompt: "¿Cuántos commits como mínimo pide el cierre de esta etapa?",
+      options: [
+        { text: "Uno", correct: false, feedback: "Un solo commit no practica el ciclo de iterar sobre el proyecto." },
+        { text: "Dos", correct: true, feedback: "Correcto: al menos dos commits, para practicar editar y confirmar cambios más de una vez." },
+        { text: "No importa la cantidad", correct: false, feedback: "El objetivo pide explícitamente al menos dos commits." },
+      ],
+    },
+  ]}
+/>

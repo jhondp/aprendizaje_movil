@@ -1,0 +1,253 @@
+---
+id: "04-react-native-expo/06-stylesheet-y-flexbox"
+title: "StyleSheet y Flexbox"
+stage: 4
+module: "Estilos"
+order: 6
+minutes: 15
+prereqs: ["04-react-native-expo/05-pressable-y-textinput"]
+summary: "Organiza estilos con StyleSheet.create y distribuye elementos en pantalla con flexDirection, justifyContent, alignItems y flex."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás definir estilos con `StyleSheet.create` y construir layouts con Flexbox usando `flexDirection`, `justifyContent`, `alignItems` y `flex`.
+
+**Prerrequisitos:** `04-react-native-expo/05-pressable-y-textinput`
+
+## Concepto
+
+En las lecciones anteriores usaste `StyleSheet.create` y algunas propiedades de layout sin detenerte en ellas. Ahora toca entenderlas a fondo, porque todo lo que ves en una pantalla de React Native se posiciona con **Flexbox**. No hay `float`, no hay `display: grid` y no hay cascada de CSS: cada componente recibe sus estilos como un objeto de JavaScript.
+
+Documentación oficial: https://reactnative.dev/docs/flexbox y https://reactnative.dev/docs/stylesheet
+
+### Una analogía: acomodar libros en un estante
+
+Piensa en un estante. Primero decides la **dirección**: pones los libros de pie uno al lado del otro (fila) o apilados uno encima del otro (columna). Luego decides cómo repartir el espacio sobrante **a lo largo** del estante: todos juntos a la izquierda, centrados o separados con el mismo espacio. Por último decides cómo se alinean **a lo ancho**: pegados al fondo, centrados o estirados hasta el borde. Esas tres decisiones son `flexDirection`, `justifyContent` y `alignItems`.
+
+### Estilos como objetos
+
+Un estilo es un objeto con propiedades en camelCase y valores numéricos sin unidad:
+
+```tsx
+import { StyleSheet, Text, View } from "react-native";
+
+export default function Badge() {
+  return (
+    <View style={styles.badge}>
+      <Text style={styles.label}>Nuevo</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  badge: { backgroundColor: "#007aff", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
+  label: { color: "#fff", fontSize: 12, fontWeight: "600" },
+});
+```
+
+`StyleSheet.create` recibe un objeto con estilos con nombre y devuelve esos mismos estilos. Aporta dos cosas: TypeScript valida cada propiedad (si escribes `colour` en lugar de `color`, el editor lo marca) y los estilos quedan definidos una sola vez, fuera del componente, en lugar de crear un objeto nuevo en cada render.
+
+### Combinar estilos
+
+La prop `style` acepta un arreglo. Los estilos se aplican de izquierda a derecha y el último gana si hay conflicto. Los valores `false`, `null` o `undefined` se ignoran, lo que permite estilos condicionales:
+
+```tsx
+<View style={[styles.card, isSelected && styles.cardSelected]} />
+```
+
+Ya usaste este patrón con `Pressable` en la lección anterior.
+
+### Las diferencias con Flexbox de la web
+
+Flexbox en React Native funciona casi igual que en CSS, con tres valores por defecto distintos:
+
+- `flexDirection` es `"column"` por defecto (en la web es `row`).
+- `alignContent` es `"flex-start"` y `flexShrink` es `0` por defecto.
+- Todo `View` ya es un contenedor flex; no existe `display: "flex"` porque es el único modo.
+
+### El eje principal y el eje cruzado
+
+`flexDirection` define el **eje principal**:
+
+- `"column"`: los hijos se apilan de arriba hacia abajo.
+- `"row"`: los hijos se colocan de izquierda a derecha.
+
+`justifyContent` reparte los hijos **en el eje principal**: `"flex-start"`, `"center"`, `"flex-end"`, `"space-between"`, `"space-around"`, `"space-evenly"`.
+
+`alignItems` los alinea **en el eje cruzado** (el perpendicular): `"stretch"` (valor por defecto), `"flex-start"`, `"center"`, `"flex-end"`.
+
+La trampa habitual: si cambias `flexDirection` de columna a fila, `justifyContent` pasa de actuar en vertical a actuar en horizontal. Las propiedades no se refieren a "arriba" o "izquierda", sino a los ejes.
+
+### flex: repartir el espacio
+
+`flex: 1` significa "ocupa todo el espacio disponible en el eje principal". Si dos hermanos tienen `flex: 1` y `flex: 2`, el segundo ocupa el doble que el primero.
+
+```tsx
+<View style={{ flex: 1, flexDirection: "row" }}>
+  <View style={{ flex: 1, backgroundColor: "tomato" }} />
+  <View style={{ flex: 2, backgroundColor: "gold" }} />
+</View>
+```
+
+Un detalle importante: un hijo con `flex: 1` solo puede crecer si su padre tiene tamaño. Por eso la pantalla raíz casi siempre empieza con `flex: 1`; sin eso, el contenedor mide solo lo que mide su contenido.
+
+### gap, padding y margin
+
+- `gap`, `rowGap` y `columnGap` separan hijos sin tener que poner márgenes en cada uno.
+- `padding` es el espacio interno; `margin`, el externo. Existen variantes como `paddingHorizontal`, `paddingVertical`, `marginTop`.
+- `width` y `height` aceptan números o porcentajes en texto, como `"50%"`.
+
+### position absolute
+
+Para superponer un elemento (por ejemplo, un botón flotante) usas `position: "absolute"` con `top`, `right`, `bottom` o `left`. El elemento se posiciona respecto a su padre y sale del flujo de Flexbox.
+
+## Práctica
+
+Toca cada botón para cambiar `flexDirection`, `justifyContent` y `alignItems` del contenedor gris. Observa cómo `justifyContent` cambia de eje cuando pasas de columna a fila.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  code={`import { useState } from "react";
+import { View, Text, Pressable, StyleSheet } from "react-native";
+
+const directions = ["column", "row"] as const;
+const justify = ["flex-start", "center", "flex-end", "space-between", "space-evenly"] as const;
+const align = ["stretch", "flex-start", "center", "flex-end"] as const;
+
+function next<T>(list: readonly T[], current: T): T {
+  return list[(list.indexOf(current) + 1) % list.length];
+}
+
+export default function App() {
+  const [direction, setDirection] = useState<(typeof directions)[number]>("column");
+  const [justifyContent, setJustify] = useState<(typeof justify)[number]>("flex-start");
+  const [alignItems, setAlign] = useState<(typeof align)[number]>("stretch");
+
+  const controls = [
+    { label: "flexDirection", value: direction, onPress: () => setDirection(next(directions, direction)) },
+    { label: "justifyContent", value: justifyContent, onPress: () => setJustify(next(justify, justifyContent)) },
+    { label: "alignItems", value: alignItems, onPress: () => setAlign(next(align, alignItems)) },
+  ];
+
+  return (
+    <View style={styles.screen}>
+      {controls.map((control) => (
+        <Pressable key={control.label} onPress={control.onPress} style={styles.control}>
+          <Text style={styles.controlText}>
+            {control.label}: {control.value}
+          </Text>
+        </Pressable>
+      ))}
+      <View style={[styles.box, { flexDirection: direction, justifyContent, alignItems }]}>
+        {["tomato", "gold", "seagreen"].map((color) => (
+          <View key={color} style={[styles.item, { backgroundColor: color }]} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, paddingTop: 56, paddingHorizontal: 16, gap: 8, backgroundColor: "#fff" },
+  control: { padding: 10, borderRadius: 8, backgroundColor: "#007aff" },
+  controlText: { color: "#fff", fontWeight: "600" },
+  box: { flex: 1, marginVertical: 16, padding: 8, backgroundColor: "#e5e5ea" },
+  item: { minWidth: 48, minHeight: 48, margin: 4 },
+});`}
+/>
+
+Prueba en especial `alignItems: stretch`: los cuadros se estiran en el eje cruzado porque solo tienen tamaño mínimo, no fijo.
+
+## Ejercicio
+
+<Challenge
+  title="Fila de nota con acción a la derecha"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="55.0.0"
+      code={`import { View, Text, Pressable, StyleSheet } from "react-native";
+
+export default function App() {
+  return (
+    <View style={styles.screen}>
+      <View style={styles.row}>
+        <View style={styles.dot} />
+        <View style={styles.texts}>
+          <Text style={styles.title}>Comprar pan</Text>
+          <Text style={styles.body} numberOfLines={1}>
+            Pan integral y dos baguettes para la cena del viernes
+          </Text>
+        </View>
+        <Pressable style={styles.action} accessibilityRole="button">
+          <Text style={styles.actionText}>Editar</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, justifyContent: "center", padding: 16, backgroundColor: "#f2f2f7" },
+  row: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16, borderRadius: 12, backgroundColor: "#fff" },
+  dot: { width: 12, height: 12, borderRadius: 6, backgroundColor: "#34c759" },
+  texts: { flex: 1 },
+  title: { fontSize: 17, fontWeight: "600" },
+  body: { fontSize: 14, color: "#666" },
+  action: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: "#e5f0ff" },
+  actionText: { color: "#007aff", fontWeight: "600" },
+});`}
+    />
+  }
+>
+  Construye una fila de nota con tres partes en horizontal: a la izquierda un círculo de color de 12 puntos, en el centro el título y una línea de texto recortada con `numberOfLines={1}`, y a la derecha un botón "Editar". El bloque central debe ocupar todo el espacio sobrante para que el botón quede siempre pegado al borde derecho, sin importar el largo del texto. Los tres elementos deben estar centrados verticalmente.
+</Challenge>
+
+## Errores comunes
+
+**La pantalla aparece vacía o los hijos con flex no crecen.** Pones `flex: 1` en un hijo y no ocupa espacio. Ocurre porque el padre no tiene tamaño: su altura es la de su contenido, que es cero. Se detecta dando un `backgroundColor` temporal a cada contenedor para ver su caja. Solución: agrega `flex: 1` a los contenedores de la cadena, empezando por la raíz.
+
+**Esperar que justifyContent centre en horizontal.** Escribes `justifyContent: "center"` en una columna y el contenido se centra en vertical. Ocurre porque en React Native el eje principal por defecto es la columna, al revés que en la web. Se detecta porque el resultado aparece girado respecto a lo esperado. Solución: usa `alignItems` para el eje horizontal en columnas, o cambia a `flexDirection: "row"`.
+
+**Escribir estilos con sintaxis de CSS.** Pones `"margin-top": 10` o `padding: "16px"` y no pasa nada o aparece una advertencia. Ocurre por costumbre de la web. Se detecta porque TypeScript marca la propiedad dentro de `StyleSheet.create`. Solución: camelCase y números sin unidad, como `marginTop: 10`.
+
+<Flashcards
+  cards={[
+    { front: "¿Cuál es el flexDirection por defecto en React Native?", back: "column: los hijos se apilan de arriba hacia abajo." },
+    { front: "¿En qué eje actúa justifyContent en Flexbox?", back: "En el eje principal, definido por flexDirection." },
+    { front: "¿En qué eje actúa alignItems en Flexbox?", back: "En el eje cruzado, perpendicular al principal." },
+    { front: "¿Qué significa flex: 1 en un componente de React Native?", back: "Que ocupa todo el espacio disponible del padre en el eje principal." },
+    { front: "¿Cómo se aplica un estilo condicional en React Native?", back: "Con un arreglo en style, por ejemplo [styles.card, active && styles.active]." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Un View tiene flexDirection: \"row\" y justifyContent: \"center\". ¿Cómo se ubican sus hijos?",
+      options: [
+        { text: "Centrados en horizontal", correct: true, feedback: "Correcto: en una fila el eje principal es horizontal." },
+        { text: "Centrados en vertical", correct: false, feedback: "Eso ocurriría con flexDirection: column." },
+        { text: "Estirados a todo el ancho", correct: false, feedback: "Estirar es el comportamiento de alignItems: stretch en el eje cruzado." }
+      ]
+    },
+    {
+      prompt: "Dos hermanos tienen flex: 1 y flex: 3. ¿Qué proporción del espacio ocupa el segundo?",
+      options: [
+        { text: "La mitad", correct: false, feedback: "Sería la mitad si ambos tuvieran el mismo valor." },
+        { text: "Tres cuartos", correct: true, feedback: "Correcto: 3 de un total de 4 partes." },
+        { text: "Tres veces el ancho de la pantalla", correct: false, feedback: "flex reparte el espacio del padre, no multiplica la pantalla." }
+      ]
+    },
+    {
+      prompt: "¿Qué pasa con style={[styles.base, false, styles.extra]}?",
+      options: [
+        { text: "Falla porque false no es un estilo", correct: false, feedback: "Los valores falsos dentro del arreglo se ignoran." },
+        { text: "Se aplican base y extra; si chocan, gana extra", correct: true, feedback: "Correcto: se aplican de izquierda a derecha y false se ignora." },
+        { text: "Solo se aplica base", correct: false, feedback: "Todos los estilos válidos del arreglo se aplican." }
+      ]
+    }
+  ]}
+/>

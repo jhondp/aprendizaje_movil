@@ -1,0 +1,177 @@
+---
+id: "01-javascript/05-objetos"
+title: "Objetos"
+stage: 1
+module: "Estructuras"
+order: 5
+minutes: 12
+prereqs: ["01-javascript/04-arrays"]
+summary: "Agrupa datos relacionados en objetos, accede a sus propiedades y recorre sus claves con Object.keys."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás crear un objeto, acceder a sus propiedades con punto y con corchetes, trabajar con objetos anidados, y obtener la lista de claves con `Object.keys`.
+
+**Prerrequisitos:** `01-javascript/04-arrays`
+
+## Concepto
+
+Un array ordena valores por posición; un objeto los ordena por nombre. Piensa en una ficha de contacto: no dices "el tercer dato de Ana", dices "el teléfono de Ana" o "el correo de Ana". Un objeto guarda pares de **clave** y **valor**, y accedes al valor por su clave, no por su posición.
+
+### Crear un objeto y acceder con punto
+
+Un objeto se escribe entre llaves, con pares `clave: valor` separados por comas.
+
+```js
+const person = {
+  name: "Marta",
+  age: 28,
+};
+
+console.log(person.name); // Marta
+console.log(person.age); // 28
+```
+
+`person.name` es la forma más común de acceder a una propiedad: un punto seguido del nombre de la clave.
+
+### Acceder con corchetes
+
+También puedes acceder con corchetes y el nombre de la clave entre comillas, `person["name"]`. Esta forma es obligatoria cuando el nombre de la clave está en una variable, o cuando la clave tiene espacios o caracteres que no son válidos como nombre de propiedad.
+
+```js
+const key = "age";
+console.log(person[key]); // 28, el valor de la clave guardada en key
+```
+
+Con punto no es posible escribir `person.key`, porque eso buscaría literalmente una propiedad llamada `key`, no el contenido de la variable `key`.
+
+### Objetos anidados
+
+Un objeto puede tener otro objeto como valor de una propiedad. Para llegar al dato más profundo, encadenas accesos.
+
+```js
+const person = {
+  name: "Marta",
+  address: {
+    city: "Bogotá",
+    country: "Colombia",
+  },
+};
+
+console.log(person.address.city); // Bogotá
+```
+
+Piensa en esto como una carpeta dentro de otra carpeta: primero abres `person`, adentro encuentras `address`, y adentro de `address` encuentras `city`.
+
+### Object.keys
+
+`Object.keys(objeto)` devuelve un array con los nombres de todas las propiedades del objeto, en el orden en que se declararon. Es útil para recorrer un objeto sin conocer sus claves de antemano.
+
+```js
+const person = { name: "Marta", age: 28 };
+console.log(Object.keys(person)); // ["name", "age"]
+```
+
+Puedes consultar la referencia completa de objetos y de `Object.keys` en MDN: https://developer.mozilla.org/es/docs/Web/JavaScript/Guide/Working_with_Objects.
+
+<Callout kind="tip">
+  Un array de objetos es el patrón más común para representar una lista de datos del mundo real: una lista de tareas, de usuarios o de productos. Vas a usarlo en la lección de métodos de array y en el proyecto final de esta etapa.
+</Callout>
+
+## Práctica
+
+Ejecuta el código y observa cómo se accede a cada propiedad. Luego agrega una propiedad nueva al objeto `person` y vuelve a ejecutar.
+
+<Playground
+  lang="js"
+  code={`const person = {
+  name: "Marta",
+  age: 28,
+  address: {
+    city: "Bogotá",
+    country: "Colombia",
+  },
+};
+
+console.log(person.name);
+console.log(person["age"]);
+console.log(person.address.city);
+console.log(Object.keys(person));`}
+  expected={`Marta
+28
+Bogotá
+["name","age","address"]`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Ficha de un producto"
+  solution={
+    <Playground
+      lang="js"
+      code={`const product = {
+  title: "Teclado mecánico",
+  price: 45,
+  stock: {
+    available: 12,
+    warehouse: "central",
+  },
+};
+
+console.log(product.title);
+console.log(product["price"]);
+console.log(product.stock.available);
+console.log(Object.keys(product));`}
+    />
+  }
+>
+  Declara un objeto `product` con las propiedades `title` (texto), `price` (número) y `stock` (un objeto anidado con `available` y `warehouse`). Imprime `title` con punto, `price` con corchetes, `stock.available` encadenado, y las claves de `product` con `Object.keys`.
+</Challenge>
+
+## Errores comunes
+
+**Usar corchetes sin comillas para una clave literal.** `person[name]` (sin comillas) busca una variable llamada `name`, no la clave `"name"`. Si esa variable no existe, lanza `ReferenceError: name is not defined`. Se detecta por ese mensaje de error; la solución es `person["name"]` con comillas, o `person.name` con punto.
+
+**Intentar acceder con punto usando una variable como clave.** `person.key` busca literalmente la propiedad `key`, no el contenido de la variable `key`. Se detecta porque el resultado es `undefined` aunque la variable `key` sí contenga un nombre de propiedad válido. Solución: usar corchetes, `person[key]`.
+
+**Olvidar un nivel al acceder a un objeto anidado.** Escribir `person.city` cuando `city` está dentro de `person.address` devuelve `undefined`. Se detecta comparando la estructura real del objeto contra la ruta de acceso escrita; hay que encadenar cada nivel: `person.address.city`.
+
+<Flashcards
+  cards={[
+    { front: "¿Cómo se accede a una propiedad de un objeto usando el nombre exacto de la clave?", back: "Con punto, por ejemplo objeto.clave, o con corchetes y comillas, objeto[\"clave\"]." },
+    { front: "¿Cuándo es obligatorio usar corchetes en vez de punto?", back: "Cuando el nombre de la clave está guardado en una variable, o cuando la clave tiene caracteres que no son válidos como nombre de propiedad." },
+    { front: "¿Qué devuelve Object.keys(objeto)?", back: "Un array con los nombres de todas las propiedades del objeto." },
+    { front: "¿Cómo se accede a una propiedad dentro de un objeto anidado?", back: "Encadenando el acceso: objeto.propiedadExterna.propiedadInterna." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Con const user = { role: \"admin\" }; const field = \"role\";, ¿cómo obtienes el valor de esa propiedad usando la variable field?",
+      options: [
+        { text: "user.field", correct: false, feedback: "Con punto se buscaría literalmente una propiedad llamada field." },
+        { text: "user[field]", correct: true, feedback: "Correcto: los corchetes usan el contenido de la variable field como nombre de clave." },
+        { text: "user(field)", correct: false, feedback: "Los paréntesis se usan para llamar funciones, no para acceder a propiedades." },
+      ],
+    },
+    {
+      prompt: "Con const data = { info: { total: 10 } }, ¿cómo accedes a total?",
+      options: [
+        { text: "data.total", correct: false, feedback: "total no es una propiedad directa de data; está anidada dentro de info." },
+        { text: "data.info.total", correct: true, feedback: "Correcto: hay que encadenar cada nivel del objeto anidado." },
+        { text: "data[info][total]", correct: false, feedback: "Sin comillas, info y total se interpretarían como variables, no como nombres de clave." },
+      ],
+    },
+    {
+      prompt: "¿Qué devuelve Object.keys({ a: 1, b: 2 })?",
+      options: [
+        { text: "[1, 2]", correct: false, feedback: "Object.keys devuelve los nombres de las propiedades, no sus valores." },
+        { text: "[\"a\", \"b\"]", correct: true, feedback: "Correcto: Object.keys devuelve un array con los nombres de las claves." },
+        { text: "{ a: 1, b: 2 }", correct: false, feedback: "Object.keys no devuelve el objeto completo, solo sus claves." },
+      ],
+    },
+  ]}
+/>

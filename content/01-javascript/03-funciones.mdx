@@ -1,0 +1,147 @@
+---
+id: "01-javascript/03-funciones"
+title: "Funciones"
+stage: 1
+module: "Fundamentos"
+order: 3
+minutes: 14
+prereqs: ["01-javascript/02-condicionales"]
+summary: "Aprende a encapsular pasos en funciones reutilizables con parámetros y valores de retorno."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás escribir funciones con parámetros y valor de retorno, y explicar por qué evitan repetir código.
+
+**Prerrequisitos:** `01-javascript/02-condicionales`
+
+## Concepto
+
+Una función es una receta con nombre. Cuando cocinas, no describes cada paso cada vez que quieres preparar un café: dices "preparar café" y todos entienden la secuencia. En programación, una función agrupa una secuencia de pasos bajo un nombre para ejecutarla cuantas veces quieras.
+
+### Declarar y llamar
+
+```js
+function greet(name) {
+  return "Hola, " + name;
+}
+
+const message = greet("Ana");
+console.log(message); // Hola, Ana
+```
+
+Tres partes importan:
+
+- `function greet(name)` declara la función. `name` es un **parámetro**: una variable que recibe un valor cuando la función se ejecuta.
+- `return` entrega un valor a quien llamó a la función. Después de `return` no se ejecuta nada más dentro de la función.
+- `greet("Ana")` es la **llamada**. `"Ana"` es el **argumento**, el valor concreto que viaja al parámetro `name`.
+
+### Funciones sin retorno
+
+Si una función no tiene `return`, devuelve `undefined`. Es útil cuando la función solo produce un efecto, como imprimir en consola.
+
+```js
+function logTwice(text) {
+  console.log(text);
+  console.log(text);
+}
+
+const result = logTwice("hola");
+console.log(result); // undefined
+```
+
+### Funciones flecha
+
+JavaScript ofrece una sintaxis más corta llamada función flecha. Hace lo mismo con menos texto y es la forma más común en código moderno.
+
+```js
+const double = (n) => n * 2;
+console.log(double(4)); // 8
+```
+
+Cuando el cuerpo tiene una sola expresión, esa expresión se devuelve automáticamente. Si necesitas varias líneas, usa llaves y `return` explícito.
+
+### Por qué importan
+
+Sin funciones, cada vez que quisieras saludar a alguien copiarías la misma línea. Si mañana cambias el saludo, tendrías que corregir todas las copias. Con una función, cambias un solo lugar. Este principio se llama "no te repitas" (DRY, por sus siglas en inglés) y lo vas a ver en todo el curso.
+
+## Práctica
+
+Ejecuta el código y observa la consola. Luego cambia el argumento de `area` y vuelve a ejecutar.
+
+<Playground
+  lang="js"
+  code={`function area(width, height) {
+  return width * height;
+}
+
+console.log(area(3, 4));
+console.log(area(10, 2));`}
+  expected={`12
+20`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Convertir temperaturas"
+  solution={
+    <Playground
+      lang="js"
+      code={`function toFahrenheit(celsius) {
+  return celsius * 9 / 5 + 32;
+}
+
+console.log(toFahrenheit(0));   // 32
+console.log(toFahrenheit(100)); // 212`}
+    />
+  }
+>
+  Escribe una función `toFahrenheit` que reciba grados Celsius y devuelva grados Fahrenheit. La fórmula es `celsius * 9 / 5 + 32`. Comprueba que `toFahrenheit(0)` devuelve `32` y `toFahrenheit(100)` devuelve `212`.
+</Challenge>
+
+## Errores comunes
+
+**Olvidar `return`.** La función calcula el valor pero nadie lo recibe: `console.log(area(3, 4))` imprime `undefined`. Se detecta porque el resultado es `undefined` aunque el cálculo parece correcto. Solución: agregar `return` delante del valor.
+
+**Confundir parámetro con argumento.** El parámetro es el nombre en la declaración (`width`); el argumento es el valor en la llamada (`3`). Si intentas usar `3` dentro de la función en lugar de `width`, la función deja de ser reutilizable. Se detecta porque cambiar el argumento no cambia el resultado.
+
+**Llamar sin paréntesis.** `greet` sin `()` no ejecuta la función, solo la nombra. `console.log(greet)` imprime el código de la función en lugar de su resultado.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué palabra clave devuelve un valor desde una función?", back: "return" },
+    { front: "¿Qué devuelve una función sin return?", back: "undefined" },
+    { front: "Diferencia entre parámetro y argumento", back: "El parámetro es el nombre en la declaración; el argumento es el valor en la llamada." },
+    { front: "¿Qué significa DRY?", back: "Don't Repeat Yourself: no repetir código, encapsularlo en funciones." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué imprime console.log(double(5)) si const double = (n) => n * 2?",
+      options: [
+        { text: "10", correct: true, feedback: "Correcto: la función flecha devuelve n * 2." },
+        { text: "undefined", correct: false, feedback: "La función flecha de una sola expresión devuelve esa expresión automáticamente." },
+        { text: "n * 2", correct: false, feedback: "La expresión se evalúa con n = 5, no se imprime como texto." }
+      ]
+    },
+    {
+      prompt: "¿Qué ocurre con el código escrito después de un return dentro de la misma función?",
+      options: [
+        { text: "Se ejecuta normalmente", correct: false, feedback: "return termina la ejecución de la función." },
+        { text: "No se ejecuta", correct: true, feedback: "Correcto: return sale de la función de inmediato." },
+        { text: "Produce un error", correct: false, feedback: "No es un error, simplemente nunca se alcanza." }
+      ]
+    },
+    {
+      prompt: "¿Cuál es el argumento en la llamada greet(\"Ana\")?",
+      options: [
+        { text: "greet", correct: false, feedback: "greet es el nombre de la función." },
+        { text: "name", correct: false, feedback: "name es el parámetro, definido en la declaración." },
+        { text: "\"Ana\"", correct: true, feedback: "Correcto: el argumento es el valor concreto que se pasa." }
+      ]
+    }
+  ]}
+/>

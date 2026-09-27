@@ -1,0 +1,224 @@
+---
+id: "01-javascript/12-async-await-y-fetch"
+title: "async/await y fetch"
+stage: 1
+module: "Asincronía"
+order: 12
+minutes: 15
+prereqs: ["01-javascript/11-callbacks-y-promesas"]
+summary: "Escribe código asíncrono que se lee como código síncrono con async/await, y usa fetch para pedir datos a una API real."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás declarar una función `async`, usar `await` para esperar el resultado de una promesa, manejar errores con `try`/`catch`, y describir cómo `fetch` pide datos a una API.
+
+**Prerrequisitos:** `01-javascript/11-callbacks-y-promesas`
+
+## Concepto
+
+`.then` y `.catch` funcionan bien, pero encadenar varios se puede volver difícil de seguir, igual que pasaba con los callbacks anidados. `async`/`await` es una forma de escribir código basado en promesas que se lee de arriba hacia abajo, como una receta de cocina normal: "espera a que el agua hierva, después agrega la pasta", en lugar de "cuando el agua hierva, llama a esta función para agregar la pasta".
+
+### Declarar una función async
+
+La palabra clave `async` delante de una función indica que esa función siempre devuelve una promesa, incluso si dentro solo hay un `return` con un valor simple.
+
+```js
+async function greet() {
+  return "hello";
+}
+
+greet().then((message) => console.log(message)); // hello
+```
+
+### await: esperar una promesa sin bloquear el resto del programa
+
+Dentro de una función `async`, `await` pausa la ejecución de esa función hasta que la promesa a su derecha se resuelve, y devuelve el valor resuelto directamente, sin necesidad de `.then`. El resto del programa, fuera de esa función, sigue ejecutándose mientras tanto.
+
+```js
+function wait(ms, value) {
+  return new Promise((resolve) => {
+    setTimeout(() => resolve(value), ms);
+  });
+}
+
+async function run() {
+  console.log("start");
+  const result = await wait(300, "done waiting");
+  console.log(result);
+  console.log("end");
+}
+
+run();
+console.log("this line runs before run() finishes");
+```
+
+`await` solo puede usarse dentro de una función marcada como `async`; escribirlo en una función normal es un error de sintaxis.
+
+### try/catch con await
+
+Cuando una promesa esperada con `await` se rechaza, `await` lanza ese error, así que puedes atraparlo con el `try`/`catch` de la lección anterior.
+
+```js
+async function verify(age) {
+  try {
+    const message = await checkAge(age); // checkAge devuelve una Promise, como en la lección anterior
+    console.log(message);
+  } catch (error) {
+    console.log("error:", error.message);
+  }
+}
+```
+
+### fetch: pedir datos a una API real
+
+`fetch(url)` pide datos a una dirección web y devuelve una `Promise` que se resuelve con un objeto `Response`. Ese objeto todavía no tiene los datos listos para usar: hay que llamar a `response.json()`, que también devuelve una promesa, para obtener el cuerpo de la respuesta ya convertido de JSON a un valor de JavaScript.
+
+```js
+async function getTodo() {
+  try {
+    const response = await fetch("https://jsonplaceholder.typicode.com/todos/1");
+    const data = await response.json();
+    console.log(data);
+  } catch (error) {
+    console.log("Request failed:", error.message);
+  }
+}
+
+getTodo();
+// { userId: 1, id: 1, title: "delectus aut autem", completed: false }
+```
+
+Este ejemplo depende de un servidor externo y de tu conexión, así que se deja aquí como código de referencia: la práctica de abajo simula la respuesta para que el ejercicio funcione igual sin conexión. Puedes revisar la referencia completa de `fetch` en MDN: https://developer.mozilla.org/es/docs/Web/API/Fetch_API/Using_Fetch.
+
+<Callout kind="warning">
+  fetch necesita conexión de red y un servidor que responda. Para que la práctica funcione siempre, incluso sin conexión, los ejemplos con fetch aparecen como código de referencia y el Playground simula la respuesta.
+</Callout>
+
+## Práctica
+
+Ejecuta el código y observa cómo se intercalan los mensajes síncronos con los que llegan después de cada `await`.
+
+<Playground
+  lang="js"
+  code={`function wait(ms, value) {
+  return new Promise((resolve) => {
+    setTimeout(() => resolve(value), ms);
+  });
+}
+
+function checkAge(age) {
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      if (age >= 18) {
+        resolve("access granted");
+      } else {
+        reject(new Error("too young"));
+      }
+    }, 200);
+  });
+}
+
+async function main() {
+  console.log("start");
+
+  const result = await wait(300, "done waiting");
+  console.log(result);
+
+  try {
+    const message = await checkAge(15);
+    console.log(message);
+  } catch (error) {
+    console.log("error:", error.message);
+  }
+
+  console.log("end");
+}
+
+main();
+console.log("this runs before main finishes");`}
+  expected={`start
+this runs before main finishes
+done waiting
+error: too young
+end`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Obtener el nombre de un usuario"
+  solution={
+    <Playground
+      lang="js"
+      code={`function fetchUser(id) {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve({ id, name: id === 1 ? "Ana" : "Luis" });
+    }, 200);
+  });
+}
+
+async function getUserName(id) {
+  const user = await fetchUser(id);
+  return user.name;
+}
+
+async function run() {
+  const name = await getUserName(1);
+  console.log(name);
+}
+
+run();`}
+    />
+  }
+>
+  Se te da una función `fetchUser(id)` que devuelve una `Promise` resuelta después de 200 ms con un objeto `{ id, name }`. Escribe una función `async` llamada `getUserName(id)` que use `await` para obtener ese usuario y devuelva solo su `name`. Llama a `getUserName(1)` desde otra función `async` e imprime el resultado.
+</Challenge>
+
+## Errores comunes
+
+**Usar await fuera de una función async.** Escribir `await` en una función normal (sin `async` delante) es un error de sintaxis: `SyntaxError: await is only valid in async functions`. Se detecta por ese mensaje; la solución es agregar `async` a la declaración de la función.
+
+**Olvidar el await y trabajar con la promesa en vez de su valor.** `const result = wait(300, "done"); console.log(result);` imprime un objeto `Promise` pendiente, no `"done"`, porque falta el `await` que espera la resolución. Se detecta porque el valor impreso es `Promise { <pending> }` en lugar del dato esperado.
+
+**Olvidar que una función async siempre devuelve una promesa.** `const value = getUserName(1); console.log(value);` imprime una `Promise`, no el nombre, aunque `getUserName` termine con un `return` directo. Se detecta de la misma forma que el error anterior: hay que usar `await` (dentro de otra función `async`) o `.then` para obtener el valor real.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué devuelve siempre una función declarada con async?", back: "Una promesa, incluso si internamente solo hace un return de un valor simple." },
+    { front: "¿Dónde puede usarse await?", back: "Solo dentro de una función declarada como async." },
+    { front: "¿Qué hace await con una promesa que se rechaza?", back: "Lanza ese error, que se puede atrapar con try/catch." },
+    { front: "¿Qué devuelve fetch(url)?", back: "Una promesa que se resuelve con un objeto Response." },
+    { front: "¿Por qué hace falta response.json() después de fetch?", back: "Porque response.json() convierte el cuerpo de la respuesta de JSON a un valor de JavaScript, y también devuelve una promesa." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué ocurre si escribes await dentro de una función que no tiene async delante?",
+      options: [
+        { text: "Funciona igual, await no necesita async", correct: false, feedback: "await solo es válido dentro de una función async." },
+        { text: "Es un error de sintaxis", correct: true, feedback: "Correcto: SyntaxError: await is only valid in async functions." },
+        { text: "La función se convierte en async automáticamente", correct: false, feedback: "JavaScript no agrega async por sí solo; hay que escribirlo explícitamente." },
+      ],
+    },
+    {
+      prompt: "¿Qué imprime console.log(getUserName(1)) si getUserName es una función async, sin usar await ni .then?",
+      options: [
+        { text: "El nombre del usuario directamente", correct: false, feedback: "Sin await ni then, se obtiene la promesa, no el valor resuelto." },
+        { text: "Un objeto Promise pendiente", correct: true, feedback: "Correcto: una función async siempre devuelve una promesa." },
+        { text: "undefined", correct: false, feedback: "No es undefined: es una promesa, aunque todavía no se haya resuelto." },
+      ],
+    },
+    {
+      prompt: "¿Qué devuelve fetch(url) antes de llamar a response.json()?",
+      options: [
+        { text: "Los datos ya convertidos en un objeto de JavaScript", correct: false, feedback: "Ese es el resultado de response.json(), no de fetch directamente." },
+        { text: "Una promesa que se resuelve con un objeto Response", correct: true, feedback: "Correcto: response.json() es un paso adicional para obtener los datos." },
+        { text: "Un error, porque falta await", correct: false, feedback: "fetch no lanza un error por sí solo; devuelve una promesa válida." },
+      ],
+    },
+  ]}
+/>

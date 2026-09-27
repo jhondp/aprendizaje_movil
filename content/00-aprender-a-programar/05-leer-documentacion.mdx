@@ -1,0 +1,122 @@
+---
+id: "00-aprender-a-programar/05-leer-documentacion"
+title: "Cómo leer documentación"
+stage: 0
+module: "Aprender a aprender"
+order: 5
+minutes: 10
+prereqs: ["00-aprender-a-programar/04-git-y-github"]
+summary: "Aprende a leer una página de documentación técnica sin necesidad de leerla completa."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a poder encontrar la sintaxis, los parámetros y un ejemplo de uso en una página de documentación técnica, y vas a poder probar ese ejemplo por tu cuenta.
+
+**Prerrequisitos:** `00-aprender-a-programar/04-git-y-github`
+
+## Concepto
+
+Nadie memoriza toda la documentación de un lenguaje de programación, ni falta que hace: aprender a **leer** documentación bajo demanda es una habilidad que vas a usar más que cualquier otra en tu carrera. Es parecido a leer el prospecto de un medicamento: no lees el papel entero de punta a punta, vas directo a la sección de dosis y efectos, que es la que necesitas en ese momento.
+
+La documentación oficial de JavaScript para el navegador vive en **MDN** (Mozilla Developer Network), en [developer.mozilla.org](https://developer.mozilla.org/es/docs/Learn/Getting_started_with_the_web). Casi todas las páginas de un método siguen la misma estructura, y conocerla te ahorra tiempo:
+
+- **Sintaxis (Syntax)**: cómo se escribe la llamada, con el nombre del método y sus parámetros entre paréntesis. Es lo primero que hay que mirar.
+- **Parámetros (Parameters)**: qué recibe el método, en qué orden y de qué tipo.
+- **Valor de retorno (Return value)**: qué te devuelve el método después de ejecutarse.
+- **Ejemplos (Examples)**: código de muestra que puedes copiar y probar tal cual, para confirmar que entendiste.
+
+### Un ejemplo concreto: Array.prototype.includes
+
+No te preocupes si todavía no sabes bien qué es un array (una lista de valores): lo vas a estudiar a fondo en la etapa 1. Por ahora, úsalo solo como caso de práctica para leer documentación: en la página de MDN de [`Array.prototype.includes`](https://developer.mozilla.org/es/docs/Web/JavaScript/Reference/Global_Objects/Array/includes) vas a encontrar que este método recibe un valor a buscar y devuelve `true` si ese valor está en la lista, o `false` si no está.
+
+```js
+const fruits = ["apple", "banana", "mango"];
+console.log(fruits.includes("banana"));
+console.log(fruits.includes("kiwi"));
+```
+
+Con solo leer la sección de sintaxis y el primer ejemplo de esa página, ya sabes lo suficiente para usar el método sin haber leído el resto del artículo.
+
+### Por qué conviene probar el ejemplo tú mismo
+
+Leer un ejemplo no es lo mismo que entenderlo. Cuando copias el ejemplo de la documentación y lo ejecutas con tus propios valores, en lugar de los que trae la página, confirmas si de verdad entendiste cómo funciona o si solo reconociste el patrón visualmente. Si tu versión modificada no da el resultado que esperabas, todavía te falta algo por entender, y es mejor descubrirlo ahí que más adelante en un programa más grande.
+
+<Callout kind="tip">
+  Cuando una página de documentación use una palabra que no conoces, búscala en el glosario de MDN antes de seguir. Adivinar el significado de los términos técnicos es una fuente común de confusión más adelante.
+</Callout>
+
+## Práctica
+
+Ejecuta este ejemplo basado en la documentación de `Array.prototype.includes`, y luego cambia el valor que se busca por otro que tú elijas antes de volver a ejecutar.
+
+<Playground
+  lang="js"
+  code={`const fruits = ["apple", "banana", "mango"];
+console.log(fruits.includes("banana"));
+console.log(fruits.includes("kiwi"));`}
+  expected={`true
+false`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Leer y probar otro método"
+  solution={
+    <Playground
+      lang="js"
+      code={`const colors = ["red", "green", "blue"];
+console.log(colors.indexOf("green"));
+console.log(colors.indexOf("purple"));`}
+    />
+  }
+>
+  Busca en MDN la página de `Array.prototype.indexOf`. Lee su sección de sintaxis y valor de retorno, y luego escribe un ejemplo en el Playground de abajo que use un array de tres colores y busque la posición de uno que existe y de uno que no existe.
+
+  <Playground lang="js" code={`// Escribe aquí tu ejemplo con indexOf`} />
+</Challenge>
+
+## Errores comunes
+
+- **Leer la página completa de arriba hacia abajo, como si fuera un cuento.** Esto agota la paciencia antes de llegar a la parte útil. Cómo detectarlo: si después de cinco minutos leyendo todavía no sabes cómo se llama al método, empieza de nuevo yendo directo a la sección de sintaxis.
+- **Copiar el ejemplo sin modificarlo y asumir que ya lo entendiste.** Cómo detectarlo: intenta explicar en una frase qué hace cada parámetro; si no puedes, cambia los valores del ejemplo y vuelve a ejecutarlo hasta que puedas.
+- **Ignorar la sección de valor de retorno.** Muchos errores vienen de suponer qué devuelve un método en lugar de comprobarlo. Cómo detectarlo: si tu código usa el resultado de un método de una forma que no coincide con lo que la documentación describe en "Return value", revisa esa sección de nuevo.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué sección de una página de MDN muestra cómo se escribe la llamada a un método?", back: "La sección de Sintaxis (Syntax)." },
+    { front: "¿Qué devuelve Array.prototype.includes?", back: "true si el valor buscado está en el array, false si no está." },
+    { front: "¿Cuál es una estrategia eficaz para leer documentación técnica?", back: "Ir directo a la sintaxis y los ejemplos, en lugar de leer todo de corrido." },
+    { front: "¿Por qué conviene modificar el ejemplo de la documentación antes de darlo por entendido?", back: "Porque copiarlo tal cual solo demuestra que se ejecuta, no que se entendió." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué devuelve el método Array.prototype.includes?",
+      options: [
+        { text: "El índice donde se encontró el valor", correct: false, feedback: "Eso es lo que devuelve indexOf, no includes." },
+        { text: "true o false, según si el valor está en el array", correct: true, feedback: "Correcto: includes devuelve un valor booleano." },
+        { text: "Una copia del array", correct: false, feedback: "includes no devuelve una copia del array." },
+      ],
+    },
+    {
+      prompt: "¿Cuál es la mejor estrategia para leer una página de documentación técnica larga?",
+      options: [
+        { text: "Leerla completa de principio a fin antes de escribir código", correct: false, feedback: "Suele consumir tiempo sin necesidad." },
+        { text: "Ir directo a la sintaxis y a los ejemplos", correct: true, feedback: "Correcto: esa es la parte que casi siempre necesitas primero." },
+        { text: "Buscar la misma información en un video en lugar de leerla", correct: false, feedback: "La documentación oficial suele ser más precisa y está siempre actualizada." },
+      ],
+    },
+    {
+      prompt: "¿Por qué conviene ejecutar el ejemplo de la documentación con tus propios valores?",
+      options: [
+        { text: "Para confirmar que entendiste cómo funciona, no solo que lo leíste", correct: true, feedback: "Correcto: modificarlo pone a prueba tu comprensión." },
+        { text: "Porque el ejemplo original nunca funciona", correct: false, feedback: "Los ejemplos oficiales sí funcionan tal como están escritos." },
+        { text: "No hace falta, con leerlo alcanza", correct: false, feedback: "Leer no es lo mismo que comprobar que entendiste." },
+      ],
+    },
+  ]}
+/>

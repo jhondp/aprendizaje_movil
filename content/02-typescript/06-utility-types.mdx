@@ -1,0 +1,203 @@
+---
+id: "02-typescript/06-utility-types"
+title: "Utility types"
+stage: 2
+module: "Tipos avanzados"
+order: 6
+minutes: 12
+prereqs: ["02-typescript/05-narrowing"]
+summary: "Deriva tipos nuevos a partir de uno existente con Partial, Pick, Omit, Record y ReturnType."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a poder derivar tipos nuevos a partir de una interface existente usando `Partial`, `Pick`, `Omit`, `Record` y `ReturnType`, sin reescribir la forma del objeto a mano.
+
+**Prerrequisitos:** `02-typescript/05-narrowing`
+
+## Concepto
+
+Piensa en una plantilla de documento en un procesador de textos. En vez de escribir un contrato desde cero cada vez, partes de la plantilla y la adaptas: quitas una sección, marcas otra como opcional, o extraes solo el bloque de firmas. Los **utility types** de TypeScript hacen exactamente eso con tipos: parten de un tipo existente y producen una variante, sin que tengas que copiar y reescribir cada propiedad a mano.
+
+Todos los ejemplos siguientes parten de esta interfaz:
+
+```ts
+interface Task {
+  id: number;
+  title: string;
+  done: boolean;
+}
+```
+
+### `Partial<T>`: todas las propiedades opcionales
+
+```ts
+function updateTask(task: Task, changes: Partial<Task>): Task {
+  return { ...task, ...changes };
+}
+
+const task: Task = { id: 1, title: "Comprar leche", done: false };
+const updated = updateTask(task, { done: true });
+```
+
+`Partial<Task>` es igual a `Task`, pero con cada propiedad marcada como opcional (`id?`, `title?`, `done?`). Es el tipo natural para un objeto de "cambios parciales": quien llama a `updateTask` solo necesita pasar las propiedades que quiere modificar. El cuerpo usa el spread que viste en `01-javascript/07-metodos-de-array`: `{ ...task, ...changes }` crea un objeto nuevo copiando primero todos los campos de `task` y después los de `changes`; como gana el campo que está más a la derecha, cada propiedad presente en `changes` reemplaza a la original y el resto queda igual. En el ejemplo, `updated` vale `{ id: 1, title: "Comprar leche", done: true }` y `task` no cambia.
+
+### `Pick<T, K>`: quedarse con algunas propiedades
+
+```ts
+type TaskSummary = Pick<Task, "id" | "title">;
+
+const summary: TaskSummary = { id: 1, title: "Comprar leche" };
+```
+
+`Pick<Task, "id" | "title">` construye un tipo nuevo con solo esas dos propiedades de `Task`, con el mismo tipo que tenían ahí. Útil para vistas que no necesitan el objeto completo, como una lista resumida.
+
+### `Omit<T, K>`: quedarse con todo menos algunas propiedades
+
+```ts
+type NewTask = Omit<Task, "id">;
+
+function createTask(data: NewTask): Task {
+  return { id: Date.now(), ...data };
+}
+```
+
+`Omit<Task, "id">` es lo opuesto de `Pick`: toma todas las propiedades de `Task` excepto `id`. Tiene sentido para un formulario de creación, donde el `id` todavía no existe y lo genera el propio código.
+
+### `Record<K, V>`: un objeto con claves y valores de tipo fijo
+
+```ts
+type TasksById = Record<number, Task>;
+
+const tasksById: TasksById = {
+  1: { id: 1, title: "Comprar leche", done: false },
+  2: { id: 2, title: "Llamar al dentista", done: true },
+};
+```
+
+`Record<number, Task>` describe un objeto donde cada clave es un `number` y cada valor es un `Task`. Es el equivalente tipado de un diccionario o mapa indexado por clave, muy común para guardar entidades por su `id`.
+
+### `ReturnType<F>`: el tipo que devuelve una función
+
+```ts
+function createEmptyTask() {
+  return { id: 0, title: "", done: false };
+}
+
+type EmptyTask = ReturnType<typeof createEmptyTask>;
+```
+
+`ReturnType<typeof createEmptyTask>` extrae el tipo que devuelve `createEmptyTask`, sin que tengas que escribirlo a mano ni mantenerlo sincronizado si la función cambia. El `typeof` aquí no es el operador de tiempo de ejecución de la lección 5: es el operador de tipos de TypeScript, que toma el tipo de un valor o función existente para usarlo en una posición de tipo.
+
+Estos cinco no son los únicos utility types, pero cubren los casos más frecuentes al trabajar con objetos de dominio como `Task`. Documentación oficial, con la lista completa: [Utility Types](https://www.typescriptlang.org/docs/handbook/utility-types.html).
+
+## Práctica
+
+Ejecuta el código y observa cómo cada utility type deriva una forma distinta a partir de `Task`, sin repetir sus propiedades a mano.
+
+<Playground
+  lang="ts"
+  code={`interface Task {
+  id: number;
+  title: string;
+  done: boolean;
+}
+
+function updateTask(task: Task, changes: Partial<Task>): Task {
+  return { ...task, ...changes };
+}
+
+type NewTask = Omit<Task, "id">;
+function createTask(data: NewTask, nextId: number): Task {
+  return { id: nextId, ...data };
+}
+
+type TasksById = Record<number, Task>;
+
+const first = createTask({ title: "Comprar leche", done: false }, 1);
+const updated = updateTask(first, { done: true });
+
+const tasksById: TasksById = { [updated.id]: updated };
+
+console.log(first);
+console.log(updated);
+console.log(tasksById);`}
+  expected={`{"id":1,"title":"Comprar leche","done":false}
+{"id":1,"title":"Comprar leche","done":true}
+{"1":{"id":1,"title":"Comprar leche","done":true}}`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Resumen con Pick"
+  solution={
+    <Playground
+      lang="ts"
+      code={`interface Task {
+  id: number;
+  title: string;
+  done: boolean;
+  notes?: string;
+}
+
+type TaskSummary = Pick<Task, "id" | "title">;
+
+function toSummary(task: Task): TaskSummary {
+  return { id: task.id, title: task.title };
+}
+
+const task: Task = { id: 1, title: "Comprar leche", done: false, notes: "Sin lactosa" };
+console.log(toSummary(task));`}
+      expected={`{"id":1,"title":"Comprar leche"}`}
+    />
+  }
+>
+  Usa la `interface Task` con `id`, `title`, `done` y `notes?`. Declara `type TaskSummary = Pick<Task, "id" | "title">`. Escribe una función `toSummary(task: Task): TaskSummary` que devuelva solo esas dos propiedades. Pruébala con una tarea que también tenga `notes`, y comprueba que el resumen no incluye `notes` ni `done`.
+</Challenge>
+
+## Errores comunes
+
+**Usar `Partial<Task>` donde en realidad se necesita `Task` completo.** Si `createTask` recibe `Partial<Task>` en vez de `Task` u `Omit<Task, "id">`, el compilador acepta un objeto sin `title` ni `done`, que después falla en tiempo de ejecución al intentar mostrarlos. Cómo detectarlo: si una función necesita que ciertas propiedades siempre estén presentes, `Partial` es la elección equivocada; revisa si en realidad quieres `Pick` u `Omit`.
+
+**Escribir a mano un tipo que ya se puede derivar.** Declarar `interface TaskSummary { id: number; title: string; }` por separado de `Task` obliga a mantener las dos definiciones sincronizadas si `title` cambia de tipo. Cómo detectarlo: si dos interfaces comparten casi todas sus propiedades, probablemente una debería derivarse de la otra con `Pick` u `Omit`.
+
+**Confundir el `typeof` de tipos con el `typeof` de JavaScript.** `ReturnType<typeof createEmptyTask>` usa `typeof` en una posición de tipo, para referirse al tipo de la función, no a la cadena `"function"` que devolvería en tiempo de ejecución. Cómo detectarlo: si el `typeof` aparece dentro de `<...>` o después de `:` (una posición de tipo), es el operador de tipos; si aparece dentro de una expresión normal como `if (typeof x === ...)`, es el operador de JavaScript de la lección 5.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué hace Partial<Task> respecto a las propiedades de Task?", back: "Genera un tipo igual a Task pero con todas sus propiedades marcadas como opcionales." },
+    { front: "¿Qué diferencia hay entre Pick<Task, K> y Omit<Task, K>?", back: "Pick se queda solo con las propiedades listadas en K; Omit se queda con todas menos las listadas en K." },
+    { front: "¿Qué describe Record<number, Task>?", back: "Un objeto donde cada clave es un number y cada valor es un Task, como un diccionario indexado por id." },
+    { front: "¿Qué extrae ReturnType<typeof miFuncion>?", back: "El tipo del valor que devuelve esa función, sin tener que escribirlo a mano." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué tipo describe correctamente un objeto de cambios parciales para actualizar una Task existente?",
+      options: [
+        { text: "Task", correct: false, feedback: "Task exige todas las propiedades; un objeto de cambios normalmente solo trae algunas." },
+        { text: "Partial<Task>", correct: true, feedback: "Correcto: Partial marca todas las propiedades como opcionales, ideal para cambios parciales." },
+        { text: "Omit<Task, \"id\">", correct: false, feedback: "Omit quita id pero exige el resto de las propiedades completas; no es lo mismo que hacerlas opcionales." },
+      ],
+    },
+    {
+      prompt: "¿Cuál es la forma correcta de derivar un tipo con solo id y title a partir de Task?",
+      options: [
+        { text: "Omit<Task, \"id\" | \"title\">", correct: false, feedback: "Omit produce el resultado contrario: todas las propiedades excepto id y title." },
+        { text: "Pick<Task, \"id\" | \"title\">", correct: true, feedback: "Correcto: Pick se queda solo con las propiedades listadas." },
+        { text: "Partial<Task>", correct: false, feedback: "Partial mantiene todas las propiedades, solo las vuelve opcionales; no elimina ninguna." },
+      ],
+    },
+    {
+      prompt: "¿Qué representa Record<number, Task>?",
+      options: [
+        { text: "Un array de objetos Task", correct: false, feedback: "Record describe un objeto indexado por clave, no un array." },
+        { text: "Un objeto donde cada clave es un number y cada valor es un Task", correct: true, feedback: "Correcto: esa es la forma que describe Record<K, V>." },
+        { text: "Una función que recibe un number y devuelve un Task", correct: false, feedback: "Eso sería un tipo de función, no Record; Record describe la forma de un objeto." },
+      ],
+    },
+  ]}
+/>

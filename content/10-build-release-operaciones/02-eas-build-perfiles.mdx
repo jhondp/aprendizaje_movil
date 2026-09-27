@@ -1,0 +1,215 @@
+---
+id: "10-build-release-operaciones/02-eas-build-perfiles"
+title: "EAS Build y perfiles en eas.json"
+stage: 10
+module: "Build"
+order: 2
+minutes: 15
+prereqs: ["10-build-release-operaciones/01-secrets-en-eas"]
+summary: "Configura eas.json con los perfiles development, preview y production y lanza tu primer build en la nube con EAS Build."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás escribir un `eas.json` con los tres perfiles canónicos, explicar qué hace cada campo (`distribution`, `developmentClient`, `channel`, `environment`, `env`) y lanzar un build de Android con `eas build --profile preview`.
+
+**Prerrequisitos:** `10-build-release-operaciones/01-secrets-en-eas`
+
+## Concepto
+
+Hasta ahora tu app corría dentro de Expo Go o de un development build que compilaste una vez. Para entregarla a otras personas necesitas un archivo instalable (`.apk` o `.aab` en Android, `.ipa` en iOS) firmado con tus credenciales. Compilar eso en tu máquina exige Android Studio, Xcode (solo en macOS) y horas de configuración. **EAS Build** hace esa compilación en servidores de Expo a partir de tu repositorio.
+
+Piensa en una panadería industrial. Tú entregas la receta (tu código y tu configuración) y ellos tienen los hornos (macOS con Xcode, Linux con el SDK de Android). Pero la misma masa puede salir como pan de muestra para el equipo o como producto final para la tienda: eso lo decide la **hoja de pedido**. En EAS, la hoja de pedido es `eas.json` y cada variante de pedido es un **perfil de build**.
+
+### El archivo eas.json
+
+`eas.json` vive en la raíz del proyecto, junto a `app.config.ts`. `eas build:configure` genera uno básico; aquí tienes el que usarás en la app de notas, con los tres perfiles completos. La referencia de todos los campos está en https://docs.expo.dev/eas/json/ y la guía de perfiles en https://docs.expo.dev/build/eas-json/.
+
+```json
+{
+  "cli": {
+    "version": ">= 14.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "channel": "development",
+      "environment": "development",
+      "env": {
+        "APP_VARIANT": "development"
+      },
+      "ios": {
+        "simulator": true
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "channel": "preview",
+      "environment": "preview",
+      "env": {
+        "APP_VARIANT": "preview"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "distribution": "store",
+      "channel": "production",
+      "environment": "production",
+      "autoIncrement": true,
+      "env": {
+        "APP_VARIANT": "production"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
+```
+
+### Qué hace cada campo
+
+- **`distribution`**: `internal` produce un archivo que se instala directamente en el dispositivo (ideal para testers); `store` produce el formato que exigen las tiendas (`.aab` en Android, `.ipa` para App Store Connect). Es el valor por defecto, pero escribirlo hace explícita la intención.
+- **`developmentClient`**: `true` compila la app con `expo-dev-client`, es decir, con el menú de desarrollo y la conexión a Metro. Solo tiene sentido en el perfil `development`.
+- **`channel`**: nombre del canal de actualizaciones OTA al que escuchará esta build. Lo usarás en la lección de EAS Update; por ahora, cada perfil tiene su canal con el mismo nombre para no mezclar builds de prueba con producción.
+- **`environment`**: enlaza el perfil con el entorno de variables de EAS de la lección anterior. Al construir con `--profile production`, EAS carga las variables del entorno `production`.
+- **`env`**: variables adicionales fijas para este perfil. Aquí definimos `APP_VARIANT`, que `app.config.ts` lee para resolver nombre e identificador. Podrías guardarla también en EAS, pero un valor que nunca cambia y no es secreto queda más claro en el archivo.
+- **`ios.simulator`**: `true` genera un build para el simulador de iOS en lugar de para un dispositivo real. Útil en `development` cuando no tienes un iPhone a mano.
+- **`android.buildType`**: `apk` produce un archivo instalable a mano; el valor por defecto, `app-bundle`, produce el `.aab` que exige Google Play y que no se instala directamente.
+- **`autoIncrement`**: en el perfil de producción, EAS sube automáticamente `buildNumber` (iOS) y `versionCode` (Android) en cada build. Funciona junto con `cli.appVersionSource: "remote"`, que guarda esos contadores en los servidores de EAS en vez de en tu `app.config.ts`. La lección de versionado explica el detalle.
+
+<Callout kind="tip">
+  Los perfiles pueden heredar con `"extends": "production"`. Úsalo cuando dos perfiles solo difieren en un par de campos; evita que un cambio en producción se te olvide en el otro.
+</Callout>
+
+### El ciclo de un build
+
+Cuando ejecutas `eas build --profile preview --platform android`:
+
+1. La CLI comprueba que estás autenticado (`eas login`) y que el proyecto está vinculado a tu cuenta (`projectId` en la configuración).
+2. Sube el proyecto (respetando `.gitignore` y `.easignore`) a EAS.
+3. Un servidor de build instala dependencias, evalúa `app.config.ts` con las variables del perfil y del entorno, y ejecuta la compilación nativa.
+4. Firma el resultado con las credenciales de tu proyecto. La primera vez, la CLI te ofrece generarlas; la siguiente lección explica qué son.
+5. Publica el artefacto en el panel de Expo con un enlace de descarga y un código QR.
+
+Un build de Android tarda entre 5 y 15 minutos; uno de iOS algo más. El plan gratuito tiene una cuota mensual de builds y una cola con prioridad menor; revisa https://docs.expo.dev/build/introduction/ para el estado actual antes de planificar una entrega.
+
+### Builds locales
+
+`eas build --local` ejecuta el mismo proceso en tu máquina, con las mismas credenciales y el mismo `eas.json`. Necesita el toolchain nativo instalado (y macOS para iOS), así que no lo tomes como el camino principal: sirve para depurar un build que falla en la nube o cuando la cuota se agotó.
+
+## Práctica
+
+Sigue la sesión de terminal. Es la secuencia completa desde un proyecto sin `eas.json` hasta un `.apk` de preview.
+
+<Terminal
+  steps={[
+    { cmd: "npm install -g eas-cli && eas login", out: "✔ Logged in as <account>." },
+    { cmd: "eas build:configure", out: "✔ Linked to project @<account>/notes (ID: 4f8c1c2e-xxxx-xxxx-xxxx-xxxxxxxxxxxx)\n✔ Generated eas.json. Learn more: https://docs.expo.dev/build-reference/eas-json/\n\nYour project is ready to build.\n\n- Run eas build when you are ready to create your first build." },
+    { cmd: "eas build --profile preview --platform android", out: "✔ Using remote Android credentials (Expo server)\n✔ Generated a new Android Keystore\n✔ Uploaded to EAS 3s\n\nBuild details: https://expo.dev/accounts/<account>/projects/notes/builds/7d2e9b10-xxxx-xxxx-xxxx-xxxxxxxxxxxx\n\nWaiting for build to complete. You can press Ctrl+C to exit.\n✔ Build finished\n\nAndroid app:\nhttps://expo.dev/artifacts/eas/aBcDeFgHiJkLmNoPqRsTuV.apk" },
+    { cmd: "eas build:list --platform android --limit 1", out: "ID              7d2e9b10-xxxx-xxxx-xxxx-xxxxxxxxxxxx\nPlatform        Android\nStatus          finished\nProfile         preview\nDistribution    internal\nChannel         preview\nApp Version     1.0.0\nVersion code    1\nStarted at      2026-09-26 10:12:04\nFinished at     2026-09-26 10:21:47" },
+  ]}
+/>
+
+Antes de lanzar el primer build de la app de notas, comprueba:
+
+<Checklist
+  id="10-build-release-operaciones/02-eas-build-perfiles/pre-build"
+  items={[
+    "eas.json tiene los perfiles development, preview y production",
+    "Cada perfil declara distribution, channel, environment y env.APP_VARIANT",
+    "Solo development tiene developmentClient: true",
+    "preview usa android.buildType apk para instalarlo a mano en un teléfono",
+    "production usa distribution store y autoIncrement con appVersionSource remote",
+    "eas whoami muestra tu cuenta y el proyecto tiene projectId",
+    "El build de preview terminó y el .apk se instaló en un dispositivo Android",
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Perfil de preview para simulador"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type Profile = {
+  distribution: "internal" | "store";
+  channel: string;
+  environment: string;
+  env: Record<string, string>;
+  developmentClient?: boolean;
+  ios?: { simulator?: boolean };
+  android?: { buildType?: "apk" | "app-bundle" };
+};
+
+const preview: Profile = {
+  distribution: "internal",
+  channel: "preview",
+  environment: "preview",
+  env: { APP_VARIANT: "preview" },
+  android: { buildType: "apk" },
+};
+
+const previewSimulator: Profile = {
+  ...preview,
+  ios: { simulator: true },
+};
+
+console.log(JSON.stringify(previewSimulator, null, 2));`}
+    />
+  }
+>
+  Tu equipo de QA quiere probar la variante preview en el simulador de iOS sin tener iPhone. Partiendo del objeto `preview`, crea un perfil `previewSimulator` que conserve todo lo anterior y agregue `ios.simulator: true`. Imprímelo con `JSON.stringify` e identifica qué línea agregarías en `eas.json` (pista: en el archivo real usarías `"extends": "preview"` para no duplicar).
+</Challenge>
+
+## Errores comunes
+
+**Construir producción con `buildType: "apk"`.** Google Play rechaza la subida porque exige un Android App Bundle. Ocurre por copiar el bloque `android` del perfil de preview. Se detecta porque `eas submit` falla con un mensaje sobre el formato del archivo. Deja `buildType` solo en `preview` y no lo escribas en `production`.
+
+**Olvidar `environment` en un perfil.** El build usa `undefined` para las variables que creaste en EAS y la app apunta a `localhost` en producción. Se detecta en los logs del build: la sección de variables de entorno no lista las que esperabas. Cada perfil de build debe declarar su `environment`.
+
+**Esperar que el `.aab` se instale en el teléfono.** Descargas el artefacto de producción, lo copias al dispositivo y Android dice que no puede abrirlo. Ocurre porque el App Bundle es un formato para la tienda, no para instalar a mano. Si quieres probar en un dispositivo, usa el perfil `preview` con `apk` o instala desde Google Play internal testing.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué archivo define los perfiles de EAS Build y dónde vive?", back: "eas.json, en la raíz del proyecto junto a app.config.ts." },
+    { front: "¿Qué diferencia hay entre distribution internal y store en eas.json?", back: "internal genera un archivo instalable directamente en el dispositivo; store genera el formato que exigen las tiendas (.aab / .ipa para App Store Connect)." },
+    { front: "¿Qué campo de un perfil de eas.json conecta el build con las variables de entorno de EAS?", back: "environment, con el valor development, preview o production." },
+    { front: "¿Por qué el perfil preview de Android usa buildType apk?", back: "Porque el .apk se instala a mano en un teléfono; el .aab por defecto solo sirve para subirlo a Google Play." },
+    { front: "¿Qué hace developmentClient: true en un perfil?", back: "Compila la app con expo-dev-client (menú de desarrollo y conexión a Metro). Solo se usa en el perfil development." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué perfil produce el archivo que subirás a Google Play?",
+      options: [
+        { text: "development, porque incluye el cliente de desarrollo", correct: false, feedback: "El development build es para programar, no para la tienda." },
+        { text: "preview, porque genera un .apk", correct: false, feedback: "El .apk se instala a mano; Google Play exige un App Bundle." },
+        { text: "production, con distribution store y sin buildType apk", correct: true, feedback: "Correcto: genera el .aab que la tienda acepta." },
+      ],
+    },
+    {
+      prompt: "¿Para qué sirve el campo channel en un perfil de build?",
+      options: [
+        { text: "Para elegir el servidor de EAS donde se compila", correct: false, feedback: "El servidor lo elige EAS; channel no interviene." },
+        { text: "Para indicar a qué canal de actualizaciones OTA escuchará esa build", correct: true, feedback: "Correcto: cada build queda asociada a un canal y solo recibe las actualizaciones publicadas en él." },
+        { text: "Para nombrar el track de Google Play", correct: false, feedback: "El track se configura en la sección submit, no en build." },
+      ],
+    },
+    {
+      prompt: "Lanzas eas build --profile production y la app instalada apunta a http://localhost:3000. ¿Cuál es la causa más probable?",
+      options: [
+        { text: "El perfil production no declara environment y EAS no cargó las variables de producción", correct: true, feedback: "Correcto: sin environment, EXPO_PUBLIC_API_URL no existe en el build y el código cayó en su valor por defecto." },
+        { text: "El build usó distribution store", correct: false, feedback: "distribution afecta al formato del artefacto, no a las variables." },
+        { text: "autoIncrement cambió la URL", correct: false, feedback: "autoIncrement solo modifica buildNumber y versionCode." },
+      ],
+    },
+  ]}
+/>

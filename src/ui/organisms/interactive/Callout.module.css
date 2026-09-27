@@ -1,0 +1,45 @@
+.root {
+  display: flex;
+  gap: 16px;
+  background: var(--color-sand);
+  border-radius: var(--radius-l);
+  padding: 20px 24px;
+  margin: 24px 0;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--color-teal);
+}
+
+.root[data-kind='warning'] {
+  background: var(--color-warn-bg);
+}
+
+.root[data-kind='danger'] {
+  background: var(--color-error-bg);
+}
+
+.icon {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--color-white);
+  background: var(--color-teal);
+}
+
+.root[data-kind='warning'] .icon,
+.root[data-kind='danger'] .icon {
+  background: var(--color-accent);
+}
+
+.body > :first-child {
+  margin-top: 0;
+}
+
+.body > :last-child {
+  margin-bottom: 0;
+}

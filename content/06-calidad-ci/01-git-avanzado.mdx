@@ -1,0 +1,194 @@
+---
+id: "06-calidad-ci/01-git-avanzado"
+title: "Git avanzado: ramas, rebase y resolución de conflictos"
+stage: 6
+module: "Herramientas"
+order: 1
+minutes: 15
+prereqs: ["06-calidad-ci/00-eslint-prettier-y-ts-strict"]
+summary: "Trabaja en ramas de funcionalidad, actualízalas con rebase y resuelve conflictos sin perder trabajo."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás crear una rama de funcionalidad, actualizarla con `git rebase` sobre `main` y resolver un conflicto de forma segura.
+
+**Prerrequisitos:** `06-calidad-ci/00-eslint-prettier-y-ts-strict`
+
+## Concepto
+
+Imagina que escribes un capítulo de un libro en tu propio cuaderno mientras la editorial sigue corrigiendo la versión oficial. Cuando terminas, tienes dos opciones: entregar tu cuaderno junto con una nota que diga "esto se escribió en paralelo" o **copiar tus páginas encima de la última edición oficial**, como si hubieras empezado a escribir hoy. La primera opción es un **merge**; la segunda es un **rebase**. Si la editorial cambió la misma frase que tú, tendrás que decidir qué versión queda: eso es un **conflicto**.
+
+### Ramas de funcionalidad
+
+Una rama es un marcador móvil que apunta a un commit. Crear una rama es barato y no copia archivos. La práctica habitual es no trabajar nunca directamente sobre `main`: cada cambio vive en su propia rama hasta que se revisa.
+
+```bash
+git switch main
+git pull
+git switch -c feat/notes-search
+```
+
+`git switch -c` crea la rama y te mueve a ella en un solo paso. El nombre describe el propósito del cambio; muchos equipos usan un prefijo como `feat/` o `fix/`.
+
+### Merge y rebase
+
+Mientras trabajas, otras personas integran cambios en `main`. Tu rama queda "atrasada". Hay dos formas de traer esos cambios.
+
+**Merge** crea un commit nuevo que une las dos historias. No reescribe nada, pero la historia queda con bifurcaciones:
+
+```bash
+git switch feat/notes-search
+git merge main
+```
+
+**Rebase** toma tus commits y los vuelve a aplicar, uno por uno, encima del último commit de `main`. El resultado es una historia lineal, como si hubieras empezado tu rama hoy:
+
+```bash
+git fetch origin
+git rebase origin/main
+```
+
+Después de un rebase tus commits tienen identificadores nuevos, porque su "padre" cambió. Si ya habías publicado la rama, el servidor rechaza un `git push` normal. Debes usar:
+
+```bash
+git push --force-with-lease
+```
+
+`--force-with-lease` solo sobrescribe la rama remota si nadie más subió commits desde tu última descarga. `--force` sobrescribe sin preguntar y puede borrar el trabajo de otra persona.
+
+La regla de oro: **haz rebase solo de ramas que son tuyas**. Nunca hagas rebase de `main` ni de una rama compartida.
+
+### Anatomía de un conflicto
+
+Un conflicto ocurre cuando dos commits modifican las mismas líneas de un archivo. Git no adivina: detiene la operación y marca el archivo así:
+
+```text
+<<<<<<< HEAD
+const PAGE_SIZE = 20;
+=======
+const PAGE_SIZE = 50;
+>>>>>>> 3f2a91c (feat(notes): load more notes per page)
+```
+
+- Entre `<<<<<<<` y `=======` está la versión de la base sobre la que se aplica tu commit. Durante un rebase, `HEAD` es `main`, no tu rama. Durante un merge, `HEAD` es tu rama. Esta inversión confunde a casi todo el mundo la primera vez.
+- Entre `=======` y `>>>>>>>` está la versión que llega: durante un rebase, tu commit.
+
+Para resolverlo, editas el archivo hasta dejar el código correcto, borras los tres marcadores y le avisas a Git:
+
+```bash
+git add src/features/notes/constants.ts
+git rebase --continue
+```
+
+Si te pierdes, `git rebase --abort` devuelve la rama exactamente al estado anterior al rebase. Es tu botón de emergencia.
+
+### Ver la historia
+
+Para entender dónde estás, el comando más útil es:
+
+```bash
+git log --oneline --graph --all
+```
+
+Muestra cada commit en una línea y dibuja las ramas. Úsalo antes y después de un rebase para ver qué cambió.
+
+### Deshacer con red de seguridad
+
+Git casi nunca pierde commits. `git reflog` lista cada posición por la que pasó `HEAD`, incluso las que ya no aparecen en ninguna rama. Si un rebase salió mal y ya lo terminaste, busca en el reflog el commit anterior y crea una rama desde ahí.
+
+Guía oficial en español: https://git-scm.com/book/es/v2/Ramificaciones-en-Git-Procedimientos-B%C3%A1sicos-para-Ramificar-y-Fusionar
+
+## Práctica
+
+Sigue un rebase con conflicto de principio a fin.
+
+<Terminal
+  steps={[
+    { cmd: "git switch -c feat/notes-page-size", out: "Switched to a new branch 'feat/notes-page-size'" },
+    { cmd: "git commit -am \"feat(notes): load more notes per page\"", out: "[feat/notes-page-size 3f2a91c] feat(notes): load more notes per page\n 1 file changed, 1 insertion(+), 1 deletion(-)" },
+    { cmd: "git fetch origin && git rebase origin/main", out: "Auto-merging src/features/notes/constants.ts\nCONFLICT (content): Merge conflict in src/features/notes/constants.ts\nerror: could not apply 3f2a91c... feat(notes): load more notes per page\nhint: Resolve all conflicts manually, mark them as resolved with\nhint: \"git add/rm <conflicted_files>\", then run \"git rebase --continue\"." },
+    { cmd: "git status --short", out: "UU src/features/notes/constants.ts" },
+    { cmd: "cat src/features/notes/constants.ts", out: "<<<<<<< HEAD\nconst PAGE_SIZE = 20;\n=======\nconst PAGE_SIZE = 50;\n>>>>>>> 3f2a91c (feat(notes): load more notes per page)" },
+    { cmd: "git add src/features/notes/constants.ts && git rebase --continue", out: "[detached HEAD 8b7e0d4] feat(notes): load more notes per page\n 1 file changed, 1 insertion(+), 1 deletion(-)\nSuccessfully rebased and updated refs/heads/feat/notes-page-size." },
+    { cmd: "git log --oneline --graph -3", out: "* 8b7e0d4 (HEAD -> feat/notes-page-size) feat(notes): load more notes per page\n* a41c2e9 (origin/main, main) fix(notes): reduce page size\n* 77d03fb feat(notes): add pagination" },
+    { cmd: "git push --force-with-lease", out: "To github.com:ana/notes.git\n + 3f2a91c...8b7e0d4 feat/notes-page-size -> feat/notes-page-size (forced update)" },
+  ]}
+/>
+
+Antes de continuar el rebase del paso 6, el archivo se editó a mano para dejar una sola línea `const PAGE_SIZE = 50;` sin marcadores.
+
+<Checklist
+  id="06-calidad-ci/01-git-avanzado-rebase"
+  items={[
+    "Creé una rama de funcionalidad desde main actualizado",
+    "Hice rebase sobre origin/main y provoqué un conflicto",
+    "Resolví el conflicto y borré los tres marcadores",
+    "Continué el rebase con git rebase --continue",
+    "Publiqué la rama con git push --force-with-lease",
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Rebase interrumpido"
+  solution={
+    <Terminal
+      steps={[
+        { cmd: "git rebase origin/main", out: "CONFLICT (content): Merge conflict in src/app/index.tsx\nerror: could not apply c19d2a0... feat(notes): add empty state" },
+        { cmd: "git rebase --abort", out: "" },
+        { cmd: "git status", out: "On branch feat/notes-empty-state\nnothing to commit, working tree clean" },
+        { cmd: "git log --oneline -1", out: "c19d2a0 (HEAD -> feat/notes-empty-state) feat(notes): add empty state" },
+      ]}
+    />
+  }
+>
+  Estás a mitad de un rebase con un conflicto en `src/app/index.tsx` y no sabes qué versión es la correcta. Escribe la secuencia de comandos que devuelve la rama al estado exacto anterior al rebase y comprueba con `git status` y `git log` que no perdiste tu commit.
+</Challenge>
+
+## Errores comunes
+
+**Hacer rebase de una rama compartida.** Otra persona descarga la rama, tú haces rebase y `push --force`, y su historia deja de coincidir con la tuya: aparecen commits duplicados al integrar. Ocurre por aplicar el rebase fuera de las ramas propias. Se detecta cuando `git pull` en la otra máquina crea commits repetidos con el mismo mensaje.
+
+**Confundir los lados del conflicto durante un rebase.** Borras el bloque de `HEAD` pensando que es tu versión y en realidad borraste la de `main`. Pasa porque en un rebase `HEAD` es la base, no tu rama. Se detecta revisando el diff con `git diff origin/main` antes de hacer push.
+
+**Dejar marcadores en el código.** El archivo compila con errores de sintaxis o, peor, un `=======` queda dentro de una cadena. Ocurre al hacer `git add` sin revisar el archivo completo. Se detecta buscando los marcadores con `git diff --check`, que los reporta como error.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué diferencia hay entre git merge main y git rebase main en una rama de funcionalidad?", back: "Merge crea un commit que une las historias; rebase vuelve a aplicar tus commits encima de main y deja la historia lineal." },
+    { front: "¿Por qué conviene git push --force-with-lease en lugar de --force?", back: "Solo sobrescribe la rama remota si nadie más subió commits desde tu última descarga." },
+    { front: "Durante un rebase, ¿qué versión aparece bajo HEAD en un conflicto?", back: "La de la base (por ejemplo main); tu commit aparece después de =======." },
+    { front: "¿Qué comando devuelve la rama al estado anterior a un rebase en curso?", back: "git rebase --abort" },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Después de un rebase de tu rama ya publicada, git push es rechazado. ¿Qué haces?",
+      options: [
+        { text: "git push --force-with-lease", correct: true, feedback: "Correcto: los commits tienen nuevos identificadores y hay que reemplazar la rama remota de forma segura." },
+        { text: "git pull y luego git push", correct: false, feedback: "Eso mezcla la historia vieja con la nueva y duplica commits." },
+        { text: "Borrar la rama remota desde la web", correct: false, feedback: "Es innecesario y pierde la pull request asociada." },
+      ],
+    },
+    {
+      prompt: "¿Cuándo NO debes hacer rebase?",
+      options: [
+        { text: "Sobre tu rama de funcionalidad antes de abrir un PR", correct: false, feedback: "Ese es el caso ideal para rebase." },
+        { text: "Sobre main o una rama que otras personas usan", correct: true, feedback: "Correcto: reescribir historia compartida rompe el trabajo de los demás." },
+        { text: "Cuando main tiene commits nuevos", correct: false, feedback: "Justamente para eso sirve el rebase." },
+      ],
+    },
+    {
+      prompt: "Resolviste el conflicto en el editor. ¿Cuál es el siguiente paso?",
+      options: [
+        { text: "git commit -m \"fix conflict\"", correct: false, feedback: "Durante un rebase no se crea un commit aparte; se continúa la operación." },
+        { text: "git add del archivo y git rebase --continue", correct: true, feedback: "Correcto: git add marca el archivo como resuelto y --continue aplica el resto." },
+        { text: "git rebase --abort", correct: false, feedback: "Eso descarta todo el rebase, incluida tu resolución." },
+      ],
+    },
+  ]}
+/>

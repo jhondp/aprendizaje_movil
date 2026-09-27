@@ -1,0 +1,128 @@
+---
+id: "00-aprender-a-programar/03-vs-code-y-node"
+title: "VS Code y Node.js"
+stage: 0
+module: "Tu entorno"
+order: 3
+minutes: 15
+prereqs: ["00-aprender-a-programar/02-la-terminal"]
+summary: "Instala VS Code y Node.js, y ejecuta tu primer archivo JavaScript desde la terminal."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a tener VS Code y Node.js instalados, y vas a poder escribir un archivo `.js` y ejecutarlo desde la terminal.
+
+**Prerrequisitos:** `00-aprender-a-programar/02-la-terminal`
+
+## Concepto
+
+Hasta ahora ejecutaste código en el Playground de este curso, que corre en tu navegador. Pero para programar de verdad necesitas dos herramientas instaladas en tu computadora: un editor de código y un programa que ejecute JavaScript fuera del navegador.
+
+**VS Code** (Visual Studio Code) es un editor de código: un programa parecido a un procesador de texto, pero pensado para escribir código. Resalta la sintaxis con colores, te avisa de errores mientras escribes y tiene una terminal integrada, así no necesitas abrir una ventana aparte. Se instala descargando el instalador desde [code.visualstudio.com](https://code.visualstudio.com/docs) para tu sistema operativo (macOS, Windows o Linux) y siguiendo el asistente de instalación.
+
+**Node.js** es un programa que ejecuta JavaScript directamente en tu computadora, sin pasar por un navegador. Hasta la aparición de Node, JavaScript solo podía correr dentro de una página web. Piensa en el navegador como una cocina con reglas fijas, donde solo puedes preparar los platos que el menú permite; Node.js es como llevarte la misma hornalla a cualquier lugar y cocinar lo que quieras, incluyendo herramientas, servidores y scripts.
+
+Node.js se instala descargando el instalador desde [nodejs.org](https://nodejs.org/en/download) para tu sistema operativo. Elige siempre la versión **LTS** (Long Term Support, soporte de largo plazo): es la recomendada para aprender y para trabajar, porque recibe correcciones sin cambios bruscos. El número exacto de la versión LTS cambia con el tiempo, así que no memorices un número: entra a nodejs.org y usa el que la página te ofrezca como LTS en ese momento.
+
+### Comprobar que quedó instalado
+
+Después de instalar ambos programas, abre una terminal (en VS Code, con el menú Terminal o el atajo `Ctrl` + `` ` ``) y verifica las versiones instaladas. Este paso es igual en macOS, Windows y Linux, porque tanto `node` como `npm` (el gestor de paquetes que se instala junto con Node) quedan disponibles como comandos de terminal.
+
+### Ejecutar tu primer archivo
+
+Un archivo con extensión `.js` contiene código JavaScript. Para ejecutarlo con Node, escribes `node` seguido del nombre del archivo, por ejemplo `node hello.js`. Node lee el archivo de arriba hacia abajo (recuerda la secuencia de la lección 01) y ejecuta cada instrucción.
+
+```js
+// hello.js
+console.log("Hola desde mi primer script");
+console.log("Node.js ejecuta este mismo código en tu computadora");
+```
+
+Al correr `node hello.js` en la terminal, vas a ver esas dos líneas impresas, igual que en el Playground de este curso, solo que ahora se ejecutan en tu propia máquina.
+
+<Callout kind="tip">
+  El Playground de este curso simula la ejecución de JavaScript en tu navegador para que puedas practicar sin instalar nada. Node.js hace lo mismo, pero de verdad, en tu computadora, y es lo que vas a usar fuera de este curso.
+</Callout>
+
+## Práctica
+
+Primero, comprueba que Node y npm quedaron instalados:
+
+<Terminal
+  steps={[
+    { cmd: "node -v", out: "v22.11.0" },
+    { cmd: "npm -v", out: "10.9.0" },
+  ]}
+/>
+
+El número que veas puede ser distinto: lo importante es que aparezca una versión y no un error. Ahora ejecuta tu primer script en el Playground, que simula lo mismo que verías al correr `node hello.js` en tu terminal:
+
+<Playground
+  lang="js"
+  code={`console.log("Hola desde mi primer script");
+console.log("Node.js ejecuta este mismo código en tu computadora");`}
+  expected={`Hola desde mi primer script
+Node.js ejecuta este mismo código en tu computadora`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Tu primer archivo .js"
+  solution={
+    <Playground
+      lang="js"
+      code={`console.log("Mi nombre es Ana");
+console.log("Estoy aprendiendo a programar");`}
+    />
+  }
+>
+  En tu computadora, crea un archivo llamado `presentacion.js` con dos líneas `console.log`: una con tu nombre y otra con la frase "Estoy aprendiendo a programar". Ejecútalo con `node presentacion.js` en tu terminal. Aquí abajo reproduce el mismo resultado en el Playground.
+
+  <Playground lang="js" code={`// Escribe aquí tus dos instrucciones`} />
+</Challenge>
+
+## Errores comunes
+
+- **Ejecutar `node -v` antes de terminar la instalación o sin reiniciar la terminal.** El comando responde "command not found" o "no se reconoce como un comando". Cómo detectarlo: cierra y vuelve a abrir la terminal (o VS Code completo) después de instalar, y repite el comando.
+- **Escribir comandos en el editor de texto en lugar de la terminal.** VS Code tiene dos zonas distintas: el área donde escribes código y el panel de la terminal integrada. Cómo detectarlo: si "escribiste un comando" y no pasó nada, revisa si el cursor estaba en el panel de terminal (suele tener fondo oscuro y un símbolo `$` o `>`) y no en el archivo abierto.
+- **Ejecutar el archivo desde otra carpeta.** Si la terminal está parada en una carpeta distinta de la que contiene `presentacion.js`, `node presentacion.js` falla porque Node busca el archivo en la carpeta actual. Cómo detectarlo: el error dice "Cannot find module" seguido de una ruta que no es la de tu archivo; usa `pwd` y `ls` para ver dónde estás y `cd` para moverte a la carpeta correcta.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué es Node.js?", back: "Un programa que ejecuta JavaScript fuera del navegador, directamente en tu computadora." },
+    { front: "¿Qué versión de Node.js conviene instalar?", back: "La versión LTS (soporte de largo plazo), consultando el número actual en nodejs.org." },
+    { front: "¿Qué comando muestra la versión de Node instalada?", back: "node -v" },
+    { front: "¿Cómo se ejecuta un archivo llamado script.js con Node?", back: "Con el comando node script.js" },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Para qué sirve Node.js?",
+      options: [
+        { text: "Para ejecutar JavaScript fuera del navegador, en tu computadora", correct: true, feedback: "Correcto: eso es exactamente lo que hace Node.js." },
+        { text: "Para diseñar interfaces visuales", correct: false, feedback: "Eso no es lo que hace Node.js." },
+        { text: "Para reemplazar a VS Code", correct: false, feedback: "Node.js y VS Code cumplen roles distintos y se usan juntos." },
+      ],
+    },
+    {
+      prompt: "¿Qué versión de Node.js se recomienda instalar para aprender?",
+      options: [
+        { text: "La más nueva disponible, sin importar el tipo", correct: false, feedback: "No siempre es la más estable para empezar." },
+        { text: "La versión LTS (soporte de largo plazo)", correct: true, feedback: "Correcto: es la recomendada por su estabilidad." },
+        { text: "Cualquiera, no importa cuál", correct: false, feedback: "Sí importa: LTS reduce sorpresas mientras aprendes." },
+      ],
+    },
+    {
+      prompt: "Creaste un archivo llamado app.js. ¿Qué comando lo ejecuta con Node?",
+      options: [
+        { text: "node app.js", correct: true, feedback: "Correcto: node seguido del nombre del archivo, ejecutado desde la carpeta que lo contiene." },
+        { text: "open app.js", correct: false, feedback: "open abre el archivo con otra aplicación; no lo ejecuta con Node." },
+        { text: "run app.js", correct: false, feedback: "El comando para ejecutar con Node es node, no run." },
+      ],
+    },
+  ]}
+/>

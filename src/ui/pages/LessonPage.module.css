@@ -1,0 +1,11 @@
+.notFound {
+  padding: var(--page-gutter);
+}
+
+.loading {
+  color: var(--ink-55);
+}
+
+.error {
+  color: var(--color-error);
+}

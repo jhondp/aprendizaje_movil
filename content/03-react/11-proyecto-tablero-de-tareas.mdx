@@ -1,0 +1,342 @@
+---
+id: "03-react/11-proyecto-tablero-de-tareas"
+title: "Proyecto: tablero de tareas web"
+stage: 3
+module: "Composición"
+order: 11
+minutes: 30
+prereqs: ["03-react/10-formularios"]
+summary: "Construye un tablero de tareas web con tres columnas, formulario validado, movimiento entre columnas y filtro por texto, aplicando lo aprendido en la etapa."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a haber construido un tablero de tareas web en React y TypeScript, con tres columnas, un formulario validado para agregar tareas, botones para moverlas entre columnas, un filtro por texto, el estado elevado a un componente contenedor y al menos un custom hook.
+
+**Prerrequisitos:** `03-react/10-formularios`
+
+## Concepto
+
+Este proyecto retoma la app de consola que migraste a TypeScript en [`02-typescript/08-proyecto-migrar-a-ts`](/etapa/02-typescript/08-proyecto-migrar-a-ts): la misma idea de gestionar tareas con un `interface Task` y un `type` para su estado, pero ahora con una interfaz visual en el navegador en lugar de una lista impresa en la terminal. Cada pieza de este tablero ya la construiste por separado en las lecciones anteriores; este proyecto las combina en una sola aplicación.
+
+### Qué vas a construir
+
+Un tablero con tres columnas fijas — "Por hacer", "En progreso" y "Hecha" — donde cada tarea es una tarjeta que puede moverse de una columna a otra con un botón, en lugar de arrastrarse con el mouse. Un formulario en la parte superior agrega tareas nuevas directamente a "Por hacer", validando que el título tenga al menos tres caracteres. Un campo de texto filtra las tareas visibles por su título, en las tres columnas a la vez, sin perder las tareas que no coinciden con el filtro (siguen existiendo, solo no se muestran).
+
+### Cómo se conectan las piezas que ya conoces
+
+- **El modelo de datos** es una `interface Task` con `id`, `title` y `status` (`"todo" | "doing" | "done"`), el mismo tipo de unión literal que usaste en la etapa de TypeScript.
+- **El estado vive en un custom hook**, `useBoard()`, que encapsula el array de tareas, el texto del filtro, y las funciones `addTask` y `moveTask`. Es la misma técnica de la lección "Custom hooks": una función que empieza con `use` y que agrupa varios hooks (`useState`, `useRef` para generar ids) detrás de una API simple.
+- **Un componente contenedor**, `BoardContainer`, llama a `useBoard()` y le pasa los datos y las funciones a componentes presentational que no tienen estado propio de negocio: `TaskForm`, `Board` y `Column`. Es la separación de la lección "Composición y container/presentational".
+- **Las listas de tareas dentro de cada columna** se renderizan con `.map()` y `key={task.id}`, nunca con el índice, siguiendo la lección "Listas y keys": si movieras una tarea de columna, el índice dentro de cada columna cambiaría, pero el `id` de la tarea no.
+- **El formulario de agregar tarea** reutiliza el patrón de `onSubmit`, `preventDefault` y validación de la lección "Formularios".
+
+Documentación oficial de referencia para todo el proyecto: [react.dev/learn/thinking-in-react](https://react.dev/learn/thinking-in-react).
+
+## Práctica
+
+El siguiente Sandpack contiene el tablero completo y funcional. Agrega un par de tareas, muévelas entre columnas con los botones, y escribe en el campo de filtro para ver cómo se ocultan (sin eliminarse) las tareas que no coinciden.
+
+```tsx
+type Status = "todo" | "doing" | "done";
+
+interface Task {
+  id: string;
+  title: string;
+  status: Status;
+}
+
+const STATUS_ORDER: Status[] = ["todo", "doing", "done"];
+const STATUS_LABELS: Record<Status, string> = {
+  todo: "Por hacer",
+  doing: "En progreso",
+  done: "Hecha",
+};
+
+function useBoard() {
+  const [tasks, setTasks] = useState<Task[]>([
+    { id: "t1", title: "Diseñar el tablero", status: "done" },
+    { id: "t2", title: "Escribir el formulario", status: "doing" },
+    { id: "t3", title: "Conectar el filtro", status: "todo" },
+  ]);
+  const [query, setQuery] = useState("");
+  const nextId = useRef(4);
+
+  function addTask(title: string) {
+    setTasks((previous) => [...previous, { id: `t${nextId.current++}`, title, status: "todo" }]);
+  }
+
+  function moveTask(id: string, status: Status) {
+    setTasks((previous) => previous.map((task) => (task.id === id ? { ...task, status } : task)));
+  }
+
+  const visibleTasks = tasks.filter((task) =>
+    task.title.toLowerCase().includes(query.toLowerCase()),
+  );
+
+  return { tasks: visibleTasks, query, setQuery, addTask, moveTask };
+}
+```
+
+<Sandpack
+  files={{
+    '/App.tsx': `import { useRef, useState } from "react";
+
+type Status = "todo" | "doing" | "done";
+
+interface Task {
+  id: string;
+  title: string;
+  status: Status;
+}
+
+const STATUS_ORDER: Status[] = ["todo", "doing", "done"];
+const STATUS_LABELS: Record<Status, string> = {
+  todo: "Por hacer",
+  doing: "En progreso",
+  done: "Hecha",
+};
+
+function useBoard() {
+  const [tasks, setTasks] = useState<Task[]>([
+    { id: "t1", title: "Diseñar el tablero", status: "done" },
+    { id: "t2", title: "Escribir el formulario", status: "doing" },
+    { id: "t3", title: "Conectar el filtro", status: "todo" },
+  ]);
+  const [query, setQuery] = useState("");
+  const nextId = useRef(4);
+
+  function addTask(title: string) {
+    setTasks((previous) => [...previous, { id: \`t\${nextId.current++}\`, title, status: "todo" }]);
+  }
+
+  function moveTask(id: string, status: Status) {
+    setTasks((previous) => previous.map((task) => (task.id === id ? { ...task, status } : task)));
+  }
+
+  const visibleTasks = tasks.filter((task) =>
+    task.title.toLowerCase().includes(query.toLowerCase()),
+  );
+
+  return { tasks: visibleTasks, query, setQuery, addTask, moveTask };
+}
+
+function TaskForm({ onAdd }: { onAdd: (title: string) => void }) {
+  const [title, setTitle] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = title.trim();
+    if (trimmed.length < 3) {
+      setError("El título debe tener al menos 3 caracteres.");
+      return;
+    }
+    setError(null);
+    onAdd(trimmed);
+    setTitle("");
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Nueva tarea" />
+      <button type="submit">Agregar</button>
+      {error && <p role="alert" style={{ color: "crimson" }}>{error}</p>}
+    </form>
+  );
+}
+
+function Column({
+  status,
+  tasks,
+  onMove,
+}: {
+  status: Status;
+  tasks: Task[];
+  onMove: (id: string, status: Status) => void;
+}) {
+  return (
+    <div style={{ flex: 1, border: "1px solid #ccc", padding: 8, minWidth: 160 }}>
+      <h3>{STATUS_LABELS[status]}</h3>
+      <ul style={{ listStyle: "none", padding: 0 }}>
+        {tasks.map((task) => (
+          <li key={task.id} style={{ marginBottom: 8, borderBottom: "1px solid #eee" }}>
+            <p>{task.title}</p>
+            <div>
+              {STATUS_ORDER.filter((target) => target !== status).map((target) => (
+                <button key={target} onClick={() => onMove(task.id, target)}>
+                  → {STATUS_LABELS[target]}
+                </button>
+              ))}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function Board({ tasks, onMove }: { tasks: Task[]; onMove: (id: string, status: Status) => void }) {
+  return (
+    <div style={{ display: "flex", gap: 12 }}>
+      {STATUS_ORDER.map((status) => (
+        <Column
+          key={status}
+          status={status}
+          tasks={tasks.filter((task) => task.status === status)}
+          onMove={onMove}
+        />
+      ))}
+    </div>
+  );
+}
+
+function BoardContainer() {
+  const { tasks, query, setQuery, addTask, moveTask } = useBoard();
+  return (
+    <div>
+      <TaskForm onAdd={addTask} />
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Filtrar por texto"
+        style={{ margin: "8px 0" }}
+      />
+      <Board tasks={tasks} onMove={moveTask} />
+    </div>
+  );
+}
+
+export default function App() {
+  return <BoardContainer />;
+}`,
+  }}
+/>
+
+<Checklist
+  id="03-react/11-proyecto-tablero-de-tareas/requisitos"
+  items={[
+    "El tablero muestra tres columnas fijas: Por hacer, En progreso y Hecha",
+    "Un formulario controlado agrega una tarea nueva a 'Por hacer', validando un mínimo de 3 caracteres en el título",
+    "Cada tarea tiene botones para moverse a las otras columnas",
+    "Un campo de texto filtra las tareas visibles por título en las tres columnas, sin eliminar las que no coinciden",
+    "El estado de las tareas vive en un componente contenedor (o en un custom hook), no repetido en cada columna",
+    "Al menos un custom hook (por ejemplo useBoard) encapsula la lógica de estado del tablero",
+    "Cada tarea se renderiza con key={task.id}, nunca con el índice del array",
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Agregar eliminar tarea"
+  solution={
+    <Sandpack
+      files={{
+        '/App.tsx': `import { useRef, useState } from "react";
+
+type Status = "todo" | "doing" | "done";
+
+interface Task {
+  id: string;
+  title: string;
+  status: Status;
+}
+
+function useBoard() {
+  const [tasks, setTasks] = useState<Task[]>([
+    { id: "t1", title: "Diseñar el tablero", status: "todo" },
+    { id: "t2", title: "Escribir el formulario", status: "doing" },
+  ]);
+  const nextId = useRef(3);
+
+  function addTask(title: string) {
+    setTasks((previous) => [...previous, { id: \`t\${nextId.current++}\`, title, status: "todo" }]);
+  }
+
+  function removeTask(id: string) {
+    setTasks((previous) => previous.filter((task) => task.id !== id));
+  }
+
+  return { tasks, addTask, removeTask };
+}
+
+export default function App() {
+  const { tasks, addTask, removeTask } = useBoard();
+  const [title, setTitle] = useState("");
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (title.trim().length < 3) return;
+    addTask(title.trim());
+    setTitle("");
+  }
+
+  return (
+    <div>
+      <form onSubmit={handleSubmit}>
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Nueva tarea" />
+        <button type="submit">Agregar</button>
+      </form>
+      <ul>
+        {tasks.map((task) => (
+          <li key={task.id}>
+            {task.title} <button onClick={() => removeTask(task.id)}>Eliminar</button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}`,
+      }}
+    />
+  }
+>
+  Al `useBoard` del tablero, agrégale una función `removeTask(id)` que elimine una tarea filtrando el array por `id` (nunca mutando el array original con `splice` o similar). Agrega un botón "Eliminar" en cada tarjeta de tarea que la llame con el `id` correspondiente.
+</Challenge>
+
+## Errores comunes
+
+**Guardar el resultado filtrado como el nuevo estado en lugar de derivarlo en cada render.** Si al escribir en el campo de filtro reemplazaras `tasks` con el array ya filtrado (en vez de mantener `tasks` completo y calcular `visibleTasks` aparte, como en `useBoard`), las tareas que no coinciden con el filtro se perderían para siempre, no solo se ocultarían. Se detecta borrando el texto del filtro: si las tareas que "desaparecieron" no vuelven a aparecer, el filtro está mutando el estado real en lugar de derivar una vista.
+
+**Mover una tarea "adivinando" su posición en el array en lugar de identificarla por `id`.** Si `moveTask` recibiera un índice de columna en lugar del `id` de la tarea, mover una tarea en una columna filtrada movería la tarea equivocada, porque el índice visible (después de filtrar) no coincide con la posición real en el array completo. Se detecta escribiendo algo en el filtro y moviendo una tarea visible: si se mueve otra tarea distinta a la esperada, la función está usando la posición en lugar del `id`.
+
+**Repetir la lógica de agregar o mover tareas en cada componente en lugar de centralizarla en `useBoard`.** Si `TaskForm` o `Column` manipularan el array de tareas directamente en lugar de llamar a `addTask` o `onMove` recibidos por props, tendrías la misma lógica duplicada en varios lugares y un bug en uno no se corregiría en el otro. Se detecta revisando si más de un componente contiene su propia copia de `setTasks` para la misma lista.
+
+<Flashcards
+  cards={[
+    { front: "¿Dónde vive el estado de las tareas en este proyecto?", back: "En el custom hook useBoard, consumido por el componente contenedor BoardContainer." },
+    { front: "¿Por qué filtrar las tareas para mostrarlas no debe reemplazar el array de estado original?", back: "Porque perderías para siempre las tareas que no coinciden con el filtro; el filtro debe ser una vista derivada, no una mutación del estado." },
+    { front: "¿Por qué cada tarjeta de tarea se identifica por task.id y no por su posición en el array?", back: "Porque la posición cambia según el filtro y la columna, mientras que el id identifica siempre a la misma tarea sin importar dónde se muestre." },
+    { front: "¿Qué patrón de la etapa reutiliza la separación entre BoardContainer y Column/Board/TaskForm?", back: "Container/presentational: el contenedor tiene el estado y la lógica, los demás componentes solo reciben props." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué problema aparece si guardas el resultado del filtro como el nuevo estado de tasks?",
+      options: [
+        { text: "Ninguno, es la forma correcta de filtrar", correct: false, feedback: "Perderías las tareas que no coinciden con el filtro en cuanto reemplazaras el estado con la lista filtrada." },
+        { text: "Las tareas que no coinciden con el filtro se pierden en lugar de solo ocultarse", correct: true, feedback: "Correcto: por eso el filtro se deriva en cada render a partir del estado completo, sin reemplazarlo." },
+        { text: "El formulario deja de poder agregar tareas nuevas", correct: false, feedback: "El formulario seguiría funcionando; el problema es que las tareas filtradas desaparecerían de forma permanente." },
+      ],
+    },
+    {
+      prompt: "¿Por qué moveTask recibe el id de la tarea en lugar de su posición en el array visible?",
+      options: [
+        { text: "Porque la posición visible cambia según el filtro y no identifica de forma confiable a la tarea real", correct: true, feedback: "Correcto: el id es estable sin importar cuántas tareas estén ocultas por el filtro." },
+        { text: "Porque TypeScript no permite pasar números como argumento", correct: false, feedback: "TypeScript acepta números perfectamente; el problema es de identidad de datos, no de tipos." },
+        { text: "Porque los arrays de JavaScript no tienen índices", correct: false, feedback: "Los arrays sí tienen índices; el problema es que ese índice no identifica de forma estable a una tarea concreta." },
+      ],
+    },
+    {
+      prompt: "¿Qué responsabilidad tiene BoardContainer que Column y TaskForm no tienen?",
+      options: [
+        { text: "Decidir los estilos CSS de cada columna", correct: false, feedback: "Los estilos viven en los componentes presentational que arman el JSX visible." },
+        { text: "Llamar a useBoard y pasar los datos y funciones resultantes como props a los demás componentes", correct: true, feedback: "Correcto: BoardContainer conecta la lógica de estado con la parte presentational, siguiendo el patrón container/presentational." },
+        { text: "Definir el tipo Task y el tipo Status", correct: false, feedback: "Esos tipos son compartidos por todo el archivo; no son una responsabilidad exclusiva del contenedor." },
+      ],
+    },
+  ]}
+/>

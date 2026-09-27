@@ -1,0 +1,271 @@
+---
+id: "11-capstone/03-publicar-y-presentar"
+title: "Publicar y presentar"
+stage: 11
+module: "Entrega"
+order: 3
+minutes: 25
+prereqs: ["11-capstone/02-rubrica-y-checklist-final", "10-build-release-operaciones/11-proyecto-publicar"]
+summary: "Publica tu app en las pruebas internas de ambas tiendas, escribe un README con capturas, agrega una pantalla Acerca de y presenta tu trabajo en 5 minutos."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás llevar tu app a las pruebas internas de ambas tiendas, documentarla con un README que otra persona entienda y presentarla en una demo de 5 minutos.
+
+**Prerrequisitos:** `11-capstone/02-rubrica-y-checklist-final`, `10-build-release-operaciones/11-proyecto-publicar`
+
+## Concepto
+
+Una app que nadie puede instalar ni entender no está terminada, aunque su código sea excelente. Esta última lección cubre tres entregas: la publicación, el README y la presentación. La publicación repite el runbook de [Proyecto: publicar la app en ambas tiendas](/etapa/10-build-release-operaciones/11-proyecto-publicar), ahora con tu propia app.
+
+### La inauguración de una exposición
+
+Un pintor puede pasar meses en su taller, pero la exposición se juzga el día de la inauguración. Ese día importan tres cosas: que los cuadros estén colgados (la app instalable), que cada uno tenga su ficha con título, técnica y año (el README y la pantalla Acerca de) y que el artista pueda contar en pocos minutos qué buscaba (la demo). Si falta cualquiera de las tres, el público se va sin entender la obra.
+
+### Publicar: el runbook resumido
+
+Ya hiciste este recorrido en la etapa 10. Para tu app, el orden es:
+
+```bash
+# 1. Production builds for both platforms
+eas build --profile production --platform all
+
+# 2. Send them to TestFlight and to Play internal testing
+eas submit --platform ios --latest
+eas submit --platform android --latest
+
+# 3. Ship one OTA update to prove the update channel works
+eas update --channel production --environment production --message "fix: copy on the empty state"
+```
+
+Antes de enviar, confirma lo que las tiendas revisan con más frecuencia: la URL de la política de privacidad, las etiquetas de privacidad que coinciden con tu clasificación de datos, textos de permisos que explican para qué se usa cada uno y una cuenta de prueba si la app requiere inicio de sesión. Los detalles están en [Ficha de la tienda y proceso de revisión](/etapa/10-build-release-operaciones/06-store-listing-y-revision) y en la documentación de EAS Submit: https://docs.expo.dev/submit/introduction/.
+
+### La pantalla Acerca de
+
+Una pantalla Acerca de es la ficha del cuadro dentro de la app. Muestra el nombre, la versión y el número de build (lo primero que te pedirá alguien que reporta un error), la descripción en una frase, enlaces a la política de privacidad, al código fuente y a las licencias de terceros, y un contacto. La política de privacidad dentro de la app no es un adorno: las tiendas piden que sea accesible para el usuario.
+
+En tu app real, la versión no se escribe a mano: se lee de la configuración con `expo-constants` o `expo-application`, para que siempre coincida con la build instalada. En la práctica de abajo va como constante para que el ejemplo no dependa de paquetes externos.
+
+### El README
+
+El README es lo primero que ve cualquiera que abra tu repositorio. GitHub lo muestra en la portada del proyecto y explica su propósito en https://docs.github.com/es/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-readmes. Una estructura que funciona:
+
+```markdown
+# Habit Tracker
+
+Mark a daily habit in one tap and keep your streak visible.
+
+![Home screen](docs/screenshots/home.png) ![Habit detail](docs/screenshots/detail.png)
+
+## Problem
+People who want to build a habit forget it after the first week.
+
+## Features
+- Mark today's habit, see the current streak, daily reminder.
+
+## Architecture
+Feature folders (habits, reminders, auth) with domain, application,
+infrastructure and ui layers. See docs/threat-model.md and docs/rubric.md.
+
+## Run it locally
+pnpm install
+cp .env.example .env   # fill EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY
+npx expo start
+
+## Quality
+[![CI](https://github.com/your-user/habit-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/your-user/habit-tracker/actions)
+```
+
+Las capturas van en `docs/screenshots/` y se toman de un dispositivo o simulador real, con datos de ejemplo, nunca con datos personales. Si tus capturas de la ficha de la tienda ya existen, reutilízalas.
+
+### El guion de demo de 5 minutos
+
+Una demo sin guion termina en diez minutos de navegar pantallas al azar. Escribe el guion y ensáyalo con cronómetro:
+
+| Minuto | Contenido |
+| --- | --- |
+| 0:00 a 0:45 | El problema en una frase y para quién es la app |
+| 0:45 a 2:30 | Las tres historias de usuario en vivo, en un teléfono con la build de TestFlight o de Play |
+| 2:30 a 3:30 | La arquitectura: el árbol de carpetas y una regla de dominio con su prueba |
+| 3:30 a 4:30 | Calidad y seguridad: CI en verde, RLS con un segundo usuario, evento de Sentry sin datos personales |
+| 4:30 a 5:00 | Qué aprendiste y qué sigue (tu lista de fuera de alcance es la versión 1.1) |
+
+Prepara un plan B: si la red falla, muestra una grabación de pantalla de las historias. Una demo en vivo que se cae consume los 5 minutos.
+
+## Práctica
+
+Esta es la pantalla Acerca de del registro de hábitos. Adáptala a tu app: nombre, descripción, enlaces reales y contacto.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  code={`import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+
+const APP = {
+  name: "Hábitos",
+  version: "1.0.0",
+  build: "12",
+  sourceUrl: "https://github.com/your-user/habit-tracker",
+  privacyUrl: "https://example.com/privacy",
+  contact: "support@example.com",
+};
+
+const links = [
+  { label: "Política de privacidad", url: APP.privacyUrl },
+  { label: "Código fuente", url: APP.sourceUrl },
+  { label: "Licencias de terceros", url: APP.sourceUrl + "/blob/main/LICENSES.md" },
+];
+
+export default function App() {
+  return (
+    <ScrollView contentContainerStyle={styles.container}>
+      <View style={styles.logo}>
+        <Text style={styles.logoText}>H</Text>
+      </View>
+      <Text style={styles.name} accessibilityRole="header">{APP.name}</Text>
+      <Text style={styles.version}>Versión {APP.version} (build {APP.build})</Text>
+      <Text style={styles.body}>
+        Marca tus hábitos diarios con un toque y mantén visible tu racha. Tus datos se guardan en tu cuenta y no se comparten con terceros.
+      </Text>
+      {links.map((link) => (
+        <Pressable
+          key={link.label}
+          accessibilityRole="link"
+          onPress={() => Linking.openURL(link.url)}
+          style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+        >
+          <Text style={styles.rowText}>{link.label}</Text>
+          <Text style={styles.chevron}>›</Text>
+        </Pressable>
+      ))}
+      <Text style={styles.footer}>Contacto: {APP.contact}</Text>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { paddingTop: 72, paddingHorizontal: 20, paddingBottom: 40, alignItems: "stretch" },
+  logo: { alignSelf: "center", width: 72, height: 72, borderRadius: 18, backgroundColor: "#10484a", justifyContent: "center", alignItems: "center" },
+  logoText: { color: "#fff", fontSize: 32, fontWeight: "700" },
+  name: { marginTop: 12, textAlign: "center", fontSize: 24, fontWeight: "700" },
+  version: { marginTop: 4, textAlign: "center", color: "#666" },
+  body: { marginVertical: 20, fontSize: 16, lineHeight: 22, color: "#333" },
+  row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: "#ccc" },
+  rowPressed: { opacity: 0.5 },
+  rowText: { fontSize: 16 },
+  chevron: { fontSize: 20, color: "#999" },
+  footer: { marginTop: 24, textAlign: "center", color: "#666" },
+});`}
+/>
+
+Marca cada punto cuando esté hecho en tu proyecto.
+
+<Checklist
+  id="11-capstone/03-publicar-y-presentar/entrega"
+  items={[
+    "La build de producción de iOS está en TestFlight y un tester interno la instaló",
+    "La build de producción de Android está en las pruebas internas de Google Play y un tester la instaló",
+    "La ficha de cada tienda tiene URL de política de privacidad, etiquetas de privacidad y cuenta de prueba si la app requiere inicio de sesión",
+    "Publiqué una actualización OTA con eas update y la vi llegar a un dispositivo",
+    "La app tiene una pantalla Acerca de con versión, build, política de privacidad, licencias y contacto",
+    "El README explica el problema, las funciones, la arquitectura y cómo ejecutar el proyecto",
+    "El README muestra al menos dos capturas tomadas con datos de ejemplo, guardadas en docs/screenshots",
+    "El README muestra el badge de CI de la rama principal",
+    "Escribí el guion de demo con los cinco bloques y los tiempos de cada uno",
+    "Ensayé la demo con cronómetro y dura 5 minutos o menos",
+    "Tengo una grabación de pantalla de las tres historias como plan B"
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Genera la entrada del changelog"
+  solution={
+    <Playground
+      lang="ts"
+      code={`const commits = [
+  "feat(habits): add weekly streak view",
+  "fix(habits): keep the streak when the timezone changes",
+  "chore: bump dependencies",
+  "feat(auth): add biometric lock",
+  "docs: add screenshots to README",
+];
+
+function describe(message: string): string {
+  const separator = message.indexOf(": ");
+  const header = message.slice(0, separator);
+  const text = message.slice(separator + 2);
+  const open = header.indexOf("(");
+  const scope = open === -1 ? "" : header.slice(open + 1, header.indexOf(")")) + ": ";
+  return "- " + scope + text;
+}
+
+function buildChangelog(version: string, date: string, messages: string[]): string[] {
+  const added = messages.filter((m) => m.startsWith("feat")).map(describe);
+  const fixed = messages.filter((m) => m.startsWith("fix")).map(describe);
+  const lines = ["## " + version + " - " + date];
+  if (added.length > 0) lines.push("### Added", ...added);
+  if (fixed.length > 0) lines.push("### Fixed", ...fixed);
+  return lines;
+}
+
+buildChangelog("1.1.0", "2026-09-26", commits).forEach((line) => console.log(line));`}
+      expected={`## 1.1.0 - 2026-09-26
+### Added
+- habits: add weekly streak view
+- auth: add biometric lock
+### Fixed
+- habits: keep the streak when the timezone changes`}
+    />
+  }
+>
+  Antes de presentar, tu `CHANGELOG.md` debe tener la entrada de la versión que publicaste. Escribe una función `buildChangelog(version, date, messages)` que reciba mensajes de commits convencionales y devuelva las líneas de la entrada: un título con versión y fecha, una sección `### Added` con los `feat` y una sección `### Fixed` con los `fix`. Cada línea muestra el scope, si existe, seguido del texto del commit. Los commits `chore` y `docs` no aparecen. Imprime cada línea con `console.log`.
+</Challenge>
+
+## Errores comunes
+
+**Enviar a revisión sin cuenta de prueba.** Se ve como un rechazo de la revisión de Apple o de Google porque el revisor no pudo pasar la pantalla de inicio de sesión. Ocurre porque tú siempre entras con tu cuenta y olvidas que el revisor no tiene una. Se detecta leyendo el motivo del rechazo en App Store Connect o en Play Console; se evita creando una cuenta de prueba con datos de ejemplo y escribiéndola en las notas de revisión.
+
+**Capturas con datos personales o de desarrollo.** Se ve como capturas del README o de la tienda que muestran tu correo real, nombres de amigos o textos como "test test". Ocurre porque se toman en el mismo dispositivo donde desarrollas. Se detecta revisando cada captura antes de subirla; se evita con un usuario de demostración y datos de ejemplo creíbles.
+
+**Una demo que recorre pantallas en lugar de historias.** Se ve como "esta es la pantalla de inicio, esta es la de ajustes, esta es la de perfil", sin explicar para qué sirve cada una. Ocurre porque se improvisa. Se detecta ensayando con cronómetro: si a los 3 minutos todavía no mostraste la historia 1 funcionando, reordena el guion alrededor de las historias.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué información mínima debe mostrar la pantalla Acerca de de una app móvil?", back: "Nombre, versión y build, una descripción breve, enlaces a la política de privacidad y a las licencias, y un contacto." },
+    { front: "¿Qué secciones debe tener el README de un proyecto de app móvil?", back: "El problema, capturas, funciones, arquitectura, cómo ejecutarlo localmente y el estado de CI." },
+    { front: "¿Cómo se reparten los 5 minutos de una demo de proyecto final?", back: "Problema, historias en vivo, arquitectura, calidad y seguridad, y cierre con lo aprendido y lo que sigue." },
+    { front: "¿Por qué la versión de la pantalla Acerca de no se escribe a mano en una app real?", back: "Porque debe coincidir con la build instalada; se lee de la configuración con expo-constants o expo-application." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Tu app requiere inicio de sesión. ¿Qué debes incluir al enviarla a revisión en las tiendas?",
+      options: [
+        { text: "Nada: el revisor puede crear su propia cuenta", correct: false, feedback: "Si el registro requiere verificación o datos previos, el revisor no podrá avanzar y rechazará la app." },
+        { text: "Una cuenta de prueba con datos de ejemplo en las notas de revisión", correct: true, feedback: "Correcto: el revisor necesita ver la app funcionando detrás del inicio de sesión." },
+        { text: "Tu cuenta personal para que vea datos reales", correct: false, feedback: "Nunca compartas tu cuenta personal ni datos reales; crea una cuenta de demostración." }
+      ]
+    },
+    {
+      prompt: "¿Qué comando envía a TestFlight la última build de iOS construida con EAS?",
+      options: [
+        { text: "eas build --platform ios", correct: false, feedback: "Ese comando construye la app, no la envía a la tienda." },
+        { text: "eas update --channel production --environment production", correct: false, feedback: "Ese comando publica una actualización OTA, no una build." },
+        { text: "eas submit --platform ios --latest", correct: true, feedback: "Correcto: eas submit envía la build a App Store Connect, desde donde llega a TestFlight." }
+      ]
+    },
+    {
+      prompt: "A los 3 minutos de ensayo de tu demo todavía estás mostrando pantallas de ajustes. ¿Qué haces?",
+      options: [
+        { text: "Reordenar el guion para mostrar primero las historias de usuario en vivo", correct: true, feedback: "Correcto: la demo gira alrededor de los problemas que resuelve la app, no de cada pantalla." },
+        { text: "Hablar más rápido para que entre todo", correct: false, feedback: "El problema es el orden y el contenido, no la velocidad." },
+        { text: "Extender la demo a 10 minutos", correct: false, feedback: "El límite de 5 minutos obliga a priorizar lo que importa." }
+      ]
+    }
+  ]}
+/>

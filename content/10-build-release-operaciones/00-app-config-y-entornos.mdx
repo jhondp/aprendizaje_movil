@@ -1,0 +1,238 @@
+---
+id: "10-build-release-operaciones/00-app-config-y-entornos"
+title: "app.config.ts y entornos"
+stage: 10
+module: "Configuración"
+order: 0
+minutes: 15
+prereqs: ["09-seguridad-movil/09-proyecto-auditoria"]
+summary: "Convierte app.json en un app.config.ts dinámico que produce variantes development, preview y production de la misma app."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás escribir un `app.config.ts` que lea la variable `APP_VARIANT` y produzca un nombre, un bundle identifier y un package name distintos para cada entorno, de modo que las tres variantes convivan instaladas en el mismo teléfono.
+
+**Prerrequisitos:** `09-seguridad-movil/09-proyecto-auditoria`
+
+## Concepto
+
+Hasta ahora tu app tenía una sola identidad: el `app.json` que creó `create-expo-app`. Para publicarla necesitas al menos tres identidades de la misma app: la que usas para desarrollar, la que le mandas a quienes prueban, y la que sube a las tiendas.
+
+Piensa en un uniforme de trabajo. Es la misma prenda, pero la etiqueta con el nombre cambia según quién la lleva: "Ana (práctica)", "Ana (turno de prueba)", "Ana". Si todas las etiquetas dijeran solo "Ana", nadie sabría cuál es cuál y no podrías colgar dos en el mismo casillero. En Android e iOS el casillero es el identificador de la app: dos apps con el mismo `bundleIdentifier` o `package` no pueden instalarse juntas. Por eso cada **variante** necesita su propio identificador.
+
+### De app.json a app.config.ts
+
+Expo lee la configuración desde `app.json` (estático) o desde `app.config.js` / `app.config.ts` (dinámico). La versión dinámica es una función que recibe la configuración estática y devuelve la definitiva. La documentación oficial está en https://docs.expo.dev/workflow/configuration/.
+
+```ts
+// app.config.ts
+import type { ConfigContext, ExpoConfig } from "expo/config";
+import { version } from "./package.json";
+
+const variant = process.env.APP_VARIANT ?? "development";
+
+const isDev = variant === "development";
+const isPreview = variant === "preview";
+
+function getIdentifier(): string {
+  if (isDev) return "com.example.notes.dev";
+  if (isPreview) return "com.example.notes.preview";
+  return "com.example.notes";
+}
+
+function getName(): string {
+  if (isDev) return "Notes (Dev)";
+  if (isPreview) return "Notes (Preview)";
+  return "Notes";
+}
+
+export default ({ config }: ConfigContext): ExpoConfig => ({
+  ...config,
+  name: getName(),
+  slug: "notes",
+  version, // single source of truth: package.json
+  ios: {
+    ...config.ios,
+    bundleIdentifier: getIdentifier(),
+  },
+  android: {
+    ...config.android,
+    package: getIdentifier(),
+  },
+  extra: {
+    ...config.extra,
+    variant,
+  },
+});
+```
+
+Tres cosas que conviene notar:
+
+- `process.env.APP_VARIANT` se lee **cuando se evalúa la configuración**, es decir, en tu máquina al ejecutar `npx expo start` o en el servidor de EAS al construir. No es una variable que la app lea en tiempo de ejecución.
+- El identificador sigue la notación de dominio invertido (`com.example.notes`). Reemplaza `com.example` por tu propio dominio o nombre; una vez publicada la app, ese valor no se puede cambiar.
+- `version` se lee de `package.json`, así hay un solo lugar donde cambia: `npm version 1.1.0` actualiza a la vez la versión del paquete y la de la app (y, en la lección de EAS Update, la runtime version que depende de ella).
+- `extra` es un espacio libre para valores que sí quieres leer en tiempo de ejecución. Se consulta con `Constants.expoConfig?.extra` desde `expo-constants`. `extra` es **público**: viaja dentro de la app y cualquiera lo ve con `npx expo config --type public`, así que nunca pongas ahí un secreto.
+
+<Callout kind="warning">
+  Una vez que tienes `app.config.ts`, las herramientas de Expo dejan de modificar tu configuración automáticamente (por ejemplo, `eas update:configure` te pedirá que agregues campos a mano). Es el precio de la flexibilidad.
+</Callout>
+
+### Los tres entornos
+
+| Variante      | Quién la usa                    | Cómo se instala                              |
+| ------------- | ------------------------------- | -------------------------------------------- |
+| `development` | Tú, mientras programas          | Development build con `expo-dev-client`      |
+| `preview`     | Testers internos, QA, tu equipo | Build de distribución interna (.apk / .ipa)  |
+| `production`  | Usuarios finales                | Tiendas (App Store, Google Play)             |
+
+La variante `development` merece una aclaración. Expo Go sirve para aprender, pero no puede cargar código nativo que no venga incluido en él. Un **development build** es tu propia app compilada con `expo-dev-client`, que agrega el menú de desarrollo y la conexión a Metro. Se instala con:
+
+```sh
+npx expo install expo-dev-client
+```
+
+Con el paquete instalado, `npx expo start` muestra un código QR que abre tu development build en lugar de Expo Go.
+
+### Verificar qué configuración se resuelve
+
+Como el archivo ahora tiene lógica, conviene comprobar el resultado antes de construir. El comando `npx expo config --type public` imprime la configuración final tal como la verá la app:
+
+```sh
+APP_VARIANT=preview npx expo config --type public
+```
+
+En Windows con PowerShell la sintaxis es `$env:APP_VARIANT="preview"; npx expo config --type public`. En la siguiente lección verás cómo EAS define `APP_VARIANT` por ti en cada perfil, para que no dependas de escribirla a mano.
+
+### Leer valores en tiempo de ejecución
+
+Nunca importes `app.json` o `app.config.ts` desde el código de la app: obtendrías el archivo sin procesar. Usa `expo-constants`:
+
+```tsx
+import Constants from "expo-constants";
+
+const variant = Constants.expoConfig?.extra?.variant ?? "production";
+```
+
+Esto te permite, por ejemplo, mostrar una franja "PREVIEW" en la pantalla de inicio para que nadie confunda una build de prueba con la de producción.
+
+## Práctica
+
+Sigue la sesión de terminal paso a paso. Fíjate en cómo cambia el nombre resuelto según la variable.
+
+<Terminal
+  steps={[
+    { cmd: "npx expo install expo-dev-client expo-constants", out: "› Installing 2 SDK 57.0.0 compatible native modules using npm\n> npm install expo-dev-client@~57.0.19 expo-constants@~57.0.19" },
+    { cmd: "npx expo config --type public | head -n 6", out: "{\n  \"name\": \"Notes (Dev)\",\n  \"slug\": \"notes\",\n  \"version\": \"1.0.0\",\n  \"ios\": {\n    \"bundleIdentifier\": \"com.example.notes.dev\"," },
+    { cmd: "APP_VARIANT=preview npx expo config --type public | head -n 6", out: "{\n  \"name\": \"Notes (Preview)\",\n  \"slug\": \"notes\",\n  \"version\": \"1.0.0\",\n  \"ios\": {\n    \"bundleIdentifier\": \"com.example.notes.preview\"," },
+    { cmd: "APP_VARIANT=preview npx expo start", out: "Starting project at /home/dev/notes\nStarting Metro Bundler\n› Metro waiting on exp+notes://expo-development-client/?url=http%3A%2F%2F192.168.1.10%3A8081\n› Scan the QR code above with Expo Go (Android) or the Camera app (iOS)\n› Using development build" },
+  ]}
+/>
+
+La lógica de `getIdentifier` es JavaScript puro. Ejecútala aquí sin Expo y comprueba que cada variante produce un identificador distinto.
+
+<Playground
+  lang="ts"
+  code={`type Variant = "development" | "preview" | "production";
+
+function getIdentifier(variant: Variant): string {
+  if (variant === "development") return "com.example.notes.dev";
+  if (variant === "preview") return "com.example.notes.preview";
+  return "com.example.notes";
+}
+
+const variants: Variant[] = ["development", "preview", "production"];
+for (const v of variants) {
+  console.log(v + " -> " + getIdentifier(v));
+}`}
+  expected={`development -> com.example.notes.dev
+preview -> com.example.notes.preview
+production -> com.example.notes`}
+/>
+
+<Checklist
+  id="10-build-release-operaciones/00-app-config-y-entornos/variantes"
+  items={[
+    "app.json fue reemplazado por app.config.ts con la función que recibe ConfigContext",
+    "APP_VARIANT decide name, ios.bundleIdentifier y android.package",
+    "Las tres variantes tienen identificadores distintos y el de production no lleva sufijo",
+    "expo-dev-client está instalado y npx expo start abre el development build",
+    "npx expo config --type public muestra la variante esperada con y sin APP_VARIANT",
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Nombre visible por variante"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type Variant = "development" | "preview" | "production";
+
+function getName(variant: Variant): string {
+  if (variant === "development") return "Notes (Dev)";
+  if (variant === "preview") return "Notes (Preview)";
+  return "Notes";
+}
+
+function resolveConfig(variant: Variant) {
+  return {
+    name: getName(variant),
+    extra: { variant },
+  };
+}
+
+console.log(JSON.stringify(resolveConfig("development")));
+console.log(JSON.stringify(resolveConfig("production")));`}
+    />
+  }
+>
+  Escribe una función `getName(variant)` que devuelva `"Notes (Dev)"`, `"Notes (Preview)"` o `"Notes"` según la variante, y una función `resolveConfig(variant)` que devuelva un objeto con `name` y `extra.variant`. Imprime el resultado para `development` y `production` con `JSON.stringify`. Después traslada ambas funciones a tu `app.config.ts` real.
+</Challenge>
+
+## Errores comunes
+
+**Cambiar el identificador después de publicar.** Se ve como una app "nueva" en la tienda y los usuarios no reciben la actualización. Ocurre porque las tiendas identifican la app por `bundleIdentifier` / `package`, no por el nombre. Se detecta porque la consola de la tienda rechaza la subida o crea un registro distinto. Decide el identificador de producción antes de la primera subida y no lo toques.
+
+**Leer `process.env.APP_VARIANT` dentro de un componente.** Devuelve `undefined` en el dispositivo, porque esa variable solo existe donde se evalúa `app.config.ts`. Se detecta porque la app se comporta como producción aunque compilaste preview. Solución: expón el valor en `extra` y léelo con `Constants.expoConfig?.extra`.
+
+**Olvidar `...config` en el objeto devuelto.** Pierdes campos que Expo o sus plugins agregaron al `config` de entrada, como `plugins` o `icon`. Se detecta porque `npx expo config --type public` muestra menos campos de los que esperabas. Empieza siempre el objeto con `...config`.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué diferencia hay entre app.json y app.config.ts?", back: "app.json es estático; app.config.ts es una función que recibe ConfigContext y devuelve la configuración final, con lógica y acceso a process.env." },
+    { front: "¿Por qué cada variante de la app necesita un bundleIdentifier y package distintos?", back: "Porque el sistema operativo identifica la app por ese valor y no permite instalar dos apps con el mismo identificador." },
+    { front: "¿Dónde se lee process.env.APP_VARIANT: en la app o al evaluar la configuración?", back: "Al evaluar la configuración (en tu máquina o en el servidor de EAS). En la app se usa Constants.expoConfig.extra." },
+    { front: "¿Qué comando muestra la configuración final que verá la app?", back: "npx expo config --type public" },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Cuál es la firma correcta de la función exportada por app.config.ts?",
+      options: [
+        { text: "({ config }: ConfigContext): ExpoConfig => ({ ...config, name: 'Notes' })", correct: true, feedback: "Correcto: recibe el contexto con la configuración estática y devuelve la definitiva." },
+        { text: "(): void => { expo.name = 'Notes' }", correct: false, feedback: "La función debe devolver el objeto ExpoConfig; no hay un objeto global expo que mutar." },
+        { text: "async (env) => fetch(env.CONFIG_URL)", correct: false, feedback: "La configuración se resuelve de forma sincrónica a partir de process.env, no descargando nada." },
+      ],
+    },
+    {
+      prompt: "Instalaste la variante preview y la de development en el mismo teléfono, pero una reemplazó a la otra. ¿Cuál es la causa más probable?",
+      options: [
+        { text: "Ambas tienen el mismo name", correct: false, feedback: "El nombre visible puede repetirse; lo que debe ser único es el identificador." },
+        { text: "Ambas comparten bundleIdentifier o package", correct: true, feedback: "Correcto: el sistema trata dos apps con el mismo identificador como la misma app." },
+        { text: "Ambas usan la misma version", correct: false, feedback: "La versión no impide la instalación en paralelo." },
+      ],
+    },
+    {
+      prompt: "¿Cómo lee la app en tiempo de ejecución el valor de la variante?",
+      options: [
+        { text: "Importando app.config.ts", correct: false, feedback: "Obtendrías el archivo sin procesar y romperías el bundle." },
+        { text: "Con process.env.APP_VARIANT dentro del componente", correct: false, feedback: "Esa variable no existe en el dispositivo." },
+        { text: "Con Constants.expoConfig?.extra desde expo-constants", correct: true, feedback: "Correcto: extra es el espacio pensado para valores de configuración leídos en runtime." },
+      ],
+    },
+  ]}
+/>

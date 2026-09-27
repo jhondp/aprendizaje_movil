@@ -1,0 +1,298 @@
+---
+id: "04-react-native-expo/09-expo-router-basico"
+title: "Expo Router: rutas por archivos"
+stage: 4
+module: "Navegación"
+order: 9
+minutes: 15
+prereqs: ["04-react-native-expo/08-imagenes-fuentes-iconos"]
+summary: "Crea pantallas con Expo Router a partir de archivos, navega con Link y router, y lee parámetros de rutas dinámicas como note/[id]."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás crear pantallas con Expo Router a partir de archivos, navegar entre ellas con `Link` y `router`, y leer el parámetro de una ruta dinámica con `useLocalSearchParams`.
+
+**Prerrequisitos:** `04-react-native-expo/08-imagenes-fuentes-iconos`
+
+## Concepto
+
+Hasta ahora cada ejemplo fue una sola pantalla. Una app real tiene muchas: una lista, un detalle, un formulario, ajustes. Pasar de una a otra se llama **navegación**, y en móvil funciona distinto que en la web: cada pantalla nueva se apila encima de la anterior, con una animación, y el gesto o botón de volver la retira.
+
+**Expo Router** es el sistema de navegación de Expo. Su idea central es que **cada archivo dentro de `src/app/` es una pantalla** y su ruta en el disco es su dirección. Es el mismo enfoque que usan frameworks web como Next.js.
+
+Documentación oficial: https://docs.expo.dev/router/introduction/ y https://docs.expo.dev/router/basics/core-concepts/
+
+### Una analogía: una pila de cartas
+
+Imagina que lees cartas sobre una mesa. Tienes una carta abierta (la lista de notas). Cuando abres un sobre nuevo, pones esa carta encima de la anterior: solo ves la de arriba, pero la de abajo sigue ahí, tal como la dejaste. Cuando terminas, retiras la de arriba y vuelves a ver la anterior. Esa pila de cartas es un **stack** de navegación: `push` pone una pantalla encima y `back` la retira.
+
+### Las rutas son archivos
+
+Con la plantilla actual de Expo, las pantallas viven en `src/app/`. En proyectos creados con SDK anteriores al 55 la carpeta es `app/` en la raíz; las reglas son idénticas. Este curso usa `src/app/` en todas las etapas porque es lo que genera `create-expo-app@latest` y deja el código de la app (rutas, componentes, lógica) reunido bajo `src/`.
+
+```text
+src/app/
+├── _layout.tsx       # root layout: wraps every screen
+├── index.tsx         # route "/"
+├── about.tsx         # route "/about"
+└── note/
+    └── [id].tsx      # route "/note/:id", for example "/note/42"
+```
+
+Tres convenciones de nombres:
+
+- `index.tsx` es la ruta por defecto de su carpeta. `src/app/index.tsx` es la primera pantalla que ves al abrir la app.
+- `_layout.tsx` no es una pantalla: es el **layout** que envuelve a las pantallas de su carpeta y decide cómo se navega entre ellas (en pila, en tabs, etc.).
+- Un nombre entre corchetes, como `[id].tsx`, es una **ruta dinámica**: coincide con cualquier valor en ese segmento y lo entrega como parámetro.
+
+Todo lo que no es una pantalla (componentes, datos, utilidades) va fuera de `src/app/`, por ejemplo en `src/components/`. Si lo pones dentro, Expo Router lo intentaría tratar como una ruta.
+
+### El layout raíz con Stack
+
+```tsx
+// src/app/_layout.tsx
+import { Stack } from "expo-router";
+
+export default function RootLayout() {
+  return <Stack />;
+}
+```
+
+`Stack` apila las pantallas con la animación nativa de cada plataforma y dibuja una barra superior (header) con el título y el botón de volver. No tienes que registrar las pantallas: `Stack` descubre las rutas por los archivos. Expo Router además agrega por ti el `SafeAreaProvider` que viste en la lección de dimensiones.
+
+### Navegar con Link y router
+
+```tsx
+// src/app/index.tsx
+import { View, Text, Pressable } from "react-native";
+import { Link, router } from "expo-router";
+
+export default function Home() {
+  return (
+    <View style={{ flex: 1, padding: 16, gap: 12 }}>
+      <Link href="/note/1">Abrir la nota 1</Link>
+      <Link href={{ pathname: "/note/[id]", params: { id: "2" } }} asChild>
+        <Pressable>
+          <Text>Abrir la nota 2</Text>
+        </Pressable>
+      </Link>
+      <Pressable onPress={() => router.push("/about")}>
+        <Text>Acerca de</Text>
+      </Pressable>
+    </View>
+  );
+}
+```
+
+- `Link` es un texto tocable que navega a `href`. Puedes escribir la ruta completa (`"/note/1"`) o un objeto con `pathname` y `params`, que evita armar la cadena a mano.
+- `asChild` hace que `Link` no dibuje su propio texto y pase la navegación a su hijo, por ejemplo un `Pressable` con tu diseño.
+- `router.push(ruta)` navega desde código, útil después de guardar un formulario. `router.back()` vuelve a la pantalla anterior.
+
+### Leer el parámetro de una ruta dinámica
+
+```tsx
+// src/app/note/[id].tsx
+import { Text, View } from "react-native";
+import { Stack, useLocalSearchParams } from "expo-router";
+
+export default function NoteDetail() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+
+  return (
+    <View style={{ flex: 1, padding: 16 }}>
+      <Stack.Screen options={{ title: "Nota " + id }} />
+      <Text>Estás viendo la nota {id}</Text>
+    </View>
+  );
+}
+```
+
+- `useLocalSearchParams` devuelve los parámetros de la ruta actual. El nombre `id` sale del nombre del archivo `[id].tsx`.
+- Los parámetros siempre llegan como **texto**. Si tus ids son números, conviértelos con `Number(id)`.
+- `Stack.Screen` dentro de una pantalla configura su header: aquí cambia el título según la nota.
+
+### Qué no cabe en un Snack
+
+Expo Router necesita varios archivos, así que no se puede ejecutar en el `App.tsx` único de un Snack. Por eso la práctica tiene dos partes: la terminal para crear los archivos en tu proyecto y un Snack que imita, con state, lo que el `Stack` hace por ti. Ver la versión manual te ayuda a entender qué automatiza el router.
+
+## Práctica
+
+Crea las rutas en el proyecto `my-notes` de la lección de creación de proyectos. Luego copia el código de `index.tsx` y `note/[id].tsx` de la sección anterior en esos archivos. Las comillas en `"src/app/note/[id].tsx"` evitan que la terminal interprete los corchetes.
+
+<Terminal
+  steps={[
+    { cmd: "mkdir -p src/app/note", out: "" },
+    { cmd: "touch src/app/index.tsx \"src/app/note/[id].tsx\"", out: "" },
+    { cmd: "ls -R src/app", out: "_layout.tsx  index.tsx  note\n\nsrc/app/note:\n[id].tsx" },
+    { cmd: "npx expo start", out: "Starting Metro Bundler\n› Metro waiting on exp://192.168.1.10:8081\n\n› Press a │ open Android\n› Press i │ open iOS simulator\n› Press w │ open web" }
+  ]}
+/>
+
+Ahora la versión manual: dos pantallas, una lista y un detalle, controladas por un state que guarda qué nota está abierta. Toca una nota y usa "Volver".
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  code={`import { useState } from "react";
+import { View, Text, Pressable, StyleSheet } from "react-native";
+
+const notes = [
+  { id: "1", title: "Comprar pan", body: "Integral y baguette." },
+  { id: "2", title: "Llamar al dentista", body: "Pedir turno para el martes." },
+  { id: "3", title: "Leer sobre Expo Router", body: "Rutas dinámicas y layouts." },
+];
+
+function Home({ onOpen }: { onOpen: (id: string) => void }) {
+  return (
+    <View style={styles.screen}>
+      <Text style={styles.title}>Notas</Text>
+      {notes.map((note) => (
+        <Pressable key={note.id} onPress={() => onOpen(note.id)} style={styles.row}>
+          <Text style={styles.rowText}>{note.title}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+function NoteDetail({ id, onBack }: { id: string; onBack: () => void }) {
+  const note = notes.find((item) => item.id === id);
+  return (
+    <View style={styles.screen}>
+      <Pressable onPress={onBack} accessibilityRole="button">
+        <Text style={styles.back}>‹ Volver</Text>
+      </Pressable>
+      <Text style={styles.title}>{note ? note.title : "No encontrada"}</Text>
+      <Text>{note?.body}</Text>
+      <Text style={styles.route}>Ruta equivalente: /note/{id}</Text>
+    </View>
+  );
+}
+
+export default function App() {
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  if (openId) return <NoteDetail id={openId} onBack={() => setOpenId(null)} />;
+  return <Home onOpen={setOpenId} />;
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, paddingTop: 56, paddingHorizontal: 16, gap: 8, backgroundColor: "#fff" },
+  title: { fontSize: 28, fontWeight: "700", marginBottom: 8 },
+  row: { paddingVertical: 14, borderBottomWidth: 1, borderColor: "#eee" },
+  rowText: { fontSize: 17 },
+  back: { color: "#007aff", fontSize: 17 },
+  route: { marginTop: 16, color: "#888" },
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Una pila de verdad"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="55.0.0"
+      code={`import { useState } from "react";
+import { View, Text, Pressable, StyleSheet } from "react-native";
+
+const notes = ["1", "2", "3", "4", "5"].map((id) => ({ id, title: "Nota " + id }));
+
+export default function App() {
+  const [stack, setStack] = useState<string[]>(["/"]);
+  const current = stack[stack.length - 1];
+
+  const push = (route: string) => setStack((prev) => [...prev, route]);
+  const back = () => setStack((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
+
+  if (current === "/") {
+    return (
+      <View style={styles.screen}>
+        <Text style={styles.title}>Notas</Text>
+        {notes.map((note) => (
+          <Pressable key={note.id} onPress={() => push("/note/" + note.id)} style={styles.row}>
+            <Text style={styles.rowText}>{note.title}</Text>
+          </Pressable>
+        ))}
+      </View>
+    );
+  }
+
+  const id = current.replace("/note/", "");
+  const nextId = String((Number(id) % notes.length) + 1);
+
+  return (
+    <View style={styles.screen}>
+      <Pressable onPress={back}>
+        <Text style={styles.link}>‹ Volver</Text>
+      </Pressable>
+      <Text style={styles.title}>Nota {id}</Text>
+      <Pressable onPress={() => push("/note/" + nextId)}>
+        <Text style={styles.link}>Siguiente nota ›</Text>
+      </Pressable>
+      <Text style={styles.stack}>Pila: {stack.join("  →  ")}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, paddingTop: 56, paddingHorizontal: 16, gap: 12, backgroundColor: "#fff" },
+  title: { fontSize: 28, fontWeight: "700" },
+  row: { paddingVertical: 14, borderBottomWidth: 1, borderColor: "#eee" },
+  rowText: { fontSize: 17 },
+  link: { color: "#007aff", fontSize: 17 },
+  stack: { marginTop: 24, color: "#888" },
+});`}
+    />
+  }
+>
+  El Snack de la práctica solo recuerda una pantalla abierta. Cámbialo para que guarde una **pila** de rutas en un arreglo de state, que empieza en `["/"]`. Tocar una nota agrega `"/note/<id>"` al final (push). En el detalle, agrega un botón "Siguiente nota" que haga push de la nota siguiente, y un botón "Volver" que retire solo la última ruta (back). Muestra la pila completa en pantalla para comprobar que, tras abrir tres notas seguidas, "Volver" te lleva paso a paso hasta la lista.
+</Challenge>
+
+## Errores comunes
+
+**Poner componentes dentro de src/app.** Aparece una pantalla nueva e inesperada, o una advertencia de que un archivo no exporta un componente por defecto. Ocurre porque Expo Router trata cada archivo de `src/app/` como una ruta. Se detecta porque el nombre del componente aparece como ruta en la navegación o en la advertencia de Metro. Solución: mueve los componentes reutilizables a `src/components/`.
+
+**Tratar el parámetro como número.** Comparas `note.id === id` con ids numéricos y nunca encuentras la nota. Ocurre porque `useLocalSearchParams` siempre entrega texto. Se detecta porque la pantalla de detalle muestra "No encontrada" aunque el id existe. Solución: guarda ids como texto o convierte con `Number(id)` antes de comparar.
+
+**Olvidar el prefijo / en href.** Escribes `href="note/1"` y la navegación va a una ruta relativa inesperada o a la pantalla de "no encontrada". Ocurre porque sin la barra inicial la ruta se interpreta respecto a la pantalla actual. Se detecta porque la URL que muestra el error no coincide con la esperada. Solución: usa rutas absolutas como `"/note/1"` o el objeto con `pathname`.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué ruta crea el archivo src/app/note/[id].tsx en Expo Router?", back: "Una ruta dinámica /note/:id, por ejemplo /note/42." },
+    { front: "¿Qué hace el archivo _layout.tsx en Expo Router?", back: "Envuelve las pantallas de su carpeta y define cómo se navega entre ellas, por ejemplo con Stack." },
+    { front: "¿Cómo lees el parámetro de una ruta dinámica en Expo Router?", back: "Con useLocalSearchParams, que devuelve los parámetros como texto." },
+    { front: "¿Qué hacen router.push y router.back en Expo Router?", back: "push apila una pantalla nueva; back retira la actual y vuelve a la anterior." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué archivo es la primera pantalla de la app con Expo Router?",
+      options: [
+        { text: "src/app/index.tsx", correct: true, feedback: "Correcto: index.tsx en la raíz de src/app corresponde a la ruta /." },
+        { text: "src/app/_layout.tsx", correct: false, feedback: "El layout envuelve pantallas, pero no es una pantalla." },
+        { text: "App.tsx en la raíz del proyecto", correct: false, feedback: "Con Expo Router las pantallas salen de la carpeta de rutas." }
+      ]
+    },
+    {
+      prompt: "Navegas a /note/7. ¿Qué devuelve useLocalSearchParams en src/app/note/[id].tsx?",
+      options: [
+        { text: "{ id: 7 }", correct: false, feedback: "Los parámetros llegan como texto, no como número." },
+        { text: "{ id: \"7\" }", correct: true, feedback: "Correcto: el nombre sale de [id] y el valor es texto." },
+        { text: "\"7\"", correct: false, feedback: "Devuelve un objeto con los parámetros, no el valor suelto." }
+      ]
+    },
+    {
+      prompt: "Quieres que un Pressable con tu diseño navegue al tocarlo. ¿Qué usas?",
+      options: [
+        { text: "Link con asChild envolviendo el Pressable", correct: true, feedback: "Correcto: asChild pasa la navegación al hijo." },
+        { text: "Un Pressable con href", correct: false, feedback: "Pressable no tiene prop href." },
+        { text: "Una etiqueta a de HTML", correct: false, feedback: "En React Native no existen etiquetas HTML." }
+      ]
+    }
+  ]}
+/>

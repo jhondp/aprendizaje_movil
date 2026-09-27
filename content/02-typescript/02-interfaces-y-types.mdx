@@ -1,0 +1,185 @@
+---
+id: "02-typescript/02-interfaces-y-types"
+title: "Interfaces y types"
+stage: 2
+module: "Por qué tipos"
+order: 2
+minutes: 12
+prereqs: ["02-typescript/01-tipos-basicos"]
+summary: "Describe la forma de un objeto con interface y type, y usa campos opcionales para valores que pueden faltar."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a poder definir la forma de un objeto con `interface` y con `type`, marcar campos opcionales y explicar cuándo elegir cada una.
+
+**Prerrequisitos:** `02-typescript/01-tipos-basicos`
+
+## Concepto
+
+Un contrato de alquiler describe qué debe tener un departamento antes de firmarlo: cuántas habitaciones, si tiene balcón, cuál es la dirección. No importa el departamento concreto que finalmente ocupes, mientras cumpla ese contrato. Una **interface** en TypeScript es exactamente eso: un contrato que describe qué forma debe tener un objeto, sin importar cuál sea el objeto concreto.
+
+### `interface`
+
+```ts
+interface Task {
+  id: number;
+  title: string;
+  done: boolean;
+}
+
+const task: Task = {
+  id: 1,
+  title: "Comprar leche",
+  done: false,
+};
+```
+
+Cualquier objeto que tenga esas tres propiedades, con esos tipos, cumple el contrato `Task`. Si falta una propiedad, o su tipo no coincide, el compilador lo rechaza:
+
+```ts
+const invalid: Task = {
+  id: 1,
+  title: "Comprar leche",
+}; // error: falta la propiedad done
+```
+
+### Campos opcionales
+
+No todos los campos de un objeto son obligatorios siempre. Un signo de interrogación después del nombre marca un campo como opcional:
+
+```ts
+interface Task {
+  id: number;
+  title: string;
+  done: boolean;
+  notes?: string;
+}
+
+const withNotes: Task = { id: 2, title: "Llamar al dentista", done: false, notes: "Turno de la tarde" };
+const withoutNotes: Task = { id: 3, title: "Leer un capítulo", done: true };
+```
+
+Ambos objetos son válidos: `notes` puede estar presente o ausente, pero si está presente debe ser un `string`. Dentro del código, `task.notes` tiene tipo `string | undefined` (una unión, tema de la próxima lección), así que antes de usarlo como texto hay que comprobar que no sea `undefined`.
+
+### `type`: el alias de tipo
+
+`type` declara un nombre para cualquier tipo, incluida la forma de un objeto:
+
+```ts
+type Task = {
+  id: number;
+  title: string;
+  done: boolean;
+};
+```
+
+Para describir la forma de un objeto plano, `interface` y `type` hacen prácticamente lo mismo y ambas son correctas; la elección suele ser una convención de equipo. La diferencia real aparece en lo que cada una puede expresar además de objetos: `type` también nombra uniones (`type Id = string | number`) y tuplas, algo que `interface` no puede hacer directamente; `interface` en cambio permite que dos declaraciones con el mismo nombre se combinen (declaration merging) y se extiende con `extends` de una forma más directa para jerarquías de objetos.
+
+La recomendación práctica para este curso: usa `interface` para la forma de un objeto (una `Task`, un `User`) y `type` cuando necesites nombrar una unión o un alias que no es un objeto. Ambas son válidas y verás las dos en proyectos reales; lo importante es ser consistente dentro de un mismo equipo. Documentación oficial: [Everyday Types — Object Types](https://www.typescriptlang.org/docs/handbook/2/everyday-types.html#object-types).
+
+## Práctica
+
+Ejecuta el código y observa cómo `notes` puede faltar sin romper el objeto, y cómo se comprueba su presencia antes de usarlo.
+
+<Playground
+  lang="ts"
+  code={`interface Task {
+  id: number;
+  title: string;
+  done: boolean;
+  notes?: string;
+}
+
+function describe(task: Task): string {
+  const base = task.title + (task.done ? " (hecha)" : " (pendiente)");
+  return task.notes ? base + " - " + task.notes : base;
+}
+
+const first: Task = { id: 1, title: "Comprar leche", done: false };
+const second: Task = { id: 2, title: "Llamar al dentista", done: true, notes: "Turno de la tarde" };
+
+console.log(describe(first));
+console.log(describe(second));`}
+  expected={`Comprar leche (pendiente)
+Llamar al dentista (hecha) - Turno de la tarde`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Interface para un usuario"
+  solution={
+    <Playground
+      lang="ts"
+      code={`interface User {
+  id: number;
+  name: string;
+  email: string;
+  age?: number;
+}
+
+function greet(user: User): string {
+  return user.age !== undefined
+    ? "Hola " + user.name + ", tienes " + user.age + " años"
+    : "Hola " + user.name;
+}
+
+const withAge: User = { id: 1, name: "Ana", email: "ana@example.com", age: 28 };
+const withoutAge: User = { id: 2, name: "Luis", email: "luis@example.com" };
+
+console.log(greet(withAge));
+console.log(greet(withoutAge));`}
+      expected={`Hola Ana, tienes 28 años
+Hola Luis`}
+    />
+  }
+>
+  Define una `interface User` con `id: number`, `name: string`, `email: string` y un campo opcional `age?: number`. Escribe una función `greet` que reciba un `User` y devuelva `"Hola " + name + ", tienes " + age + " años"` si `age` está presente, o solo `"Hola " + name` si no lo está. Prueba la función con un usuario que tenga `age` y otro que no.
+</Challenge>
+
+## Errores comunes
+
+**Crear un objeto sin todas las propiedades obligatorias.** Si `Task` exige `id`, `title` y `done`, y el objeto solo trae dos, el compilador lo rechaza con un mensaje del tipo "Property 'done' is missing". Cómo detectarlo: el error nombra exactamente la propiedad faltante.
+
+**Usar un campo opcional sin comprobar si está presente.** `task.notes.toUpperCase()` fallaría en tiempo de ejecución cuando `notes` es `undefined`, y por eso con `strictNullChecks` (activado por `strict`, la configuración de este curso) ni siquiera compila. Cómo detectarlo: el compilador marca la línea con `TS18048: 'task.notes' is possibly 'undefined'.`; la solución es comprobar antes con `if (task.notes)` o usar `task.notes?.toUpperCase()`.
+
+**Mezclar `interface` y `type` sin criterio dentro del mismo equipo.** No es un error de compilación, pero un archivo con `interface Task` en una línea y `type User = {...}` en la siguiente, sin ninguna razón para la diferencia, dificulta la lectura. Cómo detectarlo: revisa si el equipo tiene una convención documentada; si no la tiene, es momento de acordarla.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué describe una interface en TypeScript?", back: "La forma que debe tener un objeto: qué propiedades tiene y de qué tipo es cada una." },
+    { front: "¿Cómo se marca una propiedad como opcional en una interface?", back: "Con un signo de interrogación después del nombre, por ejemplo notes?: string." },
+    { front: "¿Qué puede nombrar type que interface no puede nombrar directamente?", back: "Uniones y tuplas, por ejemplo type Id = string | number." },
+    { front: "¿Qué tipo tiene una propiedad opcional dentro del código, si su tipo declarado es string?", back: "string | undefined." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué ocurre si un objeto de tipo Task no incluye la propiedad obligatoria done?",
+      options: [
+        { text: "TypeScript la agrega automáticamente con valor false", correct: false, feedback: "TypeScript no agrega propiedades faltantes: rechaza el objeto con un error." },
+        { text: "El compilador rechaza el objeto con un error que nombra la propiedad faltante", correct: true, feedback: "Correcto: una propiedad obligatoria ausente es un error de compilación." },
+        { text: "No pasa nada, done queda como undefined en tiempo de ejecución", correct: false, feedback: "Eso ocurriría en JavaScript puro, pero TypeScript lo marca como error antes de ejecutar." },
+      ],
+    },
+    {
+      prompt: "¿Qué tipo tiene task.notes si la interface declara notes?: string?",
+      options: [
+        { text: "string únicamente", correct: false, feedback: "Como el campo es opcional, también puede faltar, así que el tipo incluye undefined." },
+        { text: "string | undefined", correct: true, feedback: "Correcto: un campo opcional siempre incluye undefined en su tipo." },
+        { text: "any", correct: false, feedback: "El tipo declarado es string; el signo ? solo agrega undefined como posibilidad." },
+      ],
+    },
+    {
+      prompt: "¿Cuándo conviene usar type en vez de interface según esta lección?",
+      options: [
+        { text: "Cuando necesitas nombrar una unión o un alias que no es la forma de un objeto", correct: true, feedback: "Correcto: type puede nombrar uniones y tuplas, además de objetos." },
+        { text: "Nunca; interface siempre es superior", correct: false, feedback: "Ambas son válidas para objetos; type tiene usos que interface no cubre directamente." },
+        { text: "Solo cuando el objeto no tiene propiedades opcionales", correct: false, feedback: "Los campos opcionales funcionan igual con type y con interface." },
+      ],
+    },
+  ]}
+/>

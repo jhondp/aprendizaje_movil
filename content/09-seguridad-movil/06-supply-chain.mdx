@@ -1,0 +1,208 @@
+---
+id: "09-seguridad-movil/06-supply-chain"
+title: "Supply chain: dependencias y lockfiles"
+stage: 9
+module: "Cadena y privacidad"
+order: 6
+minutes: 12
+prereqs: ["09-seguridad-movil/05-validacion-de-entrada"]
+summary: "Audita las dependencias de tu app, entiende qué garantiza el lockfile y crea una rutina para que el código de terceros que envías sea el que revisaste."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás ejecutar una auditoría de dependencias, inspeccionar un paquete antes de instalarlo, explicar qué protege el lockfile y qué no, y definir la política de tu proyecto frente a vulnerabilidades conocidas.
+
+**Prerrequisitos:** `09-seguridad-movil/05-validacion-de-entrada`
+
+## Concepto
+
+Esta lección cubre **MASVS-CODE-3** (la app solo usa componentes sin vulnerabilidades conocidas), que en OWASP Mobile Top 10 corresponde a M2, seguridad inadecuada de la cadena de suministro. Saber exactamente qué código entra en el build, con un lockfile y builds reproducibles, es parte de la evidencia de ese control.
+
+### Los ingredientes de un restaurante
+
+Un restaurante no cultiva sus propios tomates. Compra a proveedores, y su reputación depende de ellos: si un lote llega en mal estado, el cliente se intoxica en tu mesa, no en la del proveedor. Por eso los restaurantes serios revisan a quién compran, exigen que cada entrega sea la que pidieron y retiran un ingrediente en cuanto hay una alerta sanitaria. Tus dependencias de npm son esos ingredientes: código de terceros que ejecuta con todos los permisos de tu app, en el dispositivo de tu usuario.
+
+### Cuánto confías sin saberlo
+
+Una app de Expo típica declara entre 20 y 40 dependencias directas y arrastra varios cientos transitivas. Cada una es un paquete que alguien mantiene, publicado en un registro al que cualquiera puede subir código. Los riesgos reales, sin exagerar, son cuatro:
+
+- **Vulnerabilidades conocidas**: un fallo publicado con un identificador (CVE o aviso de GitHub) en una versión que usas.
+- **Paquetes abandonados**: sin mantenimiento, las vulnerabilidades nunca se corrigen.
+- **Cuentas comprometidas o paquetes maliciosos**: alguien publica una versión con código dañino en un paquete popular, o crea uno con nombre casi idéntico (typosquatting) esperando errores de tipeo.
+- **Scripts de instalación**: un paquete puede ejecutar código en tu máquina durante `install`, antes de que lo importes. npm los ejecuta por defecto; pnpm 10 o posterior no ejecuta los scripts de las dependencias salvo las que apruebes de forma explícita (`pnpm approve-builds` las anota en la lista de permitidas, `onlyBuiltDependencies`). Revisa esa lista en cada pull request igual que el lockfile: cada paquete que agregas ahí puede ejecutar código en tu máquina y en CI.
+
+### El lockfile: la lista de compra exacta
+
+`package.json` dice "quiero `zod` versión 3.x"; `pnpm-lock.yaml` dice "instalé `zod` 3.23.8 con este hash de integridad, y estas son todas sus dependencias, también fijadas". El lockfile garantiza que tu máquina, la de tu compañero, CI y el servidor de EAS Build instalan **exactamente** el mismo árbol. Sin él, cada build podría traer una versión distinta y una versión nueva podría ser la comprometida.
+
+Lo que el lockfile garantiza: reproducibilidad e integridad (el hash detecta si el contenido del paquete cambió). Lo que no garantiza: que las versiones fijadas sean seguras. Por eso el lockfile se **versiona en git** y se **revisa en cada pull request**: un cambio inesperado en el lockfile es una señal de alerta.
+
+```yaml
+# pnpm-lock.yaml (fragment)
+packages:
+  zod@3.23.8:
+    resolution: { integrity: sha512-XBx9AXhXktjUqnepgTiE5flcKIYWi/rme0Eaj+5Y0lftuGBq+jyRu/md4WnuxqgP1ubdpNCsYEYPxrzVHD8d6g== }
+```
+
+En CI y en EAS Build, instala con `pnpm install --frozen-lockfile`: si `package.json` y el lockfile no coinciden, el build falla en lugar de resolver versiones nuevas en silencio.
+
+### Auditar: encontrar lo que ya está roto
+
+`pnpm audit` compara tu lockfile con la base de datos de avisos y lista las vulnerabilidades por severidad, con la ruta de dependencias que las introduce y la versión que las corrige. Interpretar el resultado exige criterio:
+
+- Una vulnerabilidad **crítica o alta con corrección disponible** se arregla antes del siguiente release: `pnpm update <paquete>` o, si es transitiva, `pnpm why <paquete>` para saber quién la trae y actualizar al padre.
+- Una vulnerabilidad en una **dependencia solo de desarrollo** (un plugin de ESLint, por ejemplo) no viaja en el bundle; se anota y se corrige sin urgencia.
+- Una vulnerabilidad **sin corrección disponible** se documenta con la evaluación de si el código vulnerable es alcanzable desde tu app, y se fija una fecha de revisión.
+
+Escribe esa política en el repositorio para que la decisión no dependa del humor del día.
+
+### Inspeccionar antes de instalar
+
+Antes de `pnpm add`, dedica un minuto al paquete. `npm view <paquete>` muestra la última versión, la fecha de publicación, los mantenedores y el repositorio. Preguntas rápidas:
+
+- ¿Cuándo fue la última publicación? ¿Hay actividad reciente en el repositorio?
+- ¿Cuántos mantenedores? ¿El nombre coincide exactamente con el que buscabas o es una variante?
+- ¿Cuántas dependencias trae? Un paquete pequeño con cincuenta dependencias multiplica el riesgo.
+- ¿Tiene `scripts.postinstall`? Si sí, ¿para qué?
+
+Y una pregunta previa a todas: ¿realmente necesitas el paquete, o son treinta líneas que puedes escribir? La dependencia más segura es la que no instalas.
+
+### Mantener el ritmo
+
+Las dependencias envejecen. Tres hábitos convierten esto en rutina en lugar de en crisis:
+
+1. `pnpm audit` en CI, en cada pull request, con umbral de fallo en alta o crítica.
+2. Un bot de actualizaciones (Dependabot o Renovate) que abra pull requests pequeñas; se revisan, se ejecutan los tests de la etapa 6 y se mezclan.
+3. `npx expo install --check` antes de cada release, para que las bibliotecas nativas coincidan con la versión del SDK de Expo: [https://docs.expo.dev/more/expo-cli/#install](https://docs.expo.dev/more/expo-cli/#install).
+
+<Callout kind="warning">
+  `pnpm install` en CI sin `--frozen-lockfile` puede resolver versiones distintas de las que probaste. El build que publicas debe ser el mismo árbol de dependencias que pasó tus tests.
+</Callout>
+
+## Práctica
+
+Ejecuta esta secuencia en tu app de notas. Las salidas son de ejemplo; las tuyas dirán qué paquetes concretos revisar.
+
+<Terminal
+  steps={[
+    { cmd: "pnpm audit", out: "┌─────────────────────┬────────────────────────────────────────────────────────┐\n│ high                │ Prototype Pollution in example-utils                   │\n├─────────────────────┼────────────────────────────────────────────────────────┤\n│ Package             │ example-utils                                          │\n│ Vulnerable versions │ <4.17.21                                               │\n│ Patched versions    │ >=4.17.21                                              │\n│ Paths               │ . > example-form-kit@2.1.0 > example-utils@4.17.15     │\n└─────────────────────┴────────────────────────────────────────────────────────┘\n1 vulnerabilities found\nSeverity: 1 high" },
+    { cmd: "pnpm why example-utils", out: "dependencies:\nexample-form-kit 2.1.0\n└── example-utils 4.17.15" },
+    { cmd: "npm view example-form-kit version time.modified maintainers repository.url", out: "version = '2.3.0'\ntime.modified = '2026-08-30T10:12:44.000Z'\nmaintainers = [ 'maintainer-a <a@example.com>', 'maintainer-b <b@example.com>' ]\nrepository.url = 'git+https://github.com/example/form-kit.git'" },
+    { cmd: "pnpm update example-form-kit && pnpm audit", out: "Progress: resolved 412, reused 411, downloaded 1, added 1, done\nNo known vulnerabilities found" },
+    { cmd: "git diff --stat -- pnpm-lock.yaml", out: " pnpm-lock.yaml | 12 ++++++------\n 1 file changed, 6 insertions(+), 6 deletions(-)" },
+    { cmd: "npx expo install --check", out: "The following packages should be updated for best compatibility with the installed expo version:\n  expo-secure-store@57.0.2 - expected version: ~57.0.4\nYour project may not work correctly until you install the expected versions of the packages." },
+    { cmd: "pnpm install --frozen-lockfile", out: "Lockfile is up to date, resolution step is skipped\nAlready up to date" }
+  ]}
+/>
+
+El paso 5 es el que revisarías en el pull request: doce líneas cambiadas y solo en los paquetes que esperabas. Marca lo que ya cumple tu proyecto:
+
+<Checklist
+  id="09-seguridad-movil/06-supply-chain"
+  items={[
+    "pnpm-lock.yaml está versionado en git y se revisa en cada pull request",
+    "CI y EAS Build instalan con pnpm install --frozen-lockfile",
+    "pnpm audit corre en CI y falla con severidad alta o crítica",
+    "Escribí la política: qué severidad bloquea el release y qué se documenta",
+    "Revisé cada dependencia directa: última publicación, mantenedores, dependencias que arrastra",
+    "Eliminé las dependencias que no uso o que podía sustituir con pocas líneas",
+    "Un bot de actualizaciones abre pull requests y los tests se ejecutan antes de mezclar",
+    "npx expo install --check no reporta desajustes antes del release"
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Aplicar la política de auditoría"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type Advisory = {
+  pkg: string;
+  severity: "low" | "moderate" | "high" | "critical";
+  fixAvailable: boolean;
+  devOnly: boolean;
+};
+
+const advisories: Advisory[] = [
+  { pkg: "example-utils", severity: "high", fixAvailable: true, devOnly: false },
+  { pkg: "eslint-plugin-example", severity: "moderate", fixAvailable: true, devOnly: true },
+  { pkg: "legacy-parser", severity: "critical", fixAvailable: false, devOnly: false },
+  { pkg: "tiny-color", severity: "low", fixAvailable: true, devOnly: false },
+];
+
+function decide(a: Advisory): string {
+  if (a.devOnly) return "TICKET (dev only)";
+  if ((a.severity === "high" || a.severity === "critical") && a.fixAvailable) return "BLOCK RELEASE: update now";
+  if ((a.severity === "high" || a.severity === "critical") && !a.fixAvailable) return "BLOCK RELEASE: assess reachability";
+  return "TICKET";
+}
+
+let blocked = 0;
+for (const a of advisories) {
+  const decision = decide(a);
+  if (decision.startsWith("BLOCK")) blocked += 1;
+  console.log(a.pkg + " -> " + decision);
+}
+console.log("release " + (blocked === 0 ? "allowed" : "blocked by " + blocked));`}
+      expected={`example-utils -> BLOCK RELEASE: update now
+eslint-plugin-example -> TICKET (dev only)
+legacy-parser -> BLOCK RELEASE: assess reachability
+tiny-color -> TICKET
+release blocked by 2`}
+    />
+  }
+>
+  Escribe una función `decide(advisory)` que aplique esta política a cada aviso de `pnpm audit`: dependencias solo de desarrollo devuelven `TICKET (dev only)`; severidad alta o crítica con corrección disponible devuelve `BLOCK RELEASE: update now`; alta o crítica sin corrección devuelve `BLOCK RELEASE: assess reachability`; el resto devuelve `TICKET`. Aplícala a cuatro avisos de ejemplo e imprime al final si el release queda `allowed` o `blocked by N`.
+</Challenge>
+
+## Errores comunes
+
+**Ignorar el lockfile en CI.** El pipeline ejecuta `pnpm install` sin `--frozen-lockfile` y un día el build trae una versión que nadie probó. Ocurre porque localmente "siempre funcionó". Se detecta comparando el lockfile del repositorio con el que genera CI: si difieren, la instalación no fue reproducible.
+
+**Silenciar `pnpm audit` con excepciones permanentes.** Se agregan `overrides` o se ignora un aviso "de momento" y queda para siempre. Ocurre porque el aviso rompe el pipeline en un mal momento. Se detecta listando las excepciones y comprobando si tienen fecha de revisión; sin fecha, es deuda oculta.
+
+**Instalar por nombre sin mirar.** Un error de tipeo instala un paquete de nombre parecido, o se instala una biblioteca abandonada hace tres años. Ocurre por saltarse `npm view`. Se detecta revisando en el pull request la fecha de última publicación y el repositorio de cada dependencia nueva.
+
+**Confundir vulnerabilidad de desarrollo con vulnerabilidad de la app.** Se bloquea un release por un aviso en un plugin de ESLint que nunca llega al bundle, o al revés, se descarta uno grave porque "es transitivo". Se detecta con `pnpm why`: la ruta dice si el paquete llega a producción.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué garantiza el lockfile y qué no garantiza?", back: "Garantiza instalar exactamente el mismo árbol de versiones con hashes de integridad. No garantiza que esas versiones sean seguras." },
+    { front: "¿Para qué sirve pnpm install --frozen-lockfile en CI?", back: "Para fallar si package.json y el lockfile no coinciden, en lugar de resolver versiones nuevas en silencio." },
+    { front: "¿Qué comando muestra quién introduce una dependencia transitiva vulnerable?", back: "pnpm why <paquete>." },
+    { front: "¿Qué revisas con npm view antes de instalar un paquete?", back: "Última publicación, mantenedores, repositorio, dependencias que arrastra y si el nombre es exactamente el buscado." },
+    { front: "¿Qué control MASVS cubre las dependencias con vulnerabilidades conocidas?", back: "MASVS-CODE-3." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "pnpm audit reporta una vulnerabilidad alta en un paquete transitivo. ¿Cuál es el primer paso?",
+      options: [
+        { text: "Borrar el lockfile y reinstalar", correct: false, feedback: "Eso pierde la reproducibilidad y puede traer más cambios inesperados." },
+        { text: "pnpm why <paquete> para ver qué dependencia directa lo trae y actualizarla", correct: true, feedback: "Correcto: la corrección suele estar en el padre." },
+        { text: "Agregar una excepción permanente al audit", correct: false, feedback: "Silenciar no corrige; a lo sumo se documenta con fecha de revisión." }
+      ]
+    },
+    {
+      prompt: "¿Por qué se revisa pnpm-lock.yaml en cada pull request?",
+      options: [
+        { text: "Porque Prettier lo formatea", correct: false, feedback: "El formato no es el motivo; el contenido sí." },
+        { text: "Porque un cambio inesperado indica que entran versiones que nadie pidió", correct: true, feedback: "Correcto: el lockfile es la lista exacta de lo que envías." },
+        { text: "Porque sin revisarlo pnpm no instala", correct: false, feedback: "pnpm instala igual; la revisión es una práctica de seguridad." }
+      ]
+    },
+    {
+      prompt: "¿Qué hace npx expo install --check?",
+      options: [
+        { text: "Audita vulnerabilidades en las dependencias", correct: false, feedback: "Eso es pnpm audit." },
+        { text: "Compara las versiones de las bibliotecas con las esperadas por el SDK de Expo instalado", correct: true, feedback: "Correcto: evita desajustes nativos antes del release." },
+        { text: "Instala todas las dependencias desde cero", correct: false, feedback: "Solo informa; con --fix las corrige." }
+      ]
+    }
+  ]}
+/>

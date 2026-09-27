@@ -1,0 +1,210 @@
+---
+id: "09-seguridad-movil/07-privacidad-y-permisos-minimos"
+title: "Privacidad y permisos mínimos"
+stage: 9
+module: "Cadena y privacidad"
+order: 7
+minutes: 12
+prereqs: ["09-seguridad-movil/06-supply-chain"]
+summary: "Inventaría los datos personales que tu app toca, pide solo los permisos necesarios cuando hacen falta y prepara declaraciones de privacidad veraces."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás construir el inventario de datos de tu app, reducir los permisos declarados al mínimo y pedirlos en el momento adecuado, y redactar borradores coherentes de App Privacy (Apple) y Data safety (Google Play).
+
+**Prerrequisitos:** `09-seguridad-movil/06-supply-chain`
+
+## Concepto
+
+Esta lección cubre los cuatro controles de **MASVS-PRIVACY** (minimizar acceso a datos, evitar la identificación del usuario, ser transparente y dar control) y **MASVS-PLATFORM-1** en lo relativo a permisos del sistema.
+
+### El formulario del médico
+
+Cuando llegas a una consulta nueva te dan un formulario. Un buen formulario pregunta lo que el médico necesita para tratarte; uno malo pide tu número de pasaporte, el nombre de tu empleador y si te gusta el cine. La diferencia no es de estética: cada dato que recogen es un dato que pueden perder, y cada uno que no recogen es uno que nunca tendrán que proteger. La privacidad en una app empieza por la misma pregunta: ¿para qué necesito esto exactamente?
+
+### MASVS-PRIVACY-1: minimizar
+
+Minimizar tiene dos caras. La primera son los **datos**: la app de notas necesita un correo para la cuenta y el contenido de las notas para funcionar. No necesita el nombre completo, la fecha de nacimiento ni la ubicación. Si una funcionalidad futura los necesita, se piden entonces, con su propósito.
+
+La segunda son los **permisos del sistema**. Cada permiso declarado aparece en la ficha de la tienda y en los avisos del sistema, y cada uno concedido es una capacidad que un fallo en tu app o en una dependencia puede aprovechar. En Expo los permisos se declaran en `app.json`: en iOS mediante las cadenas de uso de `ios.infoPlist` (`NSCameraUsageDescription`, `NSPhotoLibraryUsageDescription`, etc.), y en Android mediante `android.permissions`. Muchas bibliotecas añaden permisos automáticamente a través de sus config plugins; para quitar uno que una biblioteca declara y tú no usas, existe `android.blockedPermissions`.
+
+```json
+{
+  "expo": {
+    "ios": {
+      "infoPlist": {
+        "NSCameraUsageDescription": "Take a photo to attach it to a note."
+      }
+    },
+    "android": {
+      "permissions": ["android.permission.CAMERA"],
+      "blockedPermissions": ["android.permission.RECORD_AUDIO"]
+    }
+  }
+}
+```
+
+El texto de la cadena de uso debe decir **qué hará la app** con el permiso, en el idioma del usuario. Apple rechaza descripciones vacías o genéricas.
+
+### Pedir el permiso en el momento justo
+
+Un permiso solicitado al arrancar, sin contexto, es un permiso que el usuario deniega. Pídelo cuando el usuario pulse la acción que lo necesita, precedido de una explicación corta si la acción no es obvia. Con `expo-camera`:
+
+```tsx
+import { useCameraPermissions } from "expo-camera";
+
+export function AttachPhotoButton({ onGranted }: { onGranted: () => void }) {
+  const [permission, requestPermission] = useCameraPermissions();
+
+  async function onPress() {
+    if (permission?.granted) return onGranted();
+    const result = await requestPermission();
+    if (result.granted) onGranted();
+    // If denied, show how to enable it in Settings; never loop asking again.
+  }
+
+  return <Button title="Attach photo" onPress={onPress} />;
+}
+```
+
+Si el usuario deniega, la app sigue funcionando sin esa función. Un permiso denegado no es un error que reintentar.
+
+### MASVS-PRIVACY-2: no identificar de más
+
+Evita identificadores estables del dispositivo (IMEI, dirección MAC, identificador de publicidad) para reconocer al usuario: son la base del rastreo entre apps. Para analítica o diagnóstico, genera un identificador aleatorio por instalación y guárdalo tú; el usuario puede restablecerlo desinstalando. En la etapa 8 ya usas un identificador de cuenta emitido por tu backend: ese es el único que la app necesita.
+
+Vigila también las **dependencias**: un SDK de analítica o publicidad puede recoger identificadores y datos de uso por su cuenta. Todo lo que un SDK recoge cuenta como recogido por tu app, y debe aparecer en tus declaraciones. Si un SDK exige consentimiento (por ejemplo, para publicidad personalizada), no debe inicializarse antes de obtenerlo.
+
+### MASVS-PRIVACY-3: declarar la verdad
+
+Las dos tiendas exigen una declaración de datos que se muestra en la ficha de la app:
+
+- **App Privacy details** en App Store Connect: qué tipos de datos recoge la app, si están vinculados a la identidad del usuario y si se usan para rastreo. Documentación: [https://developer.apple.com/app-store/app-privacy-details/](https://developer.apple.com/app-store/app-privacy-details/).
+- **Data safety** en Google Play Console: qué datos se recogen o comparten, con qué fin, si son opcionales y si el usuario puede pedir su borrado. Documentación: [https://support.google.com/googleplay/android-developer/answer/10787469](https://support.google.com/googleplay/android-developer/answer/10787469).
+
+Ambas se rellenan a partir del **inventario de datos**: una tabla con cada dato, su propósito, dónde se guarda, con quién se comparte y cuánto tiempo se conserva. Si el inventario está hecho, las declaraciones son media hora de trabajo; si no, son adivinanzas que la tienda puede penalizar cuando descubre que el comportamiento real no coincide.
+
+| Dato               | Propósito           | Dónde vive             | Compartido con        | Retención            |
+| ------------------ | ------------------- | ---------------------- | --------------------- | -------------------- |
+| Correo             | Cuenta e inicio de sesión | Backend                | Nadie                 | Hasta borrar cuenta  |
+| Contenido de notas | Funcionalidad principal | SQLite local y backend | Nadie              | Hasta borrar la nota |
+| Reportes de fallos | Diagnóstico         | Proveedor de crash reporting | Ese proveedor    | 90 días              |
+| Identificador de instalación | Diagnóstico | AsyncStorage y proveedor | Ese proveedor      | Hasta desinstalar    |
+
+### MASVS-PRIVACY-4: dar control
+
+El usuario debe poder ver, corregir y borrar sus datos. En la práctica esto significa tres funciones: exportar o al menos ver lo que la app tiene, borrar notas de forma definitiva (también en el backend) y **eliminar la cuenta desde la app**. Apple exige la eliminación de cuenta dentro de la app para cualquier app que permita crearla, y Google Play exige ofrecer un camino de borrado de cuenta y datos. Diseña ese flujo ahora: el backend necesita un endpoint de borrado y la app una pantalla que lo invoque tras confirmar.
+
+<Callout kind="tip">
+  Antes de agregar un dato o un permiso, escribe la fila del inventario. Si no puedes rellenar la columna "propósito" con una frase concreta, no lo necesitas.
+</Callout>
+
+## Práctica
+
+Construye el inventario de datos de tu app de notas y revisa permisos y declaraciones. Marca cada punto cuando lo hayas hecho en el repositorio, no de memoria:
+
+<Checklist
+  id="09-seguridad-movil/07-privacidad"
+  items={[
+    "Escribí el inventario de datos: dato, propósito, dónde vive, con quién se comparte, retención",
+    "Cada dato del inventario tiene un propósito concreto; eliminé los que no lo tienen",
+    "Listé los permisos que declara app.json, incluidos los que agregan config plugins",
+    "Cada permiso declarado se usa en una funcionalidad concreta; bloqueé los que no",
+    "Las cadenas de uso de iOS explican qué hará la app con cada permiso",
+    "Los permisos se piden al usar la función, con explicación previa, y la app funciona si se deniegan",
+    "No uso identificadores estables del dispositivo; el identificador de diagnóstico es aleatorio por instalación",
+    "Revisé qué datos recogen mis SDKs de terceros y los incluí en el inventario",
+    "Redacté el borrador de App Privacy details a partir del inventario",
+    "Redacté el borrador de Data safety a partir del inventario",
+    "Existe un flujo para borrar la cuenta y sus datos desde la app"
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Revisar el inventario de datos"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type Row = {
+  data: string;
+  purpose: string;
+  sharedWith: string[];
+  consent: boolean;
+  retentionDays: number | "until-deleted";
+};
+
+const inventory: Row[] = [
+  { data: "email", purpose: "account sign-in", sharedWith: [], consent: true, retentionDays: "until-deleted" },
+  { data: "birth date", purpose: "", sharedWith: [], consent: false, retentionDays: "until-deleted" },
+  { data: "crash reports", purpose: "diagnostics", sharedWith: ["crash-vendor"], consent: true, retentionDays: 90 },
+  { data: "usage events", purpose: "product analytics", sharedWith: ["analytics-vendor"], consent: false, retentionDays: 365 },
+];
+
+for (const row of inventory) {
+  const problems: string[] = [];
+  if (row.purpose.trim() === "") problems.push("no purpose: remove");
+  if (row.sharedWith.length > 0 && !row.consent) problems.push("shared without consent");
+  if (typeof row.retentionDays === "number" && row.retentionDays > 180) problems.push("retention over 180 days");
+  console.log(row.data + ": " + (problems.length === 0 ? "ok" : problems.join(", ")));
+}`}
+      expected={`email: ok
+birth date: no purpose: remove
+crash reports: ok
+usage events: shared without consent, retention over 180 days`}
+    />
+  }
+>
+  Modela el inventario como una lista de filas con `data`, `purpose`, `sharedWith`, `consent` y `retentionDays`. Escribe un programa que revise cada fila y reporte: `no purpose: remove` si el propósito está vacío, `shared without consent` si se comparte con terceros sin consentimiento, y `retention over 180 days` si la retención numérica supera 180 días. Imprime `ok` para las filas sin problemas.
+</Challenge>
+
+## Errores comunes
+
+**Pedir todos los permisos al arrancar.** La app muestra tres diálogos seguidos antes de que el usuario haya visto una pantalla. Ocurre por centralizar las solicitudes "para tenerlas listas". Se detecta abriendo la app recién instalada: cualquier diálogo de permiso antes de una acción del usuario es un hallazgo.
+
+**Declarar permisos que agregó una biblioteca.** El manifiesto de Android incluye `RECORD_AUDIO` porque una dependencia lo declara, aunque la app nunca grabe. Ocurre porque los config plugins añaden permisos sin avisar. Se detecta revisando el manifiesto generado tras `npx expo prebuild` y comparándolo con las funciones reales; se corrige con `android.blockedPermissions`.
+
+**Rellenar las declaraciones de la tienda de memoria.** App Privacy dice "no recogemos datos" mientras el SDK de crash reporting envía identificadores. Ocurre por no tener inventario y por olvidar los SDKs. Se detecta comparando la declaración con el tráfico de red real de la app en un build de desarrollo.
+
+**Borrar la cuenta solo en la app.** El usuario pulsa "eliminar cuenta", la app borra la sesión local y el backend conserva todo. Ocurre porque el endpoint de borrado no existe. Se detecta iniciando sesión de nuevo después de "eliminar": si las notas siguen ahí, el borrado no ocurrió.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué columnas tiene un inventario de datos útil para las declaraciones de las tiendas?", back: "Dato, propósito, dónde vive, con quién se comparte y retención." },
+    { front: "¿Cuándo debe pedir un permiso la app?", back: "Cuando el usuario ejecuta la acción que lo necesita, con una explicación previa, nunca al arrancar." },
+    { front: "¿Qué es android.blockedPermissions en app.json?", back: "Una lista de permisos que Expo elimina del manifiesto aunque una biblioteca los declare." },
+    { front: "¿Los datos que recoge un SDK de terceros cuentan en la declaración de privacidad de mi app?", back: "Sí. Todo lo que recoge el SDK dentro de tu app es recogido por tu app." },
+    { front: "¿Qué exige MASVS-PRIVACY-4 en la práctica?", back: "Que el usuario pueda ver, corregir y borrar sus datos, incluida la eliminación de cuenta desde la app." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "La app de notas quiere permitir adjuntar fotos. ¿Cuándo pide el permiso de cámara?",
+      options: [
+        { text: "Al abrir la app por primera vez, para tenerlo listo", correct: false, feedback: "Sin contexto, el usuario deniega y la app no puede volver a preguntar fácilmente." },
+        { text: "Cuando el usuario pulsa 'adjuntar foto', tras una explicación breve", correct: true, feedback: "Correcto: permiso en contexto, con propósito claro." },
+        { text: "Nunca; se declara en app.json y con eso basta", correct: false, feedback: "Declarar no concede; el sistema exige la solicitud en tiempo de ejecución." }
+      ]
+    },
+    {
+      prompt: "¿Cuál de estos identificadores es aceptable para diagnóstico según MASVS-PRIVACY-2?",
+      options: [
+        { text: "El identificador de publicidad del dispositivo", correct: false, feedback: "Es estable entre apps y sirve para rastreo." },
+        { text: "Un UUID aleatorio generado por la app en la primera ejecución", correct: true, feedback: "Correcto: no identifica al dispositivo fuera de tu app y se restablece al desinstalar." },
+        { text: "El correo del usuario", correct: false, feedback: "Es un dato personal directo; no debe viajar a servicios de diagnóstico." }
+      ]
+    },
+    {
+      prompt: "¿De dónde deben salir las respuestas de App Privacy details y Data safety?",
+      options: [
+        { text: "Del inventario de datos, incluidos los SDKs de terceros", correct: true, feedback: "Correcto: así la declaración coincide con el comportamiento real." },
+        { text: "De lo que declaran apps similares", correct: false, feedback: "Cada app recoge datos distintos; copiar produce declaraciones falsas." },
+        { text: "Solo del código propio, sin contar bibliotecas", correct: false, feedback: "Lo que recoge un SDK dentro de tu app cuenta como recogido por tu app." }
+      ]
+    }
+  ]}
+/>

@@ -1,0 +1,269 @@
+---
+id: "03-react/08-composicion-y-container-presentational"
+title: "Composición y container/presentational"
+stage: 3
+module: "Composición"
+order: 8
+minutes: 15
+prereqs: ["03-react/07-custom-hooks"]
+summary: "Aprende a separar la lógica de estado de la presentación dividiendo un componente en container y presentational, y cuándo esa separación vale la pena."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a poder separar un componente en una parte container (estado y lógica) y una parte presentational (solo props y JSX), y vas a poder explicar cuándo esa separación aporta valor y cuándo un custom hook ya resuelve lo mismo con menos código.
+
+**Prerrequisitos:** `03-react/07-custom-hooks`
+
+## Concepto
+
+Piensa en un restaurante: en la cocina se decide qué ingredientes usar, se cocina y se emplata según la receta; en el salón, el mesero solo lleva el plato ya terminado a la mesa y lo presenta, sin decidir qué lleva la receta. Si cambias de proveedor de ingredientes, la cocina se adapta pero el mesero sigue haciendo exactamente lo mismo: mostrar el plato. El patrón **container/presentational** separa un componente de la misma forma: un componente **container** decide qué datos existen y cómo cambian (el estado, la lógica), y un componente **presentational** solo recibe esos datos como props y los muestra, sin saber de dónde vinieron.
+
+### Presentational: solo props, sin estado propio de negocio
+
+```tsx
+interface Task {
+  id: string;
+  title: string;
+  done: boolean;
+}
+
+function TaskList({ tasks, onToggle }: { tasks: Task[]; onToggle: (id: string) => void }) {
+  return (
+    <ul>
+      {tasks.map((task) => (
+        <li key={task.id}>
+          <label>
+            <input type="checkbox" checked={task.done} onChange={() => onToggle(task.id)} />
+            {task.done ? <s>{task.title}</s> : task.title}
+          </label>
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+`TaskList` no tiene ningún `useState` propio relacionado con las tareas: recibe la lista completa y una función `onToggle`, y su única responsabilidad es transformar esos datos en JSX. Si le pasas datos distintos, muestra algo distinto; no le importa si esos datos vinieron de un array fijo, de una llamada a una API o de `localStorage`.
+
+### Container: estado y lógica, delega el render
+
+```tsx
+function TaskListContainer() {
+  const [tasks, setTasks] = useState<Task[]>([
+    { id: "t1", title: "Escribir informe", done: false },
+    { id: "t2", title: "Revisar PR", done: true },
+  ]);
+
+  function handleToggle(id: string) {
+    setTasks((previous) =>
+      previous.map((task) => (task.id === id ? { ...task, done: !task.done } : task)),
+    );
+  }
+
+  return <TaskList tasks={tasks} onToggle={handleToggle} />;
+}
+```
+
+`TaskListContainer` no describe ningún `<ul>` ni ningún `<input>`: decide qué tareas existen y qué pasa cuando cambian, y le delega todo el JSX a `TaskList`. Esta separación trae dos beneficios concretos: puedes probar `TaskList` de forma aislada, pasándole datos de prueba directamente sin montar ninguna lógica de estado; y puedes reutilizar `TaskList` con otro container que obtenga las tareas de otro lado (por ejemplo, de una API), sin tocar una sola línea de la parte visual.
+
+### Una separación de conceptos, no una regla rígida
+
+Antes de que existieran los hooks, esta separación era casi la única forma práctica de reutilizar lógica de estado entre componentes sin duplicar código: si dos pantallas necesitaban la misma lógica de tareas, tenías que envolverla en un container o en patrones más complejos como los "higher-order components". Ya viste en la lección anterior que un **custom hook** como `useTasks()` puede encapsular exactamente esa misma lógica de estado y dártela como un array de valores y funciones, sin necesitar dos componentes ni dos archivos:
+
+```tsx
+function useTasks() {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  function toggle(id: string) {
+    setTasks((previous) =>
+      previous.map((task) => (task.id === id ? { ...task, done: !task.done } : task)),
+    );
+  }
+  return { tasks, toggle };
+}
+
+function TaskScreen() {
+  const { tasks, toggle } = useTasks();
+  return <TaskList tasks={tasks} onToggle={toggle} />;
+}
+```
+
+Los hooks hicieron esta separación más liviana: ya no necesitas crear un componente container solo para tener un lugar donde poner el estado. Piensa en container/presentational como una manera de razonar sobre qué parte de tu código decide (estado, efectos, lógica) y qué parte solo muestra (props, JSX), no como una obligación de crear siempre dos archivos separados. Cuando el componente es simple y no vas a reutilizar la parte visual con otra fuente de datos, mezclar estado y JSX en un solo componente es perfectamente razonable.
+
+Documentación oficial: [react.dev/learn/thinking-in-react](https://react.dev/learn/thinking-in-react).
+
+## Práctica
+
+El siguiente Sandpack separa `TaskListContainer` (estado) de `TaskList` (solo props), e incluye un segundo container, `CompletedCountContainer`, que reutiliza una versión de solo lectura de la lista para mostrar cuántas tareas están hechas, demostrando que la parte presentational sirve para más de un container.
+
+```tsx
+interface Task {
+  id: string;
+  title: string;
+  done: boolean;
+}
+
+function TaskList({ tasks, onToggle }: { tasks: Task[]; onToggle: (id: string) => void }) {
+  return (
+    <ul>
+      {tasks.map((task) => (
+        <li key={task.id}>
+          <label>
+            <input type="checkbox" checked={task.done} onChange={() => onToggle(task.id)} />
+            {task.done ? <s>{task.title}</s> : task.title}
+          </label>
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+<Sandpack
+  files={{
+    '/App.tsx': `import { useState } from "react";
+
+interface Task {
+  id: string;
+  title: string;
+  done: boolean;
+}
+
+function TaskList({ tasks, onToggle }: { tasks: Task[]; onToggle: (id: string) => void }) {
+  return (
+    <ul>
+      {tasks.map((task) => (
+        <li key={task.id}>
+          <label>
+            <input type="checkbox" checked={task.done} onChange={() => onToggle(task.id)} />
+            {task.done ? <s>{task.title}</s> : task.title}
+          </label>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function TaskListContainer() {
+  const [tasks, setTasks] = useState<Task[]>([
+    { id: "t1", title: "Escribir informe", done: false },
+    { id: "t2", title: "Revisar PR", done: true },
+    { id: "t3", title: "Responder correos", done: false },
+  ]);
+
+  function handleToggle(id: string) {
+    setTasks((previous) =>
+      previous.map((task) => (task.id === id ? { ...task, done: !task.done } : task)),
+    );
+  }
+
+  const doneCount = tasks.filter((task) => task.done).length;
+
+  return (
+    <div>
+      <p>{doneCount} de {tasks.length} tareas hechas</p>
+      <TaskList tasks={tasks} onToggle={handleToggle} />
+    </div>
+  );
+}
+
+export default function App() {
+  return <TaskListContainer />;
+}`,
+  }}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Container de notas con presentational reutilizable"
+  solution={
+    <Sandpack
+      files={{
+        '/App.tsx': `import { useState } from "react";
+
+interface Note {
+  id: string;
+  text: string;
+}
+
+function NoteList({ notes, onDelete }: { notes: Note[]; onDelete: (id: string) => void }) {
+  return (
+    <ul>
+      {notes.map((note) => (
+        <li key={note.id}>
+          {note.text} <button onClick={() => onDelete(note.id)}>Borrar</button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function NoteListContainer() {
+  const [notes, setNotes] = useState<Note[]>([
+    { id: "n1", text: "Comprar leche" },
+    { id: "n2", text: "Llamar al dentista" },
+  ]);
+
+  function handleDelete(id: string) {
+    setNotes((previous) => previous.filter((note) => note.id !== id));
+  }
+
+  return <NoteList notes={notes} onDelete={handleDelete} />;
+}
+
+export default function App() {
+  return <NoteListContainer />;
+}`,
+      }}
+    />
+  }
+>
+  Escribe un componente presentational `NoteList` que reciba `notes` (`{ id: string; text: string }[]`) y una función `onDelete(id)`, y muestre cada nota con un botón "Borrar". Escribe un componente container `NoteListContainer` que guarde las notas en estado y elimine una nota filtrando por `id` cuando se llama a `onDelete`. `NoteList` no debe tener ningún `useState` propio.
+</Challenge>
+
+## Errores comunes
+
+**Duplicar estado en el componente presentational.** Si `TaskList` guardara su propia copia de `tasks` con `useState` en lugar de leerla siempre desde props, esa copia se desincroniza en cuanto el container actualiza su propio estado, porque nada conecta ambas copias automáticamente. Se detecta porque la interfaz muestra datos distintos según qué copia se renderizó, y actualizar una no actualiza la otra.
+
+**Mezclar lógica de fetch o de negocio dentro del componente presentational.** Si `TaskList` llamara directamente a una API para obtener las tareas, ya no podrías reutilizarlo con datos de prueba ni con otra fuente de datos sin reescribirlo. Se detecta revisando si el componente que solo debería "mostrar" tiene código que decide de dónde vienen los datos.
+
+**Dividir en container y presentational cuando no hay ninguna necesidad de reutilización.** Crear dos componentes y dos archivos para un botón con un solo `useState` que nunca se va a reutilizar en otro contexto agrega indirección sin beneficio real. Se detecta preguntando: ¿voy a mostrar esta misma UI con otra fuente de datos, o necesito probar la parte visual de forma aislada? Si la respuesta es no en ambos casos, un custom hook o un solo componente suele bastar.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué responsabilidad tiene un componente container?", back: "Decidir qué datos existen y cómo cambian: el estado y la lógica, delegando el JSX a otro componente." },
+    { front: "¿Qué responsabilidad tiene un componente presentational?", back: "Recibir datos como props y transformarlos en JSX, sin tener estado propio de negocio ni saber de dónde vienen los datos." },
+    { front: "¿Qué hicieron los hooks con la necesidad de este patrón?", back: "La hicieron más liviana: un custom hook puede encapsular la misma lógica de estado sin necesitar dos componentes separados." },
+    { front: "¿Cuándo vale la pena separar container y presentational?", back: "Cuando necesitas reutilizar la parte visual con otra fuente de datos, o probarla de forma aislada; no como regla obligatoria para todo componente." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué caracteriza a un componente presentational bien diseñado?",
+      options: [
+        { text: "No tiene estado propio de negocio y solo transforma props en JSX", correct: true, feedback: "Correcto: toda la decisión sobre los datos vive en el container." },
+        { text: "Siempre hace su propia llamada a una API", correct: false, feedback: "Eso mezclaría lógica de datos dentro de la parte que solo debería mostrar." },
+        { text: "Nunca recibe props, solo children", correct: false, feedback: "Un presentational típico recibe varias props además de, opcionalmente, children." },
+      ],
+    },
+    {
+      prompt: "¿Qué cambió con la llegada de los hooks respecto a este patrón?",
+      options: [
+        { text: "Los hooks eliminaron por completo la necesidad de separar estado de presentación", correct: false, feedback: "La separación de conceptos sigue siendo útil; lo que cambió es que ya no requiere dos componentes obligatoriamente." },
+        { text: "Un custom hook puede encapsular la lógica de estado sin necesitar un componente container aparte", correct: true, feedback: "Correcto: la lógica se puede extraer a una función reutilizable en lugar de a un segundo componente." },
+        { text: "Los hooks solo funcionan dentro de componentes container", correct: false, feedback: "Los hooks funcionan en cualquier componente de función, sea container, presentational o ninguno de los dos." },
+      ],
+    },
+    {
+      prompt: "¿Cuál de estas situaciones justifica más claramente separar container y presentational?",
+      options: [
+        { text: "Un botón simple con un solo useState que nunca se reutiliza", correct: false, feedback: "En ese caso, la separación agrega indirección sin ningún beneficio real." },
+        { text: "Necesitas mostrar la misma lista con datos de una API en una pantalla y datos de prueba en un test", correct: true, feedback: "Correcto: ahí la parte presentational se reutiliza con distintas fuentes de datos." },
+        { text: "El componente no tiene ningún estado ni lógica", correct: false, feedback: "Si no hay estado ni lógica que separar, no hay ningún container que crear." },
+      ],
+    },
+  ]}
+/>

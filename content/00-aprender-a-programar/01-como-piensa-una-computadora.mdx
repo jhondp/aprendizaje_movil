@@ -1,0 +1,135 @@
+---
+id: "00-aprender-a-programar/01-como-piensa-una-computadora"
+title: "Cómo piensa una computadora"
+stage: 0
+module: "Antes de escribir código"
+order: 1
+minutes: 10
+prereqs: ["00-aprender-a-programar/00-que-es-un-programa"]
+summary: "Distingue los tres bloques con los que se construye cualquier programa: secuencia, decisión y repetición."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a poder mirar un proceso cotidiano y decir si cada paso es una secuencia, una decisión o una repetición.
+
+**Prerrequisitos:** `00-aprender-a-programar/00-que-es-un-programa`
+
+## Concepto
+
+En la lección anterior viste que un programa es una lista de instrucciones que la computadora ejecuta en orden: eso es una **secuencia**. Pero si solo pudiéramos escribir secuencias, ningún programa podría reaccionar a nada ni repetir nada. Por suerte, con solo tres bloques se puede construir cualquier programa que existe, desde una calculadora hasta una app de banco: secuencia, decisión y repetición.
+
+### Secuencia: hacer las cosas en orden
+
+Ya la conoces. Cada mañana te levantas, te lavas los dientes y te vistes, siempre en ese orden, porque el orden importa: vestirte antes de ducharte no tiene sentido. Un programa que solo tiene secuencia ejecuta instrucciones de arriba hacia abajo, sin desviarse.
+
+### Decisión: elegir entre caminos
+
+Una **decisión** aparece cuando el siguiente paso depende de una condición. Piensa en un semáforo: si está en rojo, te detienes; si no, avanzas. No hay un tercer camino, y la elección no es "más o menos", es exacta: la condición se cumple o no se cumple.
+
+```text
+si está lloviendo:
+  llevar paraguas
+si no:
+  no llevar paraguas
+```
+
+En JavaScript vas a escribir estas decisiones con la palabra clave `if`. Su sintaxis exacta la vas a aprender en la etapa 1; por ahora, quédate con la idea: una decisión evalúa una condición que solo puede ser verdadera o falsa, y ejecuta un camino distinto según el resultado.
+
+### Repetición: hacer lo mismo varias veces
+
+Una **repetición** aparece cuando un mismo paso se ejecuta varias veces, normalmente hasta que se cumple o se deja de cumplir una condición. Piensa en doblar la ropa recién lavada: doblas una prenda, y si quedan más prendas en la canasta, doblas otra, y así hasta que la canasta queda vacía. Nadie te da una instrucción distinta por cada prenda: es la misma instrucción, repetida.
+
+```text
+mientras la canasta no esté vacía:
+  doblar una prenda
+```
+
+En JavaScript vas a escribir repeticiones con `for` o `while`. También aprenderás su sintaxis exacta en la etapa 1.
+
+### Por qué esto importa antes de escribir una sola línea de código
+
+Cuando empieces a escribir JavaScript real, vas a reconocer estos tres bloques detrás de cada línea de sintaxis nueva. Aprender primero la idea, sin la sintaxis, evita que confundas "no entiendo la palabra `if`" con "no entiendo qué es una decisión": son dos problemas distintos, y el segundo ya lo resolviste en esta lección.
+
+Puedes leer más sobre cómo se estructura un proceso paso a paso en la introducción de MDN a la programación web: [MDN: Primeros pasos en la web](https://developer.mozilla.org/es/docs/Learn/Getting_started_with_the_web).
+
+<Callout kind="tip">
+  Un truco para identificar el bloque correcto: pregúntate "¿esto pasa siempre igual (secuencia), pasa solo si algo es cierto (decisión), o pasa varias veces seguidas (repetición)?".
+</Callout>
+
+## Práctica
+
+Este programa suma números paso a paso, mostrando el resultado acumulado en cada línea. Es una secuencia pura: cada instrucción depende de que la anterior ya se haya ejecutado. Ejecútalo, observa la salida y luego cambia el orden de las líneas para comprobar que el resultado también cambia.
+
+<Playground
+  lang="js"
+  code={`console.log(2 + 3);
+console.log(2 + 3 + 10);
+console.log(2 + 3 + 10 + 5);`}
+  expected={`5
+15
+20`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Suma paso a paso"
+  solution={
+    <Playground
+      lang="js"
+      code={`console.log(4);
+console.log(4 + 6);
+console.log(4 + 6 + 2);
+console.log(4 + 6 + 2 + 8);`}
+    />
+  }
+>
+  Escribe cuatro instrucciones `console.log` que muestren la suma acumulada de estos precios, en este orden: 4, luego 6, luego 2, luego 8. Cada línea debe mostrar el total hasta ese punto (por ejemplo, la segunda línea muestra `4 + 6`).
+
+  <Playground lang="js" code={`// Escribe aquí tus cuatro instrucciones`} />
+</Challenge>
+
+## Errores comunes
+
+- **Confundir una repetición con una decisión.** Ambas usan una condición, pero la decisión elige un camino una sola vez y la repetición vuelve a evaluar la condición después de cada vuelta. Cómo detectarlo: pregúntate si el paso ocurre una vez o varias veces seguidas antes de continuar.
+- **Creer que una condición del mundo real ya es una condición para la computadora.** "Si hace frío" es ambiguo: ¿cuántos grados es frío? La computadora necesita una condición exacta, como "si la temperatura es menor a 15 grados". Cómo detectarlo: si no puedes reducir la condición a verdadero o falso con un número o un valor concreto, todavía no está lista para programarse.
+- **Pensar que los tres bloques se usan por separado.** En un programa real se combinan todo el tiempo: una repetición puede contener una decisión adentro. Cómo detectarlo: al leer un proceso, identifica primero el bloque más externo y luego revisa si dentro hay otro bloque anidado.
+
+<Flashcards
+  cards={[
+    { front: "¿Cuáles son los tres bloques con los que se construye cualquier programa?", back: "Secuencia, decisión y repetición." },
+    { front: "¿Qué analogía representa una decisión?", back: "Un semáforo: si está en rojo te detienes, si no, avanzas." },
+    { front: "¿Qué analogía representa una repetición?", back: "Doblar la ropa, prenda por prenda, hasta que la canasta queda vacía." },
+    { front: "¿Qué palabra clave usarás en JavaScript para escribir una decisión?", back: "if (la sintaxis exacta se aprende en la etapa 1)." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Preparar café siguiendo siempre los mismos pasos, en el mismo orden. ¿Qué bloque es?",
+      options: [
+        { text: "Secuencia", correct: true, feedback: "Correcto: son pasos fijos que se ejecutan uno detrás de otro." },
+        { text: "Decisión", correct: false, feedback: "No hay ninguna condición que cambie el camino." },
+        { text: "Repetición", correct: false, feedback: "Los pasos no se repiten, se ejecutan una sola vez cada uno." },
+      ],
+    },
+    {
+      prompt: "Revisar si está lloviendo y elegir entre llevar paraguas o no llevarlo. ¿Qué bloque es?",
+      options: [
+        { text: "Secuencia", correct: false, feedback: "Una secuencia no elige entre caminos distintos." },
+        { text: "Decisión", correct: true, feedback: "Correcto: el camino depende de si se cumple una condición." },
+        { text: "Repetición", correct: false, feedback: "No hay ninguna acción que se repita varias veces." },
+      ],
+    },
+    {
+      prompt: "Doblar una prenda, y luego otra, y luego otra, hasta que la canasta queda vacía. ¿Qué bloque es?",
+      options: [
+        { text: "Secuencia", correct: false, feedback: "Una secuencia simple no vuelve a evaluar una condición en cada vuelta." },
+        { text: "Decisión", correct: false, feedback: "No se elige entre dos caminos distintos." },
+        { text: "Repetición", correct: true, feedback: "Correcto: la misma acción se repite mientras se cumple una condición." },
+      ],
+    },
+  ]}
+/>

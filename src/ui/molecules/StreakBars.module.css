@@ -1,0 +1,61 @@
+.root {
+  background: var(--color-white);
+  border-radius: var(--radius-xl);
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-teal);
+}
+
+.count {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.bars {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+}
+
+.day {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.bar {
+  width: 100%;
+  height: 20px;
+  border-radius: var(--radius-xs);
+  background: var(--ink-10);
+}
+
+.bar[data-active='true'] {
+  height: 52px;
+  background: var(--color-teal);
+}
+
+.bar[data-today='true'][data-active='true'] {
+  background: var(--color-accent);
+}
+
+.dayLabel {
+  font-size: 10px;
+  color: var(--ink-55);
+}

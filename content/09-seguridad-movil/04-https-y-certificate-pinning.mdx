@@ -1,0 +1,233 @@
+---
+id: "09-seguridad-movil/04-https-y-certificate-pinning"
+title: "HTTPS y certificate pinning"
+stage: 9
+module: "Red y entrada"
+order: 4
+minutes: 15
+prereqs: ["09-seguridad-movil/03-almacenamiento-seguro"]
+summary: "Asegura todo el tráfico de tu app con TLS, lee el certificado de tu API desde la terminal y decide con criterio si el certificate pinning vale su costo."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás verificar que toda la comunicación de tu app va por HTTPS sin excepciones, extraer el hash de clave pública de tu API con `openssl`, y documentar una decisión razonada sobre certificate pinning para tu proyecto.
+
+**Prerrequisitos:** `09-seguridad-movil/03-almacenamiento-seguro`
+
+## Concepto
+
+Esta lección cubre **MASVS-NETWORK-1** (todo el tráfico de red protegido según las prácticas actuales) y **MASVS-NETWORK-2** (pinning de identidad para los endpoints bajo control del desarrollador).
+
+### El sobre cerrado y la firma del cartero
+
+Enviar datos por HTTP es mandar una postal: cualquiera que la toque en el camino la lee y puede reescribirla. HTTPS, es decir HTTP sobre TLS, mete la postal en un sobre cerrado (cifrado) y además comprueba que el cartero es quien dice ser (autenticación del servidor mediante su certificado). El sistema operativo trae una lista de autoridades certificadoras (CA) en las que confía; si el certificado de tu API está firmado por una de ellas, la conexión se acepta.
+
+El pinning va un paso más: además de exigir un sobre cerrado, tu app solo acepta al cartero cuya firma concreta guardaste de antemano. Si alguien logra instalar una CA falsa en el dispositivo (una red corporativa, un proxy de inspección, malware), el sobre seguiría pareciendo válido para el sistema, pero no para tu app.
+
+### MASVS-NETWORK-1: HTTPS siempre, sin puertas traseras
+
+Las plataformas ya bloquean el tráfico en claro por defecto: Android desde la versión 9 y iOS mediante App Transport Security (ATS). El riesgo no es olvidar activar HTTPS, sino **desactivar** esas protecciones para salir de un apuro en desarrollo y dejarlo así:
+
+- En iOS, `NSAllowsArbitraryLoads: true` dentro de `NSAppTransportSecurity` apaga ATS para toda la app.
+- En Android, `android:usesCleartextTraffic="true"` permite HTTP a cualquier dominio.
+
+Con Expo, esas claves se configuran desde `app.json` (`ios.infoPlist`) o mediante config plugins. Búscalas en tu proyecto: si aparecen, son un hallazgo. Para desarrollo local con Metro no las necesitas; Expo configura excepciones acotadas al servidor de desarrollo.
+
+Además de no romper los valores por defecto, la app debe cumplir dos cosas: que **todas** las URLs sean `https://` (revisa constantes, `.env`, deep links y URLs construidas dinámicamente) y que el servidor tenga TLS bien configurado (certificado vigente, versiones modernas del protocolo, HSTS). La guía oficial de React Native resume el punto de partida: [https://reactnative.dev/docs/security#networking](https://reactnative.dev/docs/security#networking).
+
+### Leer el certificado de tu API
+
+Antes de hablar de pinning necesitas ver con qué estás tratando. `openssl s_client` abre una conexión TLS y muestra el certificado; encadenado con `openssl x509` extraes los campos. El **hash SPKI** (SHA-256 de la clave pública, en base64) es el valor que se fija en un pin, porque sobrevive a renovaciones del certificado mientras la clave no cambie. Lo harás en la práctica.
+
+### MASVS-NETWORK-2: pinning, con su factura
+
+El pinning protege contra un atacante que controla las CA del dispositivo. Su costo es operativo, y es alto:
+
+- **Rotación.** Cuando renueves el certificado con una clave nueva, o cambies de proveedor, la app con pins antiguos deja de conectar. Los usuarios que no actualicen quedan bloqueados. Por eso todo pin set lleva al menos un **pin de respaldo** para una clave que aún no está en producción, y a veces una **fecha de expiración** tras la cual el pinning se desactiva.
+- **Renovaciones automáticas.** Certbot y la mayoría de clientes ACME (Let's Encrypt, Caddy, Traefik, acme.sh) generan una **clave privada nueva en cada renovación** por defecto (https://eff-certbot.readthedocs.io/en/stable/using.html). Si fijas la clave del certificado hoja (leaf) de una API con Let's Encrypt, la app se rompe en la siguiente renovación, dentro de 90 días como máximo, aunque tengas un pin de respaldo que no corresponde a la clave nueva. Tienes dos opciones seguras: (a) reutilizar la clave de forma deliberada (`certbot --reuse-key` o el equivalente de tu herramienta), con una clave de respaldo ya generada y fijada, y rotar a ella de forma planificada; o (b) fijar la clave de la CA intermedia o raíz en lugar de la hoja (en iOS con `NSPinnedCAIdentities`; en Android, un `<pin>` del pin-set puede corresponder a cualquier certificado de la cadena), aceptando que proteges menos si esa CA emite para un atacante, y fijando también la intermedia de respaldo que tu CA publica.
+- **Terceros.** Solo se hace pinning de endpoints que controlas. Fijar la clave de una API ajena es apostar a que ese proveedor nunca rote.
+- **Depuración.** Las herramientas de inspección de tráfico dejan de funcionar; conviene desactivar el pinning en builds de desarrollo.
+
+En Expo, el pinning necesita código nativo, así que **no funciona en Expo Go ni existe una solución en JavaScript puro**: hace falta un development build (o un build de producción) y una de estas rutas:
+
+**Ruta 1: configuración de plataforma.** En iOS, ATS admite pins declarativos en `Info.plist` (iOS 14 o superior). Desde `app.json`:
+
+```json
+{
+  "expo": {
+    "ios": {
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSPinnedDomains": {
+            "api.notes.example.com": {
+              "NSIncludesSubdomains": false,
+              "NSPinnedLeafIdentities": [
+                { "SPKI-SHA256-BASE64": "PRIMARY_PIN_BASE64_HERE" },
+                { "SPKI-SHA256-BASE64": "BACKUP_PIN_BASE64_HERE" }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+En Android, el equivalente es un archivo `res/xml/network_security_config.xml` referenciado desde el manifiesto ([https://developer.android.com/privacy-and-security/security-config](https://developer.android.com/privacy-and-security/security-config)). Expo no lo genera por ti: hace falta un config plugin que escriba el archivo y modifique el manifiesto en `prebuild`.
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+  <domain-config>
+    <domain includeSubdomains="false">api.notes.example.com</domain>
+    <pin-set expiration="2027-06-30">
+      <pin digest="SHA-256">PRIMARY_PIN_BASE64_HERE</pin>
+      <pin digest="SHA-256">BACKUP_PIN_BASE64_HERE</pin>
+    </pin-set>
+  </domain-config>
+</network-security-config>
+```
+
+**Ruta 2: una biblioteca con módulo nativo.** `react-native-ssl-public-key-pinning` usa OkHttp en Android y TrustKit en iOS, se instala con `npx expo install` y se configura desde JavaScript al arrancar. Sigue necesitando un development build, pero evita escribir el plugin a mano:
+
+```ts
+import { initializeSslPinning } from "react-native-ssl-public-key-pinning";
+
+export async function setupPinning() {
+  if (__DEV__) return; // keep traffic inspectable during development
+  await initializeSslPinning({
+    "api.notes.example.com": {
+      includeSubdomains: false,
+      publicKeyHashes: ["PRIMARY_PIN_BASE64_HERE", "BACKUP_PIN_BASE64_HERE"],
+    },
+  });
+}
+```
+
+Que los pins vivan en JavaScript tiene una consecuencia útil: puedes rotarlos con una actualización OTA sin pasar por las tiendas.
+
+### ¿Vale la pena para tu app?
+
+MASVS sitúa el pinning en el perfil **MAS-L2**. Para la app de notas, que apunta a MAS-L1, la decisión razonable es documentar que **no** haces pinning, que dependes de TLS con configuración moderna y HSTS en el servidor, y qué condición haría cambiar la decisión (por ejemplo, empezar a manejar datos de salud o pagos). Una decisión escrita y justificada cumple la auditoría mejor que un pinning mal operado que bloquea a tus usuarios en la próxima renovación.
+
+<Callout kind="warning">
+  Un pinning sin pin de respaldo es una bomba de tiempo: en la siguiente rotación de clave la app deja de funcionar para todo el que no actualice. Si decides hacer pinning, el pin de respaldo y el calendario de rotación forman parte del control, no son opcionales.
+</Callout>
+
+## Práctica
+
+Ejecuta estos comandos contra tu propia API (sustituye el dominio). Verás el emisor, las fechas de validez y el hash SPKI que usarías como pin.
+
+<Terminal
+  steps={[
+    { cmd: "openssl s_client -connect api.notes.example.com:443 -servername api.notes.example.com </dev/null 2>/dev/null | openssl x509 -noout -subject -issuer -dates", out: "subject=CN=api.notes.example.com\nissuer=C=US, O=Let's Encrypt, CN=R11\nnotBefore=Aug 12 09:14:02 2026 GMT\nnotAfter=Nov 10 09:14:01 2026 GMT" },
+    { cmd: "openssl s_client -connect api.notes.example.com:443 -servername api.notes.example.com </dev/null 2>/dev/null | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl enc -base64", out: "k3Q9mV7t2cX1nB4rP8zLw0yH5aJ6dF2gS9uE1oT3iM4=" },
+    { cmd: "curl -sI http://api.notes.example.com/health | head -n 1", out: "HTTP/1.1 301 Moved Permanently" },
+    { cmd: "grep -rn \"http://\" src app.json .env 2>/dev/null | grep -v localhost", out: "" },
+    { cmd: "grep -n \"NSAllowsArbitraryLoads\\|usesCleartextTraffic\" app.json", out: "" }
+  ]}
+/>
+
+El paso 2 imprime el hash SPKI: ese es el valor que iría en un pin. El paso 3 confirma que el servidor redirige HTTP a HTTPS, aunque la app nunca debe depender de esa redirección. Los pasos 4 y 5 deben devolver vacío. Marca lo que ya cumple tu proyecto:
+
+<Checklist
+  id="09-seguridad-movil/04-network"
+  items={[
+    "Todas las URLs de la app (código, .env, deep links) empiezan por https://",
+    "app.json no contiene NSAllowsArbitraryLoads ni usesCleartextTraffic",
+    "Leí el certificado de mi API con openssl y anoté emisor y fecha de expiración",
+    "Extraje el hash SPKI de la clave pública de mi API",
+    "El servidor redirige HTTP a HTTPS y envía HSTS",
+    "Decidí si hago pinning y escribí la decisión con su justificación",
+    "Si hago pinning: hay pin de respaldo, calendario de rotación y está desactivado en __DEV__",
+    "Si hago pinning de la hoja: la renovación reutiliza la clave a propósito; si no, fijo la CA intermedia",
+    "No hago pinning de dominios de terceros que no controlo"
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Alerta de rotación de pins"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type Pin = { label: string; spki: string; keyValidUntil: string };
+
+const pins: Pin[] = [
+  { label: "primary", spki: "k3Q9mV7t2cX1nB4rP8zLw0yH5aJ6dF2gS9uE1oT3iM4=", keyValidUntil: "2026-10-15" },
+  { label: "backup", spki: "Zx8yW2vU5tS1rQ7pO3nM9lK4jH6gF0dE2cB8aA1zY5w=", keyValidUntil: "2027-09-01" },
+];
+
+const today = new Date("2026-09-26T00:00:00Z");
+const DAY = 24 * 60 * 60 * 1000;
+
+for (const pin of pins) {
+  const daysLeft = Math.floor((new Date(pin.keyValidUntil + "T00:00:00Z").getTime() - today.getTime()) / DAY);
+  const status = daysLeft <= 30 ? "ROTATE SOON" : "ok";
+  console.log(pin.label + ": " + daysLeft + " days left -> " + status);
+}
+
+const usable = pins.filter((p) => new Date(p.keyValidUntil + "T00:00:00Z").getTime() > today.getTime());
+console.log(usable.length >= 2 ? "backup present" : "WARNING: no backup pin");`}
+      expected={`primary: 19 days left -> ROTATE SOON
+backup: 340 days left -> ok
+backup present`}
+    />
+  }
+>
+  Escribe un programa que reciba una lista de pins con su fecha de caducidad de clave y una fecha "hoy" fija (usa `new Date("2026-09-26T00:00:00Z")` para que la salida sea determinista). Para cada pin imprime los días restantes y `ROTATE SOON` si quedan 30 o menos. Al final, imprime `backup present` si hay al menos dos pins vigentes o `WARNING: no backup pin` si no.
+</Challenge>
+
+## Errores comunes
+
+**Apagar ATS o permitir cleartext "solo para probar".** El flag se agrega para conectar con un servidor de pruebas sin certificado y nadie lo quita. Ocurre porque el efecto es invisible en la app. Se detecta buscando `NSAllowsArbitraryLoads` y `usesCleartextTraffic` en `app.json` y en config plugins.
+
+**Fijar el hash del certificado en lugar del de la clave pública.** El pin deja de coincidir en la siguiente renovación, incluso si configuraste la renovación para reutilizar la misma clave. Ocurre por copiar el `fingerprint` del certificado en vez del hash SPKI. Se detecta porque el pinning falla justo después de una renovación sin cambio de clave.
+
+**Fijar la clave hoja con renovación ACME por defecto.** Certbot y clientes similares crean una clave nueva en cada renovación, así que el hash SPKI de la hoja cambia cada 60 a 90 días. Ocurre por suponer que "la clave es la misma". Se detecta comparando el SPKI de la hoja antes y después de una renovación en staging, o revisando si la herramienta tiene activado `--reuse-key`; si no, fija la CA intermedia o configura la reutilización de clave con un plan de rotación.
+
+**Hacer pinning sin pin de respaldo ni plan de rotación.** Todo funciona hasta que cambia la clave del servidor, y entonces la app queda inutilizable para quien no actualice. Se detecta revisando la configuración: un solo pin es un hallazgo en sí mismo.
+
+**Esperar que el pinning funcione en Expo Go.** La configuración se agrega y "no hace nada". Ocurre porque el pinning necesita código nativo y Expo Go no puede incluir el tuyo. Se detecta probando con un proxy de inspección en un development build: si el tráfico se ve, el pinning no está activo.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué dos cosas garantiza HTTPS que HTTP no garantiza?", back: "Confidencialidad e integridad del tráfico (cifrado) y autenticación del servidor (certificado)." },
+    { front: "¿Qué es el hash SPKI y por qué se usa como pin?", back: "El SHA-256 de la clave pública del servidor; sobrevive a renovaciones del certificado que no cambian la clave." },
+    { front: "¿Por qué todo pin set necesita un pin de respaldo?", back: "Para poder rotar la clave del servidor sin bloquear a los usuarios que aún no actualizaron la app." },
+    { front: "¿Se puede hacer certificate pinning en Expo Go o en JavaScript puro?", back: "No; requiere código nativo, así que hace falta un development build con configuración de plataforma o una biblioteca nativa." },
+    { front: "¿En qué perfil MASVS es obligatorio el pinning?", back: "MAS-L2. Una app MAS-L1 puede documentar que no lo hace y por qué." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué flag de app.json indicaría un hallazgo MASVS-NETWORK-1 en iOS?",
+      options: [
+        { text: "NSAllowsArbitraryLoads en true dentro de NSAppTransportSecurity", correct: true, feedback: "Correcto: desactiva ATS para toda la app y permite tráfico sin TLS." },
+        { text: "NSPinnedDomains con dos pins", correct: false, feedback: "Eso es configuración de pinning, no una debilidad." },
+        { text: "NSIncludesSubdomains en false", correct: false, feedback: "Solo limita el alcance de un pin a un dominio exacto; no debilita TLS." }
+      ]
+    },
+    {
+      prompt: "Configuraste tu servidor para renovar el certificado cada 90 días reutilizando la misma clave (certbot --reuse-key). ¿Qué valor debes fijar para que el pinning no se rompa?",
+      options: [
+        { text: "El fingerprint SHA-256 del certificado", correct: false, feedback: "Cambia con cada renovación aunque la clave sea la misma." },
+        { text: "El hash SPKI de la clave pública", correct: true, feedback: "Correcto: solo cambia si cambia la clave. Sin --reuse-key la clave cambia en cada renovación y conviene fijar la CA intermedia." },
+        { text: "La fecha notAfter del certificado", correct: false, feedback: "Una fecha no identifica al servidor." }
+      ]
+    },
+    {
+      prompt: "La app de notas apunta a MAS-L1. ¿Cuál es una decisión válida sobre pinning para la auditoría?",
+      options: [
+        { text: "Hacer pinning de mi API y de la API de mapas de un tercero", correct: false, feedback: "Nunca se fijan claves de dominios que no controlas." },
+        { text: "No hacer pinning y no mencionarlo", correct: false, feedback: "La auditoría exige una decisión documentada, aunque sea no hacerlo." },
+        { text: "No hacer pinning, documentar la justificación y qué condición cambiaría la decisión", correct: true, feedback: "Correcto: MASVS-NETWORK-2 pertenece a L2; una decisión escrita cumple L1." }
+      ]
+    }
+  ]}
+/>

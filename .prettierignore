@@ -1,0 +1,7 @@
+dist
+pnpm-lock.yaml
+template
+docs
+.atl
+content/**/*.mdx
+*.md

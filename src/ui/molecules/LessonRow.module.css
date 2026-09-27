@@ -1,0 +1,29 @@
+.root {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: var(--radius-s);
+  font-size: 13px;
+  color: var(--color-ink);
+  text-decoration: none;
+}
+
+.root:hover {
+  background: var(--ink-06);
+  color: var(--color-ink);
+}
+
+.root[data-state='active'] {
+  background: var(--color-ink);
+  color: var(--color-sand);
+}
+
+.title {
+  flex: 1;
+}
+
+.minutes {
+  font-size: 11px;
+  opacity: 0.6;
+}

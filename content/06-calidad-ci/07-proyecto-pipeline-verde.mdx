@@ -1,0 +1,183 @@
+---
+id: "06-calidad-ci/07-proyecto-pipeline-verde"
+title: "Proyecto: pipeline verde"
+stage: 6
+module: "CI"
+order: 7
+minutes: 25
+prereqs: ["06-calidad-ci/06-github-actions"]
+summary: "Deja la app de notas con lint, tipos estrictos, pruebas unitarias, un flujo de Maestro y un workflow de CI en verde en cada pull request."
+---
+
+## Objetivo
+
+Al terminar este proyecto tendrás el repositorio de la app de notas verificado automáticamente: lint, tipos, al menos cinco pruebas unitarias y un flujo E2E, con un workflow de GitHub Actions en verde en cada pull request.
+
+**Prerrequisitos:** `06-calidad-ci/06-github-actions`
+
+## Concepto
+
+Un edificio nuevo no se entrega cuando las paredes están pintadas, sino cuando pasa la inspección final: el inspector recorre una lista fija (instalación eléctrica, salidas de emergencia, agua, gas) y firma solo si todo cumple. La lista no depende del humor del inspector ni de lo bonito que se vea el edificio. Este proyecto es la inspección final de tu app de notas: una lista objetiva de verificaciones que una máquina ejecuta en cada cambio.
+
+### Punto de partida
+
+Trabajas sobre el repositorio que terminaste en [el proyecto de la etapa 5](/etapa/05-estado-datos-arquitectura/10-proyecto-app-con-api): la app de notas con capas de dominio, infraestructura e interfaz, el puerto `NotesRepository` y su adaptador de SQLite. No agregas funcionalidades nuevas. El objetivo es que cada funcionalidad existente quede protegida.
+
+### Qué vas a construir
+
+**1. Herramientas de calidad.** ESLint con `eslint-config-expo` y la integración de Prettier, `strict: true` en `tsconfig.json` y estos scripts en `package.json`:
+
+```json
+{
+  "packageManager": "pnpm@10.18.0",
+  "scripts": {
+    "lint": "expo lint --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "test:watch": "jest --watch"
+  },
+  "jest": {
+    "preset": "jest-expo",
+    "clearMocks": true
+  }
+}
+```
+
+Usa en `packageManager` la versión que muestra `pnpm --version` en tu máquina. Si tu proyecto todavía tiene `package-lock.json`, haz primero la migración a pnpm de la lección de GitHub Actions (`pnpm import`, borrar `package-lock.json` y confirmar `pnpm-lock.yaml`); sin ella, `pnpm install --frozen-lockfile` falla en CI porque no hay lockfile de pnpm.
+
+**2. Pruebas unitarias.** Al menos cinco pruebas con Jest y React Native Testing Library, repartidas así como mínimo:
+
+| Archivo | Qué prueba | Técnica |
+| --- | --- | --- |
+| `src/features/notes/ui/useNotes.test.ts` | El hook carga y agrega notas | `renderHook`, repositorio falso inyectado |
+| `src/features/notes/ui/NotesScreen.test.tsx` | La pantalla muestra lo que devuelve el repositorio | `jest.mock` del adaptador de SQLite |
+| `src/features/notes/ui/NoteComposer.test.tsx` | El usuario escribe, guarda y ve la nota | `userEvent`, `getByRole`, `getByText` |
+
+Con las pruebas de las lecciones anteriores ya tienes seis o siete. Si tu app tiene reglas de dominio propias, por ejemplo validar un título o ordenar notas, agrega pruebas para ellas: son las más baratas de escribir y de mantener.
+
+**3. Un flujo de Maestro.** `flows/add-note.yaml`, independiente, que empieza con `clearState: true`, crea una nota y comprueba que aparece. Se ejecuta en tu máquina antes de pedir revisión.
+
+**4. El workflow de CI.** `.github/workflows/ci.yml` que se dispara en cada pull request y en cada push a `main`, instala con pnpm y caché, y ejecuta lint, formato, tipos y pruebas. Una regla de GitHub exige que el check pase para integrar en `main`.
+
+**5. La insignia.** El `README.md` empieza con la insignia de estado del workflow.
+
+### Cómo trabajar
+
+Haz el proyecto como lo harías en un equipo: una rama y una PR por paso. Por ejemplo, `chore: configure eslint and prettier`, `test(notes): cover useNotes hook`, `test(notes): add maestro flow for adding a note`, `ci: run lint, typecheck and tests on pull requests`. Así cada PR es pequeña y, desde que el workflow existe, cada PR siguiente ya se verifica sola.
+
+Un orden que funciona:
+
+1. Configura ESLint y Prettier y ejecuta `pnpm format` una vez. Integra ese cambio solo, sin mezclar lógica: es un diff grande pero mecánico.
+2. Activa `strict` y corrige los errores de `pnpm typecheck` uno por uno. No uses `any` ni `// @ts-ignore` para salir del paso: cada error es una pregunta sobre qué pasa si el valor es `null` o `undefined`.
+3. Agrega el workflow de CI lo antes posible, aunque solo ejecute lint. Cada verificación que agregues después ya correrá en la PR.
+4. Escribe las pruebas unitarias, empezando por el hook, que no depende de la interfaz.
+5. Escribe el flujo de Maestro al final, cuando el resto ya esté estable.
+
+### Qué significa terminado
+
+El proyecto está terminado cuando todo esto es verdad al mismo tiempo, en una copia recién clonada del repositorio:
+
+- `pnpm lint`, `pnpm format:check` y `pnpm typecheck` terminan sin errores ni advertencias.
+- `pnpm test` ejecuta al menos cinco pruebas y todas pasan.
+- `maestro test flows/` pasa en un emulador con la app instalada.
+- La última PR integrada muestra el check de CI en verde y `main` tiene una regla que lo exige.
+- El `README.md` muestra la insignia en verde.
+
+Para comprobar lo de "copia recién clonada", clona el repositorio en otra carpeta, ejecuta `pnpm install --frozen-lockfile` y los scripts. Si algo falla ahí, también fallará en CI.
+
+Referencias: https://docs.github.com/es/actions, https://docs.expo.dev/develop/unit-testing/ y https://docs.maestro.dev/
+
+## Práctica
+
+Así se ve la verificación final en local antes de abrir la última PR del proyecto.
+
+<Terminal
+  steps={[
+    { cmd: "pnpm lint && pnpm format:check && pnpm typecheck", out: "> expo lint --max-warnings 0\n\n> prettier --check .\nChecking formatting...\nAll matched files use Prettier code style!\n\n> tsc --noEmit" },
+    { cmd: "pnpm test", out: " PASS  src/features/notes/ui/useNotes.test.ts\n PASS  src/features/notes/ui/NotesScreen.test.tsx\n PASS  src/features/notes/ui/NoteComposer.test.tsx\n\nTest Suites: 3 passed, 3 total\nTests:       7 passed, 7 total\nSnapshots:   0 total\nTime:        3.42 s" },
+    { cmd: "maestro test flows/", out: "[Passed] add-note (6s)\n\n1/1 Flow Passed in 6s" },
+    { cmd: "gh pr checks", out: "All checks were successful\n0 cancelled, 0 failing, 1 successful, 0 skipped, and 0 pending checks\n\n✓  CI/Lint, typecheck and test (pull_request)  58s  https://github.com/ana/notes/actions/runs/1203" },
+  ]}
+/>
+
+Marca cada punto cuando esté cumplido en tu repositorio.
+
+<Checklist
+  id="06-calidad-ci/07-proyecto-pipeline-verde-done"
+  items={[
+    "pnpm lint termina sin errores ni advertencias (--max-warnings 0)",
+    "pnpm format:check pasa y Prettier está integrado en ESLint",
+    "tsconfig.json tiene strict: true y pnpm typecheck termina sin errores",
+    "pnpm test ejecuta más de cinco pruebas y todas pasan",
+    "Hay al menos una prueba de hook, una con repositorio falso o jest.mock y una de pantalla",
+    "flows/add-note.yaml pasa con maestro test flows/",
+    ".github/workflows/ci.yml ejecuta lint, formato, tipos y pruebas en cada pull request",
+    "Una regla de GitHub exige el check de CI para integrar en main",
+    "El README.md muestra la insignia de CI en verde",
+    "Un clon limpio con pnpm install --frozen-lockfile pasa todos los scripts",
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Lleva Maestro al pipeline"
+  solution={
+    <Terminal
+      steps={[
+        { cmd: "cat .github/workflows/e2e.yml", out: "name: E2E\n\non:\n  pull_request:\n\njobs:\n  maestro-android:\n    runs-on: ubuntu-latest\n    timeout-minutes: 45\n    steps:\n      - uses: actions/checkout@v7\n      - uses: pnpm/action-setup@v6\n      - uses: actions/setup-node@v7\n        with:\n          node-version: 22\n          cache: pnpm\n      - uses: actions/setup-java@v6\n        with:\n          distribution: temurin\n          java-version: 17\n      - run: pnpm install --frozen-lockfile\n      - name: Install Maestro\n        run: |\n          curl -fsSL \"https://get.maestro.mobile.dev\" | bash\n          echo \"$HOME/.maestro/bin\" >> \"$GITHUB_PATH\"\n      - name: Enable KVM for the emulator\n        run: |\n          echo 'KERNEL==\"kvm\", GROUP=\"kvm\", MODE=\"0666\", OPTIONS+=\"static_node=kvm\"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules\n          sudo udevadm control --reload-rules\n          sudo udevadm trigger --name-match=kvm\n      - name: Build, install and run flows\n        uses: reactivecircus/android-emulator-runner@v2\n        with:\n          api-level: 34\n          arch: x86_64\n          script: npx expo run:android --variant release --no-bundler && maestro test flows/" },
+        { cmd: "gh run watch", out: "✓ feat/e2e-ci E2E · 1210\nTriggered via pull_request about 21 minutes ago\n\nJOBS\n✓ maestro-android in 19m32s (ID 3390)" },
+      ]}
+    />
+  }
+>
+  Tu flujo de Maestro solo corre en tu máquina. Crea un segundo workflow, `.github/workflows/e2e.yml`, que en cada pull request instale dependencias, instale Maestro, arranque un emulador de Android con la action `reactivecircus/android-emulator-runner`, compile e instale la app con `npx expo run:android --variant release --no-bundler` y ejecute `maestro test flows/`. Mantenlo separado de `ci.yml`: tarda mucho más y no quieres que retrase la respuesta de lint y pruebas. Anota cuánto tarda el primer run.
+</Challenge>
+
+## Errores comunes
+
+**Silenciar herramientas para llegar al verde.** El pipeline pasa, pero el código tiene diez `// eslint-disable`, varios `as any` y una prueba marcada con `test.skip`. Ocurre por tratar el color del check como el objetivo en lugar de la calidad que representa. Se detecta buscando esos patrones en el repositorio antes de cerrar el proyecto; cada uno debe tener una justificación escrita o desaparecer.
+
+**Pruebas que pasan aunque el código esté roto.** Tienes siete pruebas en verde, pero una de ellas prueba un mock y otra no tiene ningún `expect`. Ocurre al escribir pruebas para cumplir la cuota. Se detecta rompiendo a propósito la funcionalidad, por ejemplo haciendo que `addNote` no guarde nada: si ninguna prueba falla, la suite no protege esa funcionalidad.
+
+**Workflow que solo funciona en la rama donde se creó.** El check aparece en la PR que agregó `ci.yml`, pero no en las siguientes o no se puede exigir en la regla de `main`. Ocurre cuando el workflow se dispara solo con `push` a una rama concreta o cuando la PR que lo agrega todavía no se integró. Se detecta abriendo una PR nueva después de integrar el workflow y comprobando que el check aparece.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué verificaciones ejecuta en cada pull request el pipeline de CI de una app de Expo?", back: "Lint, formato, verificación de tipos y pruebas unitarias; el E2E con Maestro puede ir en un workflow aparte." },
+    { front: "¿Cómo compruebas que tu suite de pruebas realmente protege una funcionalidad?", back: "Rompiéndola a propósito: si ninguna prueba falla, la funcionalidad no está protegida." },
+    { front: "¿Por qué conviene un workflow E2E separado del workflow de lint y pruebas?", back: "Porque el E2E con emulador tarda mucho más y no debe retrasar la respuesta rápida de lint, tipos y pruebas." },
+    { front: "¿Por qué verificar el proyecto en un clon limpio antes de darlo por terminado?", back: "Porque reproduce lo que hace el CI: sin archivos locales ni dependencias viejas." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "El check de CI está en verde, pero hay tres test.skip en la suite. ¿El proyecto está terminado?",
+      options: [
+        { text: "Sí, el check está en verde", correct: false, feedback: "El verde solo vale si las verificaciones son reales." },
+        { text: "No, las pruebas omitidas no protegen nada y deben arreglarse o eliminarse", correct: true, feedback: "Correcto: silenciar pruebas es falsear la inspección." },
+        { text: "Sí, si las pruebas omitidas son menos de cinco", correct: false, feedback: "No hay una cuota de pruebas omitidas aceptables." },
+      ],
+    },
+    {
+      prompt: "¿En qué orden conviene agregar las piezas del proyecto?",
+      options: [
+        { text: "Primero todo el código y al final el workflow de CI", correct: false, feedback: "Pierdes la verificación automática durante todo el proyecto." },
+        { text: "El workflow de CI temprano, y después cada verificación en su propia PR", correct: true, feedback: "Correcto: cada PR posterior ya se verifica sola." },
+        { text: "Todo en una sola PR para ahorrar tiempo", correct: false, feedback: "Una PR gigante es difícil de revisar y de revertir." },
+      ],
+    },
+    {
+      prompt: "¿Qué combinación de pruebas unitarias pide el proyecto como mínimo?",
+      options: [
+        { text: "Cinco snapshots de pantallas completas", correct: false, feedback: "Los snapshots de pantallas completas son frágiles y no verifican comportamiento." },
+        { text: "Un hook, un repositorio falso o jest.mock y una pantalla, con al menos cinco pruebas en total", correct: true, feedback: "Correcto: cubre lógica, aislamiento y lo que ve el usuario." },
+        { text: "Solo pruebas E2E con Maestro", correct: false, feedback: "El E2E complementa a las unitarias, no las reemplaza." },
+      ],
+    },
+  ]}
+/>

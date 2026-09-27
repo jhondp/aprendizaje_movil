@@ -1,0 +1,412 @@
+---
+id: "05-estado-datos-arquitectura/10-proyecto-app-con-api"
+title: "Proyecto: app conectada a una API pública"
+stage: 5
+module: "Formularios y proyecto"
+order: 10
+minutes: 35
+prereqs: ["05-estado-datos-arquitectura/09-react-hook-form-y-zod"]
+summary: "Reorganiza la app de notas por features y capas, guarda las notas en SQLite, agrega frases de una API con caché persistente y valida el formulario con zod."
+---
+
+## Objetivo
+
+Al terminar este proyecto tendrás la app de notas organizada por features y capas, con notas en SQLite, una feature de frases que consume una API pública con TanStack Query y caché persistente, y un formulario validado con zod.
+
+**Prerrequisitos:** `05-estado-datos-arquitectura/09-react-hook-form-y-zod`
+
+## Concepto
+
+Este proyecto parte de la app que construiste en [Proyecto: app de notas local](/etapa/04-react-native-expo/11-proyecto-app-de-notas). Esa app funciona, pero guarda las notas en memoria y toda la lógica vive en las pantallas. Ahora vas a aplicar cada lección de esta etapa sobre ella, sin agregar pantallas complicadas: el reto está en la estructura, no en la interfaz.
+
+Piensa en una mudanza a una casa más grande. No compras muebles nuevos: llevas los que tienes, pero esta vez cada uno va a una habitación con un propósito, las cosas de valor van a la caja fuerte y la despensa se llena con lo que traes del mercado. La app hace lo mismo con su código y sus datos.
+
+### Qué vas a construir
+
+1. **Estructura por features.** Mueve el código a `src/features/notes` con las capas `domain`, `application`, `infrastructure` y `ui`. Las rutas de `src/app` quedan delgadas.
+2. **Notas en SQLite.** Un adaptador `createSqliteNotesRepository` cumple el puerto `NotesRepository` con `expo-sqlite`. Cierras la app y las notas siguen ahí.
+3. **Feature de frases.** Una feature `quotes` muestra una frase aleatoria de https://dummyjson.com/quotes/random con TanStack Query y un botón para pedir otra.
+4. **Caché persistente.** La última frase se guarda en AsyncStorage con `PersistQueryClientProvider`, así que al abrir la app sin red se ve la frase anterior en lugar de un error.
+5. **Formulario validado.** Crear una nota usa react-hook-form y un esquema de zod para título y contenido.
+
+La API que muestra la frase responde con esta forma, que el adaptador traduce al tipo del dominio:
+
+```json
+{ "id": 807, "quote": "Inside of a ring or out, ain't nothing wrong with going down.", "author": "Muhammad Ali" }
+```
+
+### La estructura final
+
+```text
+src/
+├── app/
+│   ├── _layout.tsx                 # PersistQueryClientProvider + Stack
+│   ├── index.tsx                   # export { NotesScreen as default }
+│   └── new-note.tsx                # export { NewNoteScreen as default }
+└── features/
+    ├── notes/
+    │   ├── domain/note.ts                          # Note, createNote
+    │   ├── application/notesService.ts             # NotesRepository port, use cases
+    │   ├── infrastructure/sqliteNotesRepository.ts # expo-sqlite adapter
+    │   ├── ui/                                     # NoteRow, NoteList, NoteForm, noteFormSchema, screens
+    │   ├── notesModule.ts                          # composition root
+    │   └── index.ts                                # public API
+    └── quotes/
+        ├── domain/quote.ts                         # Quote type
+        ├── infrastructure/dummyJsonQuotes.ts       # fetch + mapping
+        ├── ui/QuoteCard.tsx                        # useQuery
+        └── index.ts
+```
+
+`notesModule.ts` es la raíz de composición de la feature: el único archivo que importa de `infrastructure`. La feature `quotes` no tiene reglas propias, así que no necesita casos de uso: su adaptador devuelve el tipo del dominio y la interfaz lo muestra. No crees capas vacías.
+
+### El adaptador de SQLite
+
+El adaptador abre la base una sola vez y guarda la promesa, para que todas las llamadas usen la misma conexión:
+
+```ts
+// src/features/notes/infrastructure/sqliteNotesRepository.ts
+import * as SQLite from "expo-sqlite";
+import type { NotesRepository } from "../application/notesService";
+import type { Note } from "../domain/note";
+
+type NoteRow = { id: string; title: string; body: string; created_at: string };
+
+export function createSqliteNotesRepository(databaseName: string): NotesRepository {
+  const dbPromise = SQLite.openDatabaseAsync(databaseName).then(async (db) => {
+    await db.execAsync(
+      "CREATE TABLE IF NOT EXISTS notes (id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, created_at TEXT NOT NULL);",
+    );
+    return db;
+  });
+
+  return {
+    async list(): Promise<Note[]> {
+      const db = await dbPromise;
+      const rows = await db.getAllAsync<NoteRow>("SELECT * FROM notes ORDER BY created_at DESC");
+      return rows.map((r) => ({ id: r.id, title: r.title, body: r.body, createdAt: r.created_at }));
+    },
+    async save(note) {
+      const db = await dbPromise;
+      await db.runAsync(
+        "INSERT OR REPLACE INTO notes (id, title, body, created_at) VALUES (?, ?, ?, ?)",
+        note.id,
+        note.title,
+        note.body,
+        note.createdAt,
+      );
+    },
+    async remove(id) {
+      const db = await dbPromise;
+      await db.runAsync("DELETE FROM notes WHERE id = ?", id);
+    },
+  };
+}
+```
+
+El adaptador traduce entre `created_at` (el nombre de la columna) y `createdAt` (el nombre del dominio). Esa traducción es justo el trabajo de un adaptador.
+
+### La caché persistente de frases
+
+TanStack Query guarda su caché en memoria. Para que sobreviva al cierre de la app, se envuelve el cliente con `PersistQueryClientProvider` y un persister de AsyncStorage. Documentación: https://tanstack.com/query/latest/docs/framework/react/plugins/persistQueryClient
+
+```bash
+npx expo install @tanstack/react-query @tanstack/react-query-persist-client @tanstack/query-async-storage-persister @react-native-async-storage/async-storage
+```
+
+```tsx
+// src/app/_layout.tsx
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
+import { QueryClient } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
+import { Stack } from "expo-router";
+
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { gcTime: 1000 * 60 * 60 * 24 } },
+});
+
+const persister = createAsyncStoragePersister({ storage: AsyncStorage });
+
+export default function RootLayout() {
+  return (
+    <PersistQueryClientProvider client={queryClient} persistOptions={{ persister }}>
+      <Stack />
+    </PersistQueryClientProvider>
+  );
+}
+```
+
+`gcTime` sube a 24 horas porque la documentación pide que sea al menos igual a `maxAge`, el tiempo máximo que se conserva la caché persistida (24 horas por defecto). Con los 5 minutos por defecto, una consulta que ningún componente usa durante 5 minutos se elimina de la memoria y también del almacenamiento, y la frase guardada desaparece antes de tiempo.
+
+### Qué significa terminado
+
+El proyecto está terminado cuando:
+
+- Creas tres notas, cierras la app por completo, la vuelves a abrir y las tres siguen ahí.
+- Enviar el formulario con el título vacío muestra el error debajo del campo y no crea nada.
+- La frase aparece al abrir, el botón "Otra frase" pide una nueva y, sin red, se ve la última frase guardada.
+- `grep -rnE "from \"(react|react-native|expo)" src/features/*/domain` no imprime nada.
+- `src/app/index.tsx` y `src/app/new-note.tsx` solo importan y exportan una pantalla; `src/app/_layout.tsx` solo configura proveedores y navegación.
+
+## Práctica
+
+El Snack es el esqueleto del proyecto en un solo archivo. Las features ya están separadas por comentarios y la frase se carga con TanStack Query. Las notas todavía usan un adaptador en memoria y un formulario sin validar: ese es tu trabajo. Pasa el código a un proyecto local con `npx create-expo-app@latest` y reparte cada bloque en su archivo según la estructura de arriba.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  dependencies={{ '@tanstack/react-query': '^5.0.0' }}
+  code={`import { useEffect, useState } from "react";
+import { ActivityIndicator, Button, FlatList, StyleSheet, Text, TextInput, View } from "react-native";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+
+// features/notes/domain
+function createNote(title, now) {
+  const clean = title.trim();
+  if (clean.length === 0) throw new Error("El título es obligatorio");
+  return { id: String(now.getTime()), title: clean, createdAt: now.toISOString() };
+}
+
+// features/notes/application
+const makeNotesService = (repository, now) => ({
+  add: (title) => repository.save(createNote(title, now())),
+  list: () => repository.list(),
+});
+
+// features/notes/infrastructure (TODO: replace with an expo-sqlite adapter)
+function createInMemoryNotesRepository() {
+  let notes = [];
+  return {
+    list: async () => [...notes].reverse(),
+    save: async (note) => {
+      notes = [...notes, note];
+    },
+  };
+}
+
+// features/quotes/infrastructure
+async function fetchRandomQuote() {
+  const res = await fetch("https://dummyjson.com/quotes/random");
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const data = await res.json();
+  return { id: data.id, text: data.quote, author: data.author };
+}
+
+// composition root
+const notesService = makeNotesService(createInMemoryNotesRepository(), () => new Date());
+const queryClient = new QueryClient();
+
+// features/quotes/ui
+function QuoteCard() {
+  const { data, isPending, isError, isFetching, refetch } = useQuery({
+    queryKey: ["quotes", "random"],
+    queryFn: fetchRandomQuote,
+    staleTime: 60_000,
+  });
+  if (isPending) return <ActivityIndicator />;
+  if (isError) return <Button title="No se pudo cargar. Reintentar" onPress={() => refetch()} />;
+  return (
+    <View style={styles.card}>
+      <Text style={styles.quote}>{data.text}</Text>
+      <Text style={styles.author}>{data.author}</Text>
+      <Button title={isFetching ? "Cargando..." : "Otra frase"} onPress={() => refetch()} />
+    </View>
+  );
+}
+
+// features/notes/ui (TODO: validate with react-hook-form + zod)
+function NotesSection() {
+  const [notes, setNotes] = useState([]);
+  const [title, setTitle] = useState("");
+  useEffect(() => {
+    notesService.list().then(setNotes);
+  }, []);
+  const add = async () => {
+    await notesService.add(title);
+    setTitle("");
+    setNotes(await notesService.list());
+  };
+  return (
+    <View style={styles.section}>
+      <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="Nueva nota" />
+      <Button title="Agregar" onPress={add} />
+      <FlatList data={notes} keyExtractor={(n) => n.id} renderItem={({ item }) => <Text style={styles.note}>{item.title}</Text>} />
+    </View>
+  );
+}
+
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <View style={styles.container}>
+        <QuoteCard />
+        <NotesSection />
+      </View>
+    </QueryClientProvider>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, paddingTop: 64, paddingHorizontal: 16, gap: 16 },
+  card: { padding: 12, borderRadius: 8, backgroundColor: "#f1f5f9", gap: 6 },
+  quote: { fontSize: 16, fontStyle: "italic" },
+  author: { color: "#475569" },
+  section: { flex: 1, gap: 8 },
+  input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 8 },
+  note: { fontSize: 16, paddingVertical: 4 },
+});`}
+/>
+
+Hay un fallo a propósito en el esqueleto: si agregas una nota vacía, `createNote` lanza un error que nadie captura. El formulario con zod lo evita antes de llegar al dominio, y el dominio sigue protegiendo los datos si otra parte de la app llama a `add`.
+
+Marca cada punto cuando lo tengas funcionando en tu proyecto local:
+
+<Checklist
+  id="05-estado-datos-arquitectura/10-proyecto-app-con-api-entrega"
+  items={[
+    "El código vive en src/features/notes y src/features/quotes con sus capas",
+    "Los archivos de src/app solo importan y exportan pantallas",
+    "El dominio de notas no importa react, react-native ni expo",
+    "NotesRepository es un tipo y createSqliteNotesRepository lo implementa con expo-sqlite",
+    "Solo notesModule.ts importa el adaptador de SQLite",
+    "Las notas sobreviven al cierre completo de la app",
+    "La frase se obtiene con useQuery y se puede pedir otra",
+    "PersistQueryClientProvider guarda la caché en AsyncStorage y gcTime es de 24 horas",
+    "El formulario de nota usa react-hook-form con zodResolver y muestra errores por campo",
+    "Los componentes de la interfaz reciben datos por props y solo las pantallas llaman a casos de uso"
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Notas en SQLite sin tocar el dominio"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="55.0.0"
+      dependencies={{ 'expo-sqlite': '*' }}
+      code={`import { useEffect, useState } from "react";
+import { Button, FlatList, Text, TextInput, View } from "react-native";
+import * as SQLite from "expo-sqlite";
+
+// domain (unchanged)
+function createNote(title, now) {
+  const clean = title.trim();
+  if (clean.length === 0) throw new Error("El título es obligatorio");
+  return { id: String(now.getTime()), title: clean, createdAt: now.toISOString() };
+}
+
+// application (unchanged)
+const makeNotesService = (repository, now) => ({
+  add: (title) => repository.save(createNote(title, now())),
+  list: () => repository.list(),
+});
+
+// infrastructure: expo-sqlite adapter, same port
+function createSqliteNotesRepository(databaseName) {
+  const dbPromise = SQLite.openDatabaseAsync(databaseName).then(async (db) => {
+    await db.execAsync(
+      "CREATE TABLE IF NOT EXISTS notes (id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL, created_at TEXT NOT NULL);"
+    );
+    return db;
+  });
+  return {
+    list: async () => {
+      const db = await dbPromise;
+      const rows = await db.getAllAsync("SELECT * FROM notes ORDER BY created_at DESC");
+      return rows.map((r) => ({ id: r.id, title: r.title, createdAt: r.created_at }));
+    },
+    save: async (note) => {
+      const db = await dbPromise;
+      await db.runAsync(
+        "INSERT OR REPLACE INTO notes (id, title, created_at) VALUES (?, ?, ?)",
+        note.id,
+        note.title,
+        note.createdAt
+      );
+    },
+  };
+}
+
+// composition root: the only line that changed
+const notesService = makeNotesService(createSqliteNotesRepository("project.db"), () => new Date());
+
+export default function App() {
+  const [notes, setNotes] = useState([]);
+  const [title, setTitle] = useState("");
+  const [error, setError] = useState("");
+  useEffect(() => {
+    notesService.list().then(setNotes);
+  }, []);
+  const add = async () => {
+    try {
+      await notesService.add(title);
+      setTitle("");
+      setError("");
+      setNotes(await notesService.list());
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+  return (
+    <View style={{ flex: 1, paddingTop: 64, paddingHorizontal: 16, gap: 8 }}>
+      <TextInput style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 8 }} value={title} onChangeText={setTitle} placeholder="Nueva nota" />
+      <Button title="Agregar" onPress={add} />
+      {error ? <Text style={{ color: "#b00020" }}>{error}</Text> : null}
+      <FlatList data={notes} keyExtractor={(n) => n.id} renderItem={({ item }) => <Text>{item.title}</Text>} />
+    </View>
+  );
+}`}
+    />
+  }
+>
+  Empieza por el paso más importante del proyecto. Toma la parte de notas del esqueleto (dominio, aplicación, adaptador y pantalla; deja fuera las frases) y reemplaza `createInMemoryNotesRepository` por `createSqliteNotesRepository(databaseName)`, que cumpla el mismo puerto con `openDatabaseAsync`, `runAsync` y `getAllAsync`, y traduzca la columna `created_at` al campo `createdAt`. Solo la raíz de composición puede cambiar además del adaptador. De paso, captura el error del dominio y muéstralo bajo el campo. Recarga el Snack y comprueba que las notas siguen ahí.
+</Challenge>
+
+## Errores comunes
+
+**Mover archivos sin mover las dependencias.** Se ve como una carpeta `features/notes/domain` cuyo `note.ts` todavía importa `expo-sqlite` o un componente. Pasa porque reorganizar carpetas se siente como terminar la arquitectura. La estructura promete algo que el código no cumple. Se detecta con el `grep` de la sección "Qué significa terminado". Solución: revisar los imports de cada capa contra la tabla de la lección de screaming architecture.
+
+**Dejar `gcTime` en su valor por defecto con la caché persistente.** Se ve como `PersistQueryClientProvider` configurado pero, a veces, la frase no aparece al abrir sin red. Ocurre porque una consulta sin componentes que la usen se elimina, también del almacenamiento, cuando pasa `gcTime`, que por defecto es de 5 minutos. Se detecta navegando a otra pantalla donde no se muestre la frase durante más de 5 minutos, cerrando la app y abriéndola en modo avión: aparece el error en lugar de la frase. Solución: `gcTime` de 24 horas en el `QueryClient`, igual o mayor que `maxAge`.
+
+**Abrir la base de datos en cada operación.** Se ve como `openDatabaseAsync` dentro de `list` y de `save`. Pasa por copiar el ejemplo de la lección de SQLite dentro de cada método. Cada llamada abre una conexión nueva, lo que es lento y puede provocar errores de base bloqueada. Se detecta porque la lista tarda en aparecer o por errores intermitentes al guardar rápido. Solución: abrir una vez y reutilizar la promesa.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué archivo de una feature es el único que importa de infrastructure?", back: "La raíz de composición, por ejemplo notesModule.ts, que crea el adaptador y se lo pasa a los casos de uso." },
+    { front: "¿Qué componente de TanStack Query guarda la caché en AsyncStorage?", back: "PersistQueryClientProvider con un persister creado por createAsyncStoragePersister." },
+    { front: "¿Por qué hay que subir gcTime al persistir la caché de TanStack Query?", back: "Debe ser igual o mayor que maxAge (24 horas por defecto); si no, las consultas sin uso se eliminan de la caché y del almacenamiento antes de tiempo." },
+    { front: "¿Qué traducción hace un adaptador de SQLite para notas?", back: "Convierte filas de la base, como created_at, en objetos del dominio, como createdAt, y viceversa." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Cambias las notas de memoria a SQLite. ¿Qué archivos deberían cambiar?",
+      options: [
+        { text: "Un adaptador nuevo y la raíz de composición", correct: true, feedback: "Correcto: dominio, casos de uso y pantallas no se enteran." },
+        { text: "El dominio y las pantallas", correct: false, feedback: "Si cambian, la separación de capas no está funcionando." },
+        { text: "Todas las rutas de src/app", correct: false, feedback: "Las rutas solo exportan pantallas; no saben dónde se guardan las notas." }
+      ]
+    },
+    {
+      prompt: "¿Por qué la feature quotes no tiene carpeta application en este proyecto?",
+      options: [
+        { text: "Porque TanStack Query prohíbe los casos de uso", correct: false, feedback: "No hay tal restricción." },
+        { text: "Porque no tiene reglas propias y una capa vacía solo agregaría archivos", correct: true, feedback: "Correcto: las capas se agregan cuando resuelven un problema." },
+        { text: "Porque las frases se guardan en SQLite", correct: false, feedback: "Las frases se cachean con TanStack Query y AsyncStorage." }
+      ]
+    },
+    {
+      prompt: "Abres la app sin red y quieres ver la última frase. ¿Qué lo hace posible?",
+      options: [
+        { text: "retry: 3 en useQuery", correct: false, feedback: "Los reintentos fallarían igual sin red." },
+        { text: "La caché persistida en AsyncStorage con PersistQueryClientProvider", correct: true, feedback: "Correcto: la caché se restaura al abrir y muestra el último dato guardado." },
+        { text: "Guardar la frase en SecureStore", correct: false, feedback: "SecureStore es para secretos, no para caché de datos públicos." }
+      ]
+    }
+  ]}
+/>

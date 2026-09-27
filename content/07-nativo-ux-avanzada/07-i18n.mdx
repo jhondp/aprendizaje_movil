@@ -1,0 +1,288 @@
+---
+id: "07-nativo-ux-avanzada/07-i18n"
+title: "Internacionalización"
+stage: 7
+module: "Inclusión"
+order: 7
+minutes: 12
+prereqs: ["07-nativo-ux-avanzada/06-accesibilidad"]
+summary: "Traduce la app a español e inglés con expo-localization e i18n-js, con interpolación, plurales y formato de fechas según el idioma del dispositivo."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás detectar el idioma del dispositivo con `expo-localization`, mostrar los textos de la app en español o inglés con `i18n-js` y formatear fechas y números según ese idioma.
+
+**Prerrequisitos:** `07-nativo-ux-avanzada/06-accesibilidad`
+
+## Concepto
+
+Internacionalizar (abreviado **i18n**, porque entre la "i" y la "n" hay 18 letras) es preparar la app para que funcione en varios idiomas y regiones sin reescribir componentes. Localizar (**l10n**) es el trabajo de traducir y adaptar para un idioma concreto. Primero se internacionaliza, una vez; después se localiza tantas veces como idiomas quieras.
+
+La analogía: piensa en los carteles de un aeropuerto. El arquitecto no pinta "Salidas" en la pared: deja un marco donde se coloca un cartel intercambiable. Si mañana llegan vuelos de otro país, se cambia el cartel, no la pared. En tu app, los componentes son las paredes y los textos son los carteles: en lugar de escribir `"Guardar"` en el JSX, escribes una **clave** como `"save"` y un diccionario decide qué texto mostrar.
+
+Documentación oficial: https://docs.expo.dev/versions/latest/sdk/localization/ y https://docs.expo.dev/guides/localization/
+
+### Instalar
+
+```bash
+npx expo install expo-localization
+npx expo install i18n-js
+```
+
+`expo-localization` informa qué idiomas y región tiene configurados el teléfono. `i18n-js` busca cada clave en el diccionario del idioma activo.
+
+### El idioma del dispositivo
+
+`getLocales()` devuelve la lista de idiomas del usuario, ordenada por preferencia. Cada elemento tiene, entre otros campos:
+
+- `languageTag`: la etiqueta completa, por ejemplo `"es-MX"` o `"en-US"`.
+- `languageCode`: solo el idioma, por ejemplo `"es"`. Puede ser `null`.
+- `regionCode`: el país, por ejemplo `"MX"`.
+- `textDirection`: `"ltr"` o `"rtl"` (árabe y hebreo se escriben de derecha a izquierda).
+
+```tsx
+import { getLocales } from "expo-localization";
+
+const deviceLanguage = getLocales()[0]?.languageCode ?? "en";
+```
+
+Si el usuario cambia el idioma en Ajustes mientras la app está abierta, `getLocales()` no se actualiza sola. El hook `useLocales()` sí vuelve a renderizar con la nueva lista.
+
+### Diccionarios y traducción
+
+Los textos viven en objetos con la misma forma para cada idioma. En un proyecto real, cada idioma va en su propio archivo (`src/i18n/es.json`, `src/i18n/en.json`):
+
+```tsx
+import { I18n } from "i18n-js";
+
+export const i18n = new I18n({
+  es: {
+    save: "Guardar",
+    greeting: "Hola, %{name}",
+    notes: { zero: "No tienes notas", one: "Tienes 1 nota", other: "Tienes %{count} notas" },
+  },
+  en: {
+    save: "Save",
+    greeting: "Hello, %{name}",
+    notes: { zero: "You have no notes", one: "You have 1 note", other: "You have %{count} notes" },
+  },
+});
+
+i18n.locale = deviceLanguage;
+i18n.enableFallback = true;
+i18n.defaultLocale = "en";
+```
+
+Y en los componentes:
+
+```tsx
+<Button title={i18n.t("save")} onPress={save} />
+<Text>{i18n.t("greeting", { name: "Ana" })}</Text>
+<Text>{i18n.t("notes", { count: notes.length })}</Text>
+```
+
+Tres ideas clave:
+
+- **Interpolación**: `%{name}` se reemplaza por el valor que pasas. Nunca construyas frases concatenando trozos traducidos (`t("you_have") + count + t("notes")`): el orden de las palabras cambia entre idiomas.
+- **Plurales**: si pasas `count`, `i18n-js` elige `zero`, `one` u `other`. Cada idioma tiene sus propias reglas de plural, por eso son claves distintas y no un `if` en tu código.
+- **Respaldo** (`enableFallback`): si falta una clave en el idioma activo, se usa la de `defaultLocale` en lugar de mostrar un mensaje de "traducción faltante".
+
+### Fechas y números
+
+Las fechas y los números no se traducen con diccionarios: se **formatean**. El 3 de mayo es `3/5/2026` en México y `5/3/2026` en Estados Unidos. Usa la API estándar `Intl`, que Hermes incluye:
+
+```tsx
+const date = new Date(2026, 4, 3);
+new Intl.DateTimeFormat("es-MX", { dateStyle: "long" }).format(date); // 3 de mayo de 2026
+new Intl.DateTimeFormat("en-US", { dateStyle: "long" }).format(date); // May 3, 2026
+new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(1234.5); // $1,234.50
+```
+
+Pasa el `languageTag` completo, no solo el idioma: la región decide separadores y orden.
+
+### Cambiar de idioma dentro de la app
+
+Cambiar `i18n.locale` no vuelve a renderizar nada: `i18n` es un objeto normal, no estado de React. Si ofreces un selector de idioma, guarda el idioma elegido en estado (o en tu store global) y úsalo como fuente de verdad. Así React vuelve a renderizar cuando cambia.
+
+### Textos del sistema e idioma por app
+
+Algunos textos no los dibuja tu código sino el sistema: el nombre de la app bajo el ícono y los textos de propósito de los permisos que viste al comienzo de la etapa. Se traducen desde `app.json` con `locales`, un archivo JSON por idioma:
+
+```json
+{
+  "expo": {
+    "ios": { "infoPlist": { "CFBundleAllowMixedLocalizations": true } },
+    "locales": { "es": "./src/i18n/app-es.json", "en": "./src/i18n/app-en.json" }
+  }
+}
+```
+
+Además, iOS y Android permiten elegir un idioma distinto para cada app desde Ajustes. Para que tu app aparezca en esa lista, declara los idiomas con la opción `supportedLocales` del config plugin de `expo-localization`:
+
+```json
+{
+  "expo": {
+    "plugins": [["expo-localization", { "supportedLocales": ["es", "en"] }]]
+  }
+}
+```
+
+Como todo cambio de configuración nativa, esto solo se aplica en una compilación propia, no en Expo Go.
+
+## Práctica
+
+El Snack detecta el idioma del dispositivo al arrancar. Toca "English" y "Español" para cambiar, suma notas y observa cómo cambian el plural y el formato de la fecha.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  dependencies={{ 'expo-localization': '~55.0.19', 'i18n-js': '4.5.3' }}
+  code={`import { useState } from "react";
+import { Button, StyleSheet, Text, View } from "react-native";
+import { getLocales } from "expo-localization";
+import { I18n } from "i18n-js";
+
+const i18n = new I18n({
+  es: {
+    title: "Mis notas",
+    add: "Agregar nota",
+    notes: { zero: "No tienes notas", one: "Tienes 1 nota", other: "Tienes %{count} notas" },
+    updated: "Actualizado: %{date}"
+  },
+  en: {
+    title: "My notes",
+    add: "Add note",
+    notes: { zero: "You have no notes", one: "You have 1 note", other: "You have %{count} notes" },
+    updated: "Updated: %{date}"
+  }
+});
+i18n.enableFallback = true;
+i18n.defaultLocale = "en";
+
+const TAGS: Record<string, string> = { es: "es-MX", en: "en-US" };
+const device = getLocales()[0]?.languageCode ?? "en";
+
+export default function App() {
+  const [locale, setLocale] = useState(device === "es" ? "es" : "en");
+  const [count, setCount] = useState(0);
+  i18n.locale = locale;
+
+  const date = new Intl.DateTimeFormat(TAGS[locale], { dateStyle: "long" }).format(new Date());
+
+  return (
+    <View style={styles.container}>
+      <Text accessibilityRole="header" style={styles.title}>{i18n.t("title")}</Text>
+      <Text style={styles.text}>{i18n.t("notes", { count })}</Text>
+      <Text style={styles.text}>{i18n.t("updated", { date })}</Text>
+      <Button title={i18n.t("add")} onPress={() => setCount(count + 1)} />
+      <View style={styles.row}>
+        <Button title="Español" onPress={() => setLocale("es")} />
+        <Button title="English" onPress={() => setLocale("en")} />
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", padding: 24, gap: 12 },
+  title: { fontSize: 24, fontWeight: "700" },
+  text: { fontSize: 16 },
+  row: { flexDirection: "row", gap: 12 }
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Saludo con nombre y respaldo"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="55.0.0"
+      dependencies={{ 'expo-localization': '~55.0.19', 'i18n-js': '4.5.3' }}
+      code={`import { useState } from "react";
+import { Button, StyleSheet, Text, View } from "react-native";
+import { getLocales } from "expo-localization";
+import { I18n } from "i18n-js";
+
+const i18n = new I18n({
+  es: { greeting: "Hola, %{name}" },
+  en: { greeting: "Hello, %{name}", farewell: "See you soon, %{name}" }
+});
+i18n.enableFallback = true;
+i18n.defaultLocale = "en";
+
+export default function App() {
+  const device = getLocales()[0]?.languageCode ?? "en";
+  const [locale, setLocale] = useState(device === "es" ? "es" : "en");
+  i18n.locale = locale;
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.text}>{i18n.t("greeting", { name: "Ana" })}</Text>
+      <Text style={styles.text}>{i18n.t("farewell", { name: "Ana" })}</Text>
+      <Button
+        title={locale === "es" ? "English" : "Español"}
+        onPress={() => setLocale(locale === "es" ? "en" : "es")}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", padding: 24, gap: 12 },
+  text: { fontSize: 18 }
+});`}
+    />
+  }
+>
+  Crea un diccionario con la clave `greeting` (`"Hola, %{name}"` / `"Hello, %{name}"`) y una clave `farewell` que solo exista en inglés. Muestra ambas con el nombre "Ana" y un botón que alterne el idioma. Activa `enableFallback` y comprueba que en español la despedida aparece en inglés en lugar de un mensaje de traducción faltante.
+</Challenge>
+
+## Errores comunes
+
+**Concatenar frases traducidas.** En inglés se lee bien, pero en otro idioma el orden queda absurdo ("Notas 3 tienes"). Ocurre porque se traducen trozos en lugar de frases completas. Se detecta buscando `+` o plantillas de texto que mezclan varias llamadas a `t()`. Solución: una clave por frase completa, con interpolación.
+
+**Cambiar `i18n.locale` y esperar que la pantalla se actualice.** Tocas "English" y nada cambia hasta el siguiente render. Ocurre porque `i18n` no es estado de React. Se detecta porque el texto cambia solo después de otra interacción. Solución: guarda el idioma en estado o en el store y asigna `i18n.locale` a partir de él.
+
+**Formatear fechas a mano.** Se ve como `` `${day}/${month}/${year}` `` en el código. Ocurre porque es lo más rápido para un solo país. Se detecta al cambiar la región del teléfono: la fecha no cambia de formato. Solución: `Intl.DateTimeFormat` con el `languageTag` del usuario.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué significa i18n?", back: "Internacionalización: preparar la app para varios idiomas; hay 18 letras entre la i y la n." },
+    { front: "¿Qué función de expo-localization devuelve los idiomas preferidos del usuario?", back: "getLocales(), ordenados por preferencia; useLocales() es su versión en hook." },
+    { front: "¿Cómo se inserta un valor dentro de un texto traducido con i18n-js?", back: "Con interpolación: la clave contiene %{name} y se llama i18n.t(\"key\", { name })." },
+    { front: "¿Qué hace enableFallback en i18n-js?", back: "Si falta una clave en el idioma activo, usa la del idioma por defecto." },
+    { front: "¿Con qué API estándar se formatean fechas según la región del usuario?", back: "Intl.DateTimeFormat, pasando el languageTag completo, por ejemplo es-MX." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Cómo muestras \"Tienes 3 notas\" de forma correcta en varios idiomas?",
+      options: [
+        { text: "t(\"you_have\") + \" 3 \" + t(\"notes\")", correct: false, feedback: "Concatenar rompe el orden de las palabras en otros idiomas." },
+        { text: "t(\"notes\", { count: 3 }) con claves one y other", correct: true, feedback: "Correcto: interpolación y plural en una sola clave." },
+        { text: "Un if que elija el texto según el idioma", correct: false, feedback: "Mete la traducción en el código; no escala a más idiomas." }
+      ]
+    },
+    {
+      prompt: "¿Qué campo de getLocales() usarías para formatear una moneda con los separadores del país del usuario?",
+      options: [
+        { text: "languageCode", correct: false, feedback: "Solo indica el idioma; falta la región." },
+        { text: "languageTag", correct: true, feedback: "Correcto: incluye idioma y región, por ejemplo es-MX." },
+        { text: "textDirection", correct: false, feedback: "Indica si se escribe de izquierda a derecha o al revés." }
+      ]
+    },
+    {
+      prompt: "El usuario toca \"English\" en tu selector y la pantalla no cambia. ¿Qué falta?",
+      options: [
+        { text: "Reinstalar la app", correct: false, feedback: "No hace falta; es un problema de renderizado." },
+        { text: "Guardar el idioma en estado de React para provocar un render", correct: true, feedback: "Correcto: i18n.locale por sí solo no vuelve a renderizar." },
+        { text: "Llamar a getLocales() otra vez", correct: false, feedback: "getLocales() devuelve el idioma del sistema, no el elegido en la app." }
+      ]
+    }
+  ]}
+/>

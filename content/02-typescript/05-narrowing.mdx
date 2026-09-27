@@ -1,0 +1,205 @@
+---
+id: "02-typescript/05-narrowing"
+title: "Narrowing"
+stage: 2
+module: "Tipos avanzados"
+order: 5
+minutes: 12
+prereqs: ["02-typescript/04-genericos"]
+summary: "Reduce una unión de tipos a una forma concreta con typeof, in y un switch exhaustivo sobre un discriminante."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a poder reducir el tipo de una variable dentro de una rama de código usando `typeof` y `in`, y escribir un `switch` exhaustivo que el compilador verifica por ti.
+
+**Prerrequisitos:** `02-typescript/04-genericos`
+
+## Concepto
+
+Piensa en un guardia de seguridad frente a dos puertas distintas, una para empleados y otra para visitantes. Antes de dejar pasar a alguien, el guardia comprueba la credencial: si es de empleado, abre la puerta de empleados; si es de visitante, abre la otra. La credencial concreta que tiene la persona en la mano determina qué puerta se abre. **Narrowing** es ese mismo proceso aplicado a tipos: TypeScript reduce (acota) el tipo posible de una variable dentro de una rama de código, según una comprobación que hiciste antes.
+
+### `typeof`
+
+Para valores primitivos, `typeof` es la comprobación más directa:
+
+```ts
+function formatId(id: string | number): string {
+  if (typeof id === "string") {
+    return id.toUpperCase(); // aquí TypeScript sabe que id es string
+  }
+  return id.toFixed(0); // aquí sabe que id es number
+}
+```
+
+Dentro del `if`, TypeScript reduce `id` de `string | number` a solo `string`, y permite `toUpperCase()`. En la rama `return` final, ya descartó `string`, así que `id` solo puede ser `number`, y permite `toFixed()`. Ninguna de las dos llamadas sería válida fuera de su rama correspondiente.
+
+### `in`
+
+Para distinguir entre dos formas de objeto que no comparten un discriminante explícito, el operador `in` comprueba si una propiedad existe:
+
+```ts
+interface Circle {
+  radius: number;
+}
+
+interface Rectangle {
+  width: number;
+  height: number;
+}
+
+function area(shape: Circle | Rectangle): number {
+  if ("radius" in shape) {
+    return Math.PI * shape.radius ** 2; // aquí TypeScript sabe que shape es Circle
+  }
+  return shape.width * shape.height; // aquí sabe que shape es Rectangle
+}
+```
+
+`"radius" in shape` comprueba, en tiempo de ejecución, si el objeto tiene esa propiedad, y TypeScript usa esa misma comprobación para reducir el tipo en cada rama.
+
+### `switch` exhaustivo sobre un discriminante
+
+La lección anterior mostró uniones discriminadas con un campo `kind`. Un `switch` sobre ese campo, combinado con el tipo `never`, permite que el compilador te avise si olvidaste cubrir un caso:
+
+```ts
+type Status = "todo" | "in-progress" | "done";
+
+function label(status: Status): string {
+  switch (status) {
+    case "todo":
+      return "Por hacer";
+    case "in-progress":
+      return "En progreso";
+    case "done":
+      return "Hecha";
+    default: {
+      const exhaustiveCheck: never = status;
+      return exhaustiveCheck;
+    }
+  }
+}
+```
+
+Si mañana alguien agrega un cuarto valor a `Status`, por ejemplo `"archived"`, y no actualiza el `switch`, la línea `const exhaustiveCheck: never = status` deja de compilar: dentro del `default`, `status` ya no sería `never` (el tipo de "esto nunca debería ocurrir"), sería `"archived"`, y asignar un `string` a `never` es un error. Este patrón convierte un olvido silencioso, el tipo de bug que solo se nota en producción, en un error de compilación inmediato. Documentación oficial: [Narrowing](https://www.typescriptlang.org/docs/handbook/2/narrowing.html).
+
+## Práctica
+
+Ejecuta el código y observa cómo cada función reduce el tipo de su parámetro según la comprobación (`typeof`, `in`) antes de operar.
+
+<Playground
+  lang="ts"
+  code={`function formatId(id: string | number): string {
+  if (typeof id === "string") {
+    return id.toUpperCase();
+  }
+  return id.toFixed(0);
+}
+
+interface Circle {
+  radius: number;
+}
+
+interface Rectangle {
+  width: number;
+  height: number;
+}
+
+function area(shape: Circle | Rectangle): number {
+  if ("radius" in shape) {
+    return Math.PI * shape.radius ** 2;
+  }
+  return shape.width * shape.height;
+}
+
+console.log(formatId("abc"));
+console.log(formatId(3.7));
+console.log(area({ radius: 2 }));
+console.log(area({ width: 3, height: 4 }));`}
+  expected={`ABC
+4
+12.566370614359172
+12`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Switch exhaustivo de estados"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type Status = "todo" | "in-progress" | "done";
+
+function label(status: Status): string {
+  switch (status) {
+    case "todo":
+      return "Por hacer";
+    case "in-progress":
+      return "En progreso";
+    case "done":
+      return "Hecha";
+    default: {
+      const exhaustiveCheck: never = status;
+      return exhaustiveCheck;
+    }
+  }
+}
+
+console.log(label("todo"));
+console.log(label("in-progress"));
+console.log(label("done"));`}
+      expected={`Por hacer
+En progreso
+Hecha`}
+    />
+  }
+>
+  Declara `type Status = "todo" | "in-progress" | "done"`. Escribe una función `label` que reciba un `Status` y devuelva su etiqueta en español ("Por hacer", "En progreso", "Hecha") usando un `switch`, con un caso `default` que asigne el valor a una variable `const exhaustiveCheck: never` para que el compilador te avise si falta cubrir un caso. Prueba la función con los tres valores.
+</Challenge>
+
+## Errores comunes
+
+**Comprobar `typeof` con un valor incorrecto.** `typeof id === "String"` (con mayúscula) o `typeof id === "text"` nunca es verdadero, porque `typeof` siempre devuelve minúsculas exactas: `"string"`, `"number"`, `"boolean"`, `"undefined"`, `"object"`, `"function"`. Cómo detectarlo: el compilador marca la comparación con `TS2367: This comparison appears to be unintentional because the types '"string" | "number" | ...' and '"String"' have no overlap.`; corrige el texto a minúsculas exactas.
+
+**Usar `in` sobre una propiedad que ambos tipos comparten.** Si `Circle` y `Rectangle` tuvieran ambas una propiedad `color`, comprobar `"color" in shape` no distingue nada, porque es verdadero para las dos formas. Cómo detectarlo: dentro del `if`, TypeScript no reduce la unión a un solo tipo, porque la propiedad no es exclusiva de una forma.
+
+**Olvidar el caso `default` con `never` y perder la verificación de exhaustividad.** Si la función declara un tipo de retorno como `string`, `tsc --strict` ya avisa cuando falta un caso, pero con un mensaje genérico: `TS2366: Function lacks ending return statement and return type does not include 'undefined'.` El patrón `never` importa sobre todo en funciones que devuelven `void` (por ejemplo, un `switch` que solo imprime o actualiza estado), donde un caso olvidado no produce ningún error, y además nombra el valor que falta: `Type '"archived"' is not assignable to type 'never'.` Cómo detectarlo: agrega un valor nuevo a la unión y revisa si el compilador señala cada `switch` incompleto; si alguno no aparece, le falta el `default` con `never`.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué es narrowing en TypeScript?", back: "El proceso de reducir el tipo posible de una variable dentro de una rama de código, según una comprobación previa." },
+    { front: "¿Qué comprobación usarías para distinguir string de number dentro de una unión?", back: "typeof, por ejemplo if (typeof id === \"string\")." },
+    { front: "¿Qué comprobación usarías para distinguir dos formas de objeto que no comparten un discriminante?", back: "El operador in, por ejemplo if (\"radius\" in shape)." },
+    { front: "¿Para qué sirve asignar el valor a una variable const x: never dentro del default de un switch?", back: "Para que el compilador marque un error si en el futuro se agrega un valor a la unión y ese switch no lo cubre." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Dentro de if (typeof id === \"string\") { ... }, ¿qué tipo tiene id en ese bloque si originalmente era string | number?",
+      options: [
+        { text: "string | number, sin cambios", correct: false, feedback: "El narrowing sí reduce el tipo dentro del bloque; no queda igual que antes de la comprobación." },
+        { text: "string", correct: true, feedback: "Correcto: TypeScript reduce la unión a string dentro de esa rama." },
+        { text: "any", correct: false, feedback: "TypeScript nunca amplía a any por una comprobación de typeof; al contrario, la reduce." },
+      ],
+    },
+    {
+      prompt: "¿Qué comprobación distingue Circle de Rectangle cuando ninguna de las dos interfaces tiene un campo discriminante explícito?",
+      options: [
+        { text: "typeof shape === \"Circle\"", correct: false, feedback: "typeof nunca devuelve el nombre de una interfaz; solo distingue tipos primitivos como string, number u object." },
+        { text: "\"radius\" in shape", correct: true, feedback: "Correcto: in comprueba si una propiedad exclusiva de una de las formas está presente." },
+        { text: "shape.kind === \"circle\"", correct: false, feedback: "Ninguna de las dos interfaces del ejemplo declara un campo kind; esa comprobación fallaría en compilación." },
+      ],
+    },
+    {
+      prompt: "¿Qué logra agregar un caso default con const exhaustiveCheck: never = status en un switch sobre una unión de literales?",
+      options: [
+        { text: "Que el switch se ejecute más rápido", correct: false, feedback: "No afecta el rendimiento; es una verificación en tiempo de compilación." },
+        { text: "Que el compilador marque un error si se agrega un valor a la unión y el switch no lo cubre", correct: true, feedback: "Correcto: si sobra un caso sin cubrir, ese caso no es never y la asignación falla en compilación." },
+        { text: "Que TypeScript ignore los demás casos del switch", correct: false, feedback: "Los demás casos siguen evaluándose normalmente; el default solo actúa cuando ningún case coincidió." },
+      ],
+    },
+  ]}
+/>

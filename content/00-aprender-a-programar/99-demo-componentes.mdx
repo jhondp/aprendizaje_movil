@@ -1,0 +1,115 @@
+---
+id: "00-aprender-a-programar/99-demo-componentes"
+title: "Demostración de componentes"
+stage: 0
+module: "Interno"
+order: 99
+minutes: 5
+prereqs: []
+summary: "Lección oculta que muestra cada componente interactivo de la plataforma."
+hidden: true
+---
+
+## Objetivo
+
+Verificar que cada componente interactivo se renderiza. Esta lección no aparece en el índice.
+
+**Prerrequisitos:** ninguno.
+
+## Concepto
+
+<Callout kind="tip">Este es un aviso de tipo consejo.</Callout>
+
+<Callout kind="warning">Este es un aviso de advertencia.</Callout>
+
+<Callout kind="danger">Este es un aviso de peligro.</Callout>
+
+## Práctica
+
+<Playground
+  lang="ts"
+  code={`const saludo: string = "Hola";
+console.log(saludo);`}
+  expected="Hola"
+/>
+
+<Sandpack
+  files={{
+    '/App.tsx': `export default function App() {
+  return <h1>Hola desde React</h1>;
+}`,
+  }}
+/>
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  code={`import { Text, View } from 'react-native';
+
+export default function App() {
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <Text>Hola desde React Native</Text>
+    </View>
+  );
+}`}
+/>
+
+<Terminal
+  steps={[
+    { cmd: 'node --version', out: 'v22.11.0' },
+    { cmd: 'pnpm --version', out: '9.12.0' },
+  ]}
+/>
+
+<Checklist id="setup" items={['Instalé Node.js', 'Instalé pnpm', 'Instalé Git']} />
+
+## Ejercicio
+
+<Challenge
+  title="Reto de prueba"
+  solution={<Playground lang="js" code={`console.log("solución");`} />}
+>
+  Escribe un programa que muestre la palabra solución.
+
+  <Playground lang="js" code={`// tu código`} />
+</Challenge>
+
+## Errores comunes
+
+- Olvidar cerrar las comillas. Cómo detectarlo: el error dice "Unterminated string".
+- Usar una variable antes de declararla. Cómo detectarlo: el error dice "is not defined".
+
+<Flashcards
+  cards={[
+    { front: '¿Qué muestra console.log?', back: 'El valor que recibe, en la consola.' },
+    { front: '¿Qué es Expo Snack?', back: 'Un entorno en línea para ejecutar React Native.' },
+    { front: '¿Para qué sirve una checklist?', back: 'Para no olvidar pasos operativos.' },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: '¿Cuál componente ejecuta JavaScript sin conexión?',
+      options: [
+        { text: 'Playground', correct: true, feedback: 'Correcto.' },
+        { text: 'Snack', correct: false, feedback: 'Snack necesita conexión.' },
+      ],
+    },
+    {
+      prompt: '¿Cuál componente muestra React Native real?',
+      options: [
+        { text: 'Snack', correct: true, feedback: 'Correcto.' },
+        { text: 'Terminal', correct: false, feedback: 'La terminal es simulada.' },
+      ],
+    },
+    {
+      prompt: '¿Qué guarda la Checklist?',
+      options: [
+        { text: 'Los ítems marcados por lección', correct: true, feedback: 'Correcto.' },
+        { text: 'Nada', correct: false, feedback: 'Persiste en el navegador.' },
+      ],
+    },
+  ]}
+/>

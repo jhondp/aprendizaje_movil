@@ -1,0 +1,218 @@
+---
+id: "09-seguridad-movil/00-modelo-de-amenazas-movil"
+title: "Modelo de amenazas móvil"
+stage: 9
+module: "Modelo"
+order: 0
+minutes: 15
+prereqs: ["08-autenticacion-backend/07-proyecto-app-con-usuarios"]
+summary: "Identifica qué proteges, de quién y por dónde entran los ataques en una app móvil, con una versión ligera de STRIDE."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás escribir un modelo de amenazas de una página para tu app de notas: activos, actores, puntos de entrada y amenazas priorizadas con STRIDE-lite.
+
+**Prerrequisitos:** `08-autenticacion-backend/07-proyecto-app-con-usuarios`
+
+## Concepto
+
+Esta lección no pertenece a una categoría MASVS concreta: es el paso previo que decide qué categorías te importan. Sin un modelo de amenazas, cualquier lista de controles de seguridad se convierte en una lista de tareas sin prioridad. Con él, sabes qué proteger primero y por qué.
+
+### La casa antes que las cerraduras
+
+Piensa en cómo decidirías la seguridad de una casa. No empiezas comprando cerraduras: primero preguntas qué hay de valor dentro (activos), quién podría querer entrar (actores), por dónde podría hacerlo (puntos de entrada) y qué pasaría si lo lograra (impacto). Solo después eliges si la puerta trasera necesita una cerradura mejor o si basta con una luz con sensor. Un modelo de amenazas es exactamente esa conversación, escrita, para tu app.
+
+### Los cuatro elementos
+
+**Activos** son las cosas cuyo robo, alteración o pérdida te hace daño. En la app de notas con usuarios de la etapa 8:
+
+- El contenido de las notas del usuario.
+- El token de sesión que lo identifica ante tu backend.
+- La cuenta en sí: correo y contraseña.
+- La reputación de tu app en las tiendas.
+
+**Actores** son quienes podrían atacar. En móvil hay una diferencia importante con la web: el dispositivo no es tuyo. Considera al menos estos perfiles:
+
+- Alguien que encuentra o roba el teléfono desbloqueado.
+- Una app maliciosa instalada en el mismo dispositivo.
+- Un atacante en la misma red Wi-Fi (una cafetería, un aeropuerto).
+- El propio usuario, que puede tener el dispositivo con root o jailbreak y leer todo lo que la app guarda.
+- Un atacante remoto que solo ve tu backend.
+
+**Puntos de entrada** son las superficies por donde entran datos o comandos: la pantalla de login, los deep links, la API, el almacenamiento local, las dependencias que instalas, los archivos que la app importa.
+
+**Impacto** es qué pasa si la amenaza se cumple: desde "el usuario ve un mensaje raro" hasta "todas las notas de todos los usuarios quedan expuestas".
+
+### STRIDE-lite
+
+STRIDE es una nemotecnia de Microsoft para recorrer amenazas de forma sistemática. La versión completa está pensada para sistemas grandes; aquí usarás una reducida, suficiente para una app móvil de un equipo pequeño:
+
+| Letra | Amenaza                                    | Pregunta que te haces sobre cada punto de entrada          |
+| ----- | ------------------------------------------ | ---------------------------------------------------------- |
+| S     | Spoofing (suplantación)                    | ¿Alguien puede hacerse pasar por el usuario o por mi API?  |
+| T     | Tampering (alteración)                     | ¿Alguien puede modificar datos en tránsito o en reposo?    |
+| R     | Repudiation (repudio)                      | ¿Puedo saber quién hizo qué si algo sale mal?              |
+| I     | Information disclosure (fuga)              | ¿Se expone algo que debía ser privado?                     |
+| D     | Denial of service (denegación)             | ¿Alguien puede dejar la app o la API inutilizables?        |
+| E     | Elevation of privilege (escalada)          | ¿Alguien puede hacer más de lo que su rol permite?         |
+
+Para cada punto de entrada de tu app, recorres las seis letras y anotas la amenaza si aplica. Muchas celdas quedan vacías, y eso está bien: el valor está en haber preguntado.
+
+### Priorizar con dos números
+
+No puedes corregir todo a la vez. Asigna a cada amenaza una **probabilidad** (1 a 3) y un **impacto** (1 a 3) y multiplica. Una fuga del token de sesión por guardarlo sin cifrar tiene probabilidad media (alguien con acceso físico o una app maliciosa en un dispositivo con root) e impacto alto (acceso total a la cuenta): 2 × 3 = 6. Que alguien vea el nombre de la app en la lista de apps recientes: 1 × 1 = 1. Empiezas por los 9 y los 6.
+
+```ts
+type Threat = {
+  entryPoint: string;
+  stride: "S" | "T" | "R" | "I" | "D" | "E";
+  description: string;
+  likelihood: 1 | 2 | 3;
+  impact: 1 | 2 | 3;
+};
+
+const score = (t: Threat) => t.likelihood * t.impact;
+```
+
+Esa tabla, ordenada por puntuación, es tu modelo de amenazas. Cabe en una página de `THREAT_MODEL.md` en el repositorio y se revisa cada vez que agregas una funcionalidad con un punto de entrada nuevo.
+
+### Suposiciones que debes escribir
+
+Un modelo de amenazas también dice qué **no** vas a defender. Para la app de notas es razonable asumir que no defiendes contra un atacante con el teléfono desbloqueado en la mano durante horas, ni contra un sistema operativo comprometido. Escribirlo evita discusiones circulares y te permite decir, con honestidad, hasta dónde llega la protección. El estándar que usarás en la siguiente lección, OWASP MASVS, organiza los controles precisamente en función de este tipo de supuestos: [https://mas.owasp.org/MASVS/](https://mas.owasp.org/MASVS/).
+
+<Callout kind="tip">
+  Un modelo de amenazas de una página que existe vale más que uno exhaustivo que nadie escribe. Empieza con cinco amenazas y crece desde ahí.
+</Callout>
+
+## Práctica
+
+Recorre STRIDE-lite sobre la app de notas con usuarios. Marca cada punto cuando lo hayas pensado y anotado en tu `THREAT_MODEL.md`, aunque la respuesta sea "no aplica".
+
+<Checklist
+  id="09-seguridad-movil/00-stride-lite"
+  items={[
+    "Listé los activos: notas, token de sesión, credenciales, reputación",
+    "Listé los actores: ladrón del dispositivo, app maliciosa, atacante en la red, usuario con root, atacante remoto",
+    "Listé los puntos de entrada: login, API, deep links, almacenamiento local, dependencias",
+    "S: revisé si alguien puede suplantar al usuario o a mi API",
+    "T: revisé si los datos pueden alterarse en tránsito o en reposo",
+    "R: revisé si puedo saber quién hizo cada acción sensible",
+    "I: revisé qué información podría filtrarse (logs, almacenamiento, capturas)",
+    "D: revisé cómo respondería la app si la API deja de responder",
+    "E: revisé si un usuario puede leer o borrar notas de otro",
+    "Asigné probabilidad e impacto a cada amenaza y ordené por puntuación",
+    "Escribí las suposiciones: qué no voy a defender"
+  ]}
+/>
+
+Ahora ejecuta el siguiente código: es la tabla del modelo convertida en datos, ordenada por puntuación. Cambia un valor de `likelihood` o `impact` y observa cómo cambia el orden.
+
+<Playground
+  lang="ts"
+  code={`type Threat = {
+  entryPoint: string;
+  stride: "S" | "T" | "R" | "I" | "D" | "E";
+  description: string;
+  likelihood: 1 | 2 | 3;
+  impact: 1 | 2 | 3;
+};
+
+const threats: Threat[] = [
+  { entryPoint: "storage", stride: "I", description: "Session token stored unencrypted", likelihood: 2, impact: 3 },
+  { entryPoint: "api", stride: "E", description: "Notes endpoint does not check owner", likelihood: 2, impact: 3 },
+  { entryPoint: "network", stride: "T", description: "HTTP instead of HTTPS in one endpoint", likelihood: 2, impact: 2 },
+  { entryPoint: "deep link", stride: "S", description: "Deep link opens a note by id without session", likelihood: 1, impact: 2 },
+  { entryPoint: "ui", stride: "I", description: "App name visible in recent apps", likelihood: 1, impact: 1 },
+];
+
+const score = (t: Threat) => t.likelihood * t.impact;
+const sorted = [...threats].sort((a, b) => score(b) - score(a));
+
+for (const t of sorted) {
+  console.log(score(t) + " [" + t.stride + "] " + t.entryPoint + ": " + t.description);
+}`}
+  expected={`6 [I] storage: Session token stored unencrypted
+6 [E] api: Notes endpoint does not check owner
+4 [T] network: HTTP instead of HTTPS in one endpoint
+2 [S] deep link: Deep link opens a note by id without session
+1 [I] ui: App name visible in recent apps`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Modelar una funcionalidad nueva"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type Threat = {
+  stride: "S" | "T" | "R" | "I" | "D" | "E";
+  description: string;
+  likelihood: 1 | 2 | 3;
+  impact: 1 | 2 | 3;
+};
+
+const shareLinkThreats: Threat[] = [
+  { stride: "I", description: "Link id is sequential, anyone can guess other notes", likelihood: 3, impact: 3 },
+  { stride: "S", description: "Link never expires, forwarded link keeps working", likelihood: 2, impact: 2 },
+  { stride: "R", description: "No record of who opened the shared note", likelihood: 2, impact: 1 },
+  { stride: "D", description: "Public endpoint without rate limit", likelihood: 1, impact: 2 },
+];
+
+const score = (t: Threat) => t.likelihood * t.impact;
+const top = [...shareLinkThreats].sort((a, b) => score(b) - score(a))[0];
+
+console.log("Fix first: " + top.description + " (score " + score(top) + ")");
+console.log("Mitigation: use a random 128-bit id and an expiration date");`}
+    />
+  }
+>
+  Imagina que agregas a la app de notas la opción "compartir nota por enlace público". Escribe al menos cuatro amenazas de STRIDE-lite para ese punto de entrada como un arreglo de objetos, asigna probabilidad e impacto, y haz que el programa imprima cuál corregirías primero y con qué mitigación. Pista: pregúntate cómo se genera el identificador del enlace y cuánto tiempo vive.
+</Challenge>
+
+## Errores comunes
+
+**Modelar la app ideal en lugar de la app real.** El documento dice "los tokens están cifrados" porque así debería ser, pero nadie lo comprobó en el código. Ocurre cuando el modelo se escribe desde la memoria y no desde el repositorio. Se detecta abriendo el archivo que guarda el token y leyendo qué API usa; si no coincide con el modelo, el modelo está mal.
+
+**Tratar al dispositivo como propio.** Se asume que "nadie va a leer el almacenamiento de la app" porque en la web el servidor era tuyo. En móvil el usuario puede tener root y cualquier app maliciosa puede intentar leer lo que dejas accesible. Se detecta revisando si el modelo incluye al menos un actor con acceso físico o local al dispositivo.
+
+**Confundir listar amenazas con priorizarlas.** Una lista de treinta amenazas sin puntuación paraliza al equipo. Ocurre por saltarse el paso de probabilidad e impacto. Se detecta cuando nadie puede decir cuál es la amenaza número uno.
+
+<Flashcards
+  cards={[
+    { front: "¿Cuáles son los cuatro elementos de un modelo de amenazas móvil?", back: "Activos, actores, puntos de entrada e impacto." },
+    { front: "¿Qué significan las letras de STRIDE?", back: "Spoofing, Tampering, Repudiation, Information disclosure, Denial of service, Elevation of privilege." },
+    { front: "¿Cómo se prioriza una amenaza en STRIDE-lite?", back: "Probabilidad (1-3) multiplicada por impacto (1-3); se corrige primero la de mayor puntuación." },
+    { front: "¿Qué actor distingue al modelo de amenazas móvil del web?", back: "El propio usuario o una app maliciosa con acceso local al dispositivo, incluso con root o jailbreak." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Cuál de estos es un activo en la app de notas con usuarios?",
+      options: [
+        { text: "El token de sesión", correct: true, feedback: "Correcto: su robo da acceso a la cuenta, por eso es un activo a proteger." },
+        { text: "Un atacante en la red Wi-Fi", correct: false, feedback: "Eso es un actor, no un activo." },
+        { text: "La pantalla de login", correct: false, feedback: "Eso es un punto de entrada." }
+      ]
+    },
+    {
+      prompt: "Una amenaza tiene probabilidad 3 e impacto 1; otra tiene probabilidad 1 e impacto 3. ¿Cuál corriges primero según STRIDE-lite?",
+      options: [
+        { text: "La primera, porque es más probable", correct: false, feedback: "Ambas puntúan 3; la probabilidad sola no decide." },
+        { text: "Cualquiera de las dos: empatan en puntuación", correct: true, feedback: "Correcto: 3 × 1 = 1 × 3. Desempatas con criterio de negocio." },
+        { text: "La segunda, porque el impacto siempre gana", correct: false, feedback: "El método multiplica ambos valores; no hay prioridad automática del impacto." }
+      ]
+    },
+    {
+      prompt: "¿Qué letra de STRIDE cubre que un usuario lea notas de otro usuario?",
+      options: [
+        { text: "T (Tampering)", correct: false, feedback: "Tampering es alterar datos, no leer los de otro." },
+        { text: "E (Elevation of privilege)", correct: true, feedback: "Correcto: hace más de lo que su rol permite." },
+        { text: "D (Denial of service)", correct: false, feedback: "DoS es dejar el sistema inutilizable." }
+      ]
+    }
+  ]}
+/>

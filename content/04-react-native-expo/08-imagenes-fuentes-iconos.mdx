@@ -1,0 +1,266 @@
+---
+id: "04-react-native-expo/08-imagenes-fuentes-iconos"
+title: "Imágenes, fuentes e íconos"
+stage: 4
+module: "Estilos"
+order: 8
+minutes: 12
+prereqs: ["04-react-native-expo/07-dimensiones-y-safearea"]
+summary: "Muestra imágenes remotas con expo-image, carga fuentes propias con expo-font y agrega íconos con @expo/vector-icons."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás mostrar imágenes remotas con `expo-image`, cargar una fuente personalizada con `useFonts` y agregar íconos vectoriales con `@expo/vector-icons`.
+
+**Prerrequisitos:** `04-react-native-expo/07-dimensiones-y-safearea`
+
+## Concepto
+
+Una app se reconoce por tres detalles visuales: sus imágenes, su tipografía y sus íconos. Expo trae una librería para cada uno. En esta lección aprendes a usarlas y, sobre todo, por qué conviene usarlas en lugar de las alternativas más simples.
+
+Documentación oficial: https://docs.expo.dev/versions/latest/sdk/image/, https://docs.expo.dev/versions/latest/sdk/font/ y https://docs.expo.dev/guides/icons/
+
+### Una analogía: la biblioteca del barrio
+
+Si cada vez que quieres leer un libro lo compras en otra ciudad, esperas el envío aunque ya lo hayas leído la semana pasada. Una biblioteca en tu barrio guarda una copia: la primera vez espera el envío, las siguientes la tienes al instante. `expo-image` es esa biblioteca para imágenes: descarga una vez y guarda una copia en el disco del teléfono.
+
+### expo-image: imágenes remotas
+
+En la lección de `View`, `Text` e `Image` usaste el `Image` de React Native con imágenes locales. Para imágenes que vienen de internet, Expo recomienda `expo-image`, que tiene una API parecida y agrega:
+
+- **Caché en disco y en memoria.** Una imagen descargada no se vuelve a pedir al volver a la pantalla ni al reabrir la app. El `Image` de React Native depende de la caché de red del sistema, que es menos predecible.
+- **Mejor rendimiento.** Usa librerías nativas especializadas (SDWebImage en iOS y Glide en Android), decodifica en segundo plano y maneja bien listas con muchas imágenes.
+- **Placeholders y transiciones.** Puedes mostrar un color o un blurhash (una versión borrosa diminuta) mientras llega la imagen, y un fundido al aparecer.
+- **Más formatos**, como WebP y AVIF, en ambas plataformas.
+
+```tsx
+import { Image } from "expo-image";
+
+export default function Cover() {
+  return (
+    <Image
+      source="https://picsum.photos/id/1025/800/500"
+      style={{ width: "100%", aspectRatio: 16 / 10, borderRadius: 12 }}
+      contentFit="cover"
+      transition={300}
+      accessibilityLabel="Perro en la nieve"
+    />
+  );
+}
+```
+
+- `source` acepta directamente una URL en texto, además de `require` para archivos locales.
+- `contentFit` reemplaza a `resizeMode`: `"cover"` recorta para llenar la caja, `"contain"` muestra la imagen completa.
+- `transition` es la duración del fundido en milisegundos.
+- `aspectRatio` en el estilo calcula la altura a partir del ancho. Así una imagen remota siempre tiene tamaño, aunque no sepas sus dimensiones de antemano.
+
+Se instala con `npx expo install expo-image`.
+
+### expo-font: tipografías propias
+
+Las apps usan la fuente del sistema (San Francisco en iOS, Roboto en Android) salvo que cargues otra. `expo-font` carga archivos de fuente y te avisa cuando están listos:
+
+```tsx
+import { Text } from "react-native";
+import { useFonts } from "expo-font";
+
+export default function Title() {
+  const [loaded] = useFonts({
+    "Inter-Bold": require("../assets/fonts/Inter-Bold.ttf"),
+  });
+
+  if (!loaded) return null;
+
+  return <Text style={{ fontFamily: "Inter-Bold", fontSize: 24 }}>Mis notas</Text>;
+}
+```
+
+- `useFonts` recibe un objeto: la clave es el nombre con el que usarás la fuente en `fontFamily` y el valor es el archivo.
+- Devuelve un arreglo cuyo primer elemento es `true` cuando las fuentes cargaron. Antes de eso, no renderizas el texto para evitar que aparezca con la fuente equivocada y luego salte.
+- Cada peso es un archivo distinto: si necesitas negrita y normal, cargas dos archivos con dos nombres.
+
+Para fuentes de Google Fonts existen paquetes listos, como `@expo-google-fonts/inter`, que exportan cada peso ya preparado. Es lo que usa el Snack de la práctica. En un proyecto real, Expo también permite incrustar las fuentes en el binario con el config plugin de `expo-font`, de modo que estén disponibles desde el primer instante.
+
+### @expo/vector-icons: íconos
+
+Los íconos vectoriales se escalan a cualquier tamaño sin perder nitidez y se colorean con una prop. `@expo/vector-icons` agrupa familias populares como Ionicons, MaterialIcons y FontAwesome. Desde Expo SDK 56 el paquete `expo` ya no lo incluye, así que en un proyecto creado con `create-expo-app@latest` lo instalas con `npx expo install @expo/vector-icons` (en los Snack de esta etapa, con SDK 55, se declara en `dependencies`). Para proyectos nuevos, Expo recomienda además migrar a los paquetes `@react-native-vector-icons/*` (por ejemplo `@react-native-vector-icons/ionicons`, con una API casi idéntica) o, para íconos del sistema, a `expo-symbols`:
+
+```tsx
+import Ionicons from "@expo/vector-icons/Ionicons";
+
+export default function Star() {
+  return <Ionicons name="star" size={24} color="#ffcc00" accessibilityLabel="Favorita" />;
+}
+```
+
+- `name` es el nombre del ícono dentro de la familia. El catálogo completo está en https://icons.expo.fyi.
+- `size` y `color` definen su aspecto.
+- Importar cada familia desde su propia ruta (`@expo/vector-icons/Ionicons`) evita incluir en el bundle familias que no usas.
+
+<Callout kind="tip">
+  Los Snack de esta etapa usan SDK 55, donde `@expo/vector-icons` sigue siendo la opción estándar. En tu proyecto local con SDK 56 o posterior, instálalo explícitamente o usa `@react-native-vector-icons/*`; el código de los íconos cambia solo en la ruta del import.
+</Callout>
+
+## Práctica
+
+La tarjeta combina las tres librerías: una foto remota con `expo-image`, un título con la fuente Inter y un ícono que alterna entre favorito y no favorito. Toca la estrella, cambia la URL de la imagen o el nombre del ícono.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  dependencies={{ "expo-image": "*", "expo-font": "*", "@expo/vector-icons": "*", "@expo-google-fonts/inter": "*" }}
+  code={`import { useState } from "react";
+import { View, Text, Pressable, StyleSheet } from "react-native";
+import { Image } from "expo-image";
+import { useFonts, Inter_400Regular, Inter_700Bold } from "@expo-google-fonts/inter";
+import Ionicons from "@expo/vector-icons/Ionicons";
+
+export default function App() {
+  const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_700Bold });
+  const [favorite, setFavorite] = useState(false);
+
+  if (!fontsLoaded) return null;
+
+  return (
+    <View style={styles.screen}>
+      <View style={styles.card}>
+        <Image
+          source="https://picsum.photos/id/1025/800/500"
+          style={styles.image}
+          contentFit="cover"
+          transition={300}
+          accessibilityLabel="Perro en la nieve"
+        />
+        <View style={styles.row}>
+          <Text style={styles.title}>Paseo de invierno</Text>
+          <Pressable
+            onPress={() => setFavorite(!favorite)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={favorite ? "Quitar de favoritas" : "Marcar como favorita"}
+          >
+            <Ionicons name={favorite ? "star" : "star-outline"} size={26} color="#ffb300" />
+          </Pressable>
+        </View>
+        <Text style={styles.body}>
+          Nota con foto remota, fuente Inter e ícono vectorial.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, justifyContent: "center", padding: 16, backgroundColor: "#f2f2f7" },
+  card: { borderRadius: 16, overflow: "hidden", backgroundColor: "#fff" },
+  image: { width: "100%", aspectRatio: 16 / 10 },
+  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16 },
+  title: { fontFamily: "Inter_700Bold", fontSize: 20 },
+  body: { fontFamily: "Inter_400Regular", fontSize: 15, color: "#555", paddingHorizontal: 16, paddingBottom: 16 },
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Galería con placeholder"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="55.0.0"
+      dependencies={{ "expo-image": "*", "@expo/vector-icons": "*" }}
+      code={`import { FlatList, View, Text, StyleSheet } from "react-native";
+import { Image } from "expo-image";
+import Ionicons from "@expo/vector-icons/Ionicons";
+
+const photos = [1015, 1025, 1035, 1043, 1050, 1069].map((id) => ({
+  id: String(id),
+  uri: "https://picsum.photos/id/" + id + "/400/400",
+}));
+
+export default function App() {
+  return (
+    <FlatList
+      style={styles.list}
+      data={photos}
+      numColumns={2}
+      keyExtractor={(item) => item.id}
+      columnWrapperStyle={styles.columns}
+      ListHeaderComponent={
+        <View style={styles.header}>
+          <Ionicons name="images-outline" size={24} color="#007aff" />
+          <Text style={styles.title}>Galería</Text>
+        </View>
+      }
+      renderItem={({ item }) => (
+        <Image
+          source={item.uri}
+          placeholder={{ blurhash: "L6PZfSi_.AyE_3t7t7R**0o#DgR4" }}
+          contentFit="cover"
+          transition={500}
+          style={styles.photo}
+        />
+      )}
+    />
+  );
+}
+
+const styles = StyleSheet.create({
+  list: { flex: 1, paddingTop: 56, paddingHorizontal: 16, backgroundColor: "#fff" },
+  header: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 },
+  title: { fontSize: 24, fontWeight: "700" },
+  columns: { gap: 12, marginBottom: 12 },
+  photo: { flex: 1, aspectRatio: 1, borderRadius: 12 },
+});`}
+    />
+  }
+>
+  Construye una galería de dos columnas con seis fotos de `https://picsum.photos/id/<n>/400/400`. Cada foto debe ser cuadrada, usar `expo-image` con un `placeholder` de tipo blurhash y un fundido de 500 ms. Encima de la galería, agrega un encabezado con el ícono `images-outline` de Ionicons y el texto "Galería". Pista: `FlatList` acepta `numColumns={2}` y `aspectRatio: 1` hace la foto cuadrada.
+</Challenge>
+
+## Errores comunes
+
+**Imagen remota sin tamaño.** La imagen no aparece y no hay error. Ocurre porque una imagen remota no tiene dimensiones conocidas antes de descargarse, y sin `width` y `height` (o `aspectRatio`) su caja mide cero. Se detecta poniendo un `backgroundColor` temporal en el estilo. Solución: da siempre tamaño, por ejemplo `width: "100%"` y `aspectRatio`.
+
+**Usar la fuente antes de que cargue.** El texto aparece un instante con la fuente del sistema y luego cambia, o en Android aparece una advertencia de que la familia no existe. Ocurre porque `useFonts` carga de forma asíncrona. Se detecta en el primer arranque de la app. Solución: no renderices el texto hasta que el primer valor de `useFonts` sea `true`.
+
+**Nombre de ícono inexistente.** En lugar del ícono aparece un signo de interrogación o nada, y en la consola de Metro una advertencia. Ocurre porque cada familia tiene su propio catálogo: `star` existe en Ionicons, pero el mismo nombre puede no existir en otra familia. Se detecta con TypeScript, que marca el valor de `name`, o buscando el ícono en https://icons.expo.fyi.
+
+<Flashcards
+  cards={[
+    { front: "¿Por qué usar expo-image para imágenes remotas en lugar del Image de React Native?", back: "Porque agrega caché en disco y memoria, mejor rendimiento, placeholders, transiciones y más formatos." },
+    { front: "¿Qué prop de expo-image reemplaza a resizeMode?", back: "contentFit, con valores como cover o contain." },
+    { front: "¿Qué devuelve useFonts de expo-font?", back: "Un arreglo cuyo primer valor es true cuando las fuentes terminaron de cargar." },
+    { front: "¿Cómo se colorea un ícono de @expo/vector-icons?", back: "Con la prop color, igual que su tamaño se define con size." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Una lista muestra avatares descargados de internet y se ven lentos al volver a la pantalla. ¿Qué cambio ayuda más?",
+      options: [
+        { text: "Usar expo-image, que guarda las imágenes en caché", correct: true, feedback: "Correcto: la segunda vez la imagen sale del disco, no de la red." },
+        { text: "Aumentar el tamaño de las imágenes", correct: false, feedback: "Imágenes más grandes tardan más en descargar." },
+        { text: "Usar ScrollView en lugar de FlatList", correct: false, feedback: "Eso empeora el rendimiento con listas largas." }
+      ]
+    },
+    {
+      prompt: "Cargaste la fuente con useFonts({ \"Inter-Bold\": require(...) }). ¿Cómo la aplicas?",
+      options: [
+        { text: "style={{ fontFamily: \"Inter-Bold\" }}", correct: true, feedback: "Correcto: la clave del objeto es el nombre de la familia." },
+        { text: "style={{ font: \"Inter Bold 24px\" }}", correct: false, feedback: "La propiedad abreviada font de CSS no existe en React Native." },
+        { text: "style={{ fontWeight: \"Inter-Bold\" }}", correct: false, feedback: "fontWeight recibe pesos como 700, no nombres de fuentes." }
+      ]
+    },
+    {
+      prompt: "¿Por qué conviene importar @expo/vector-icons/Ionicons en lugar de todo el paquete?",
+      options: [
+        { text: "Para no incluir en el bundle familias de íconos que no usas", correct: true, feedback: "Correcto: cada familia trae su archivo de fuente." },
+        { text: "Porque el paquete completo no funciona en iOS", correct: false, feedback: "Funciona en ambas plataformas; el motivo es el tamaño." },
+        { text: "Porque así los íconos se vuelven imágenes PNG", correct: false, feedback: "Siguen siendo íconos vectoriales basados en fuentes." }
+      ]
+    }
+  ]}
+/>

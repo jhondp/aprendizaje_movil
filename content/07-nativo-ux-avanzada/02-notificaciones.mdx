@@ -1,0 +1,331 @@
+---
+id: "07-nativo-ux-avanzada/02-notificaciones"
+title: "Notificaciones"
+stage: 7
+module: "Nativo"
+order: 2
+minutes: 15
+prereqs: ["07-nativo-ux-avanzada/01-camara"]
+summary: "Programa notificaciones locales con expo-notifications, responde al toque del usuario y entiende el flujo de las notificaciones push."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás programar una notificación local con `expo-notifications`, reaccionar cuando el usuario la toca y describir los pasos del flujo de notificaciones push.
+
+**Prerrequisitos:** `07-nativo-ux-avanzada/01-camara`
+
+## Concepto
+
+Una notificación es un mensaje que aparece fuera de tu app: en la pantalla de bloqueo, en el centro de notificaciones o como un banner encima de otra app. Hay dos tipos y conviene no confundirlos:
+
+- **Local**: la programa tu propia app en el teléfono. "Recuérdame esta nota en una hora" es una notificación local. No necesita servidor ni internet.
+- **Push**: la envía un servidor a través de Apple (APNs) o Google (FCM). "Ana compartió una nota contigo" es una notificación push, porque el evento ocurre fuera del teléfono.
+
+La analogía: una notificación local es la alarma que pones en tu propio despertador. Una notificación push es una carta que alguien te envía por correo: necesita tu dirección (el token del dispositivo), una oficina de correos (APNs o FCM) y un remitente (tu servidor).
+
+Documentación oficial: https://docs.expo.dev/versions/latest/sdk/notifications/ y https://docs.expo.dev/push-notifications/overview/
+
+### Pedir permiso
+
+Desde Android 13 y en todas las versiones de iOS, mostrar notificaciones requiere permiso. El patrón es el mismo de las lecciones anteriores:
+
+```tsx
+import * as Notifications from "expo-notifications";
+
+const { status } = await Notifications.requestPermissionsAsync();
+if (status !== "granted") {
+  // Keep the app usable; reminders are optional.
+}
+```
+
+### Qué hacer cuando la app está abierta
+
+Por defecto, si la notificación llega con la app en primer plano, el sistema no la muestra. Para decidir qué hacer, registra un manejador una sola vez, fuera de los componentes:
+
+```tsx
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: false,
+    shouldSetBadge: false,
+  }),
+});
+```
+
+`shouldShowBanner` muestra el aviso flotante; `shouldShowList` la deja en el centro de notificaciones.
+
+### Programar una notificación local
+
+`scheduleNotificationAsync` recibe el contenido y un disparador (`trigger`). El disparador de intervalo de tiempo es el más simple:
+
+```tsx
+await Notifications.scheduleNotificationAsync({
+  content: {
+    title: "Recordatorio",
+    body: "Revisa tu nota: lista de compras",
+    data: { noteId: "42" },
+  },
+  trigger: {
+    type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+    seconds: 60,
+  },
+});
+```
+
+Hay otros disparadores: `DATE` (una fecha concreta), `DAILY` y `WEEKLY` (repetidos a una hora). Si pasas `trigger: null`, la notificación se muestra de inmediato.
+
+El campo `data` es tu equipaje de mano: viaja con la notificación y lo lees cuando el usuario la toca. Guarda ahí identificadores, no datos completos.
+
+### Canales en Android
+
+Android agrupa las notificaciones en **canales**, y el usuario puede silenciar cada canal por separado. Crea al menos uno antes de programar:
+
+```tsx
+import { Platform } from "react-native";
+
+if (Platform.OS === "android") {
+  await Notifications.setNotificationChannelAsync("reminders", {
+    name: "Recordatorios",
+    importance: Notifications.AndroidImportance.DEFAULT,
+  });
+}
+```
+
+### Responder al toque
+
+Cuando el usuario toca la notificación, tu app se abre y recibes una respuesta con el contenido original. Suscríbete en un efecto y cancela la suscripción al desmontar:
+
+```tsx
+useEffect(() => {
+  const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+    const noteId = response.notification.request.content.data.noteId;
+    // Navigate to the note, for example with router.push.
+  });
+  return () => subscription.remove();
+}, []);
+```
+
+### El flujo push
+
+<Callout kind="warning">
+  Las notificaciones push necesitan un dispositivo físico y un proyecto de EAS con su `projectId`. En Expo Go para Android no están disponibles desde el SDK 53: necesitas una compilación de desarrollo, que la etapa 10 enseña a crear. Las notificaciones locales sí funcionan en Expo Go.
+</Callout>
+
+El flujo tiene cuatro pasos:
+
+1. La app pide permiso.
+2. La app obtiene un **token push de Expo**, una dirección única para ese dispositivo e instalación.
+3. La app envía ese token a tu servidor, que lo guarda asociado al usuario.
+4. Cuando ocurre un evento, el servidor envía un mensaje al servicio push de Expo, que lo entrega a APNs o FCM.
+
+Pasos 1 y 2 en la app:
+
+```tsx
+import * as Device from "expo-device";
+import Constants from "expo-constants";
+import * as Notifications from "expo-notifications";
+
+export async function registerForPushNotifications(): Promise<string | null> {
+  if (!Device.isDevice) return null; // Simulators cannot receive push notifications.
+
+  const { status } = await Notifications.requestPermissionsAsync();
+  if (status !== "granted") return null;
+
+  const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+  if (!projectId) throw new Error("Missing EAS projectId");
+
+  const token = await Notifications.getExpoPushTokenAsync({ projectId });
+  return token.data; // For example: ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]
+}
+```
+
+Paso 4, desde el servidor (o desde tu terminal para probar):
+
+```bash
+curl -H "Content-Type: application/json" \
+  -X POST https://exp.host/--/api/v2/push/send \
+  -d '{"to": "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]", "title": "Nota compartida", "body": "Ana compartió una nota contigo", "data": {"noteId": "42"}}'
+```
+
+El paso 3 depende de tu backend; la etapa 8 construye uno. Por ahora basta con saber que el token es un dato del usuario y que puede cambiar: vuelve a registrarlo en cada arranque.
+
+## Práctica
+
+El reproductor web de Snack no muestra notificaciones. Abre este Snack en tu teléfono con Expo Go escaneando el código QR, toca "Programar en 5 segundos" y bloquea la pantalla. Después toca la notificación y observa el `noteId` que recibe la app.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  dependencies={{ 'expo-notifications': '~55.0.27' }}
+  code={`import { useEffect, useState } from "react";
+import { Button, Platform, StyleSheet, Text, View } from "react-native";
+import * as Notifications from "expo-notifications";
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: false,
+    shouldSetBadge: false
+  })
+});
+
+export default function App() {
+  const [message, setMessage] = useState("Sin notificaciones programadas");
+
+  useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data;
+      setMessage("Abriste la nota " + String(data.noteId));
+    });
+    return () => subscription.remove();
+  }, []);
+
+  async function schedule() {
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== "granted") {
+      setMessage("Permiso rechazado");
+      return;
+    }
+    if (Platform.OS === "android") {
+      await Notifications.setNotificationChannelAsync("reminders", {
+        name: "Recordatorios",
+        importance: Notifications.AndroidImportance.DEFAULT
+      });
+    }
+    await Notifications.scheduleNotificationAsync({
+      content: { title: "Recordatorio", body: "Revisa tu lista de compras", data: { noteId: "42" } },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 5 }
+    });
+    setMessage("Programada para dentro de 5 segundos");
+  }
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.text}>{message}</Text>
+      <Button title="Programar en 5 segundos" onPress={schedule} />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12, padding: 24 },
+  text: { fontSize: 16, textAlign: "center" }
+});`}
+/>
+
+Para cuando tengas una compilación de desarrollo, estos son los pasos del flujo push:
+
+<Checklist
+  id="07-nativo-ux-avanzada/02-notificaciones-push"
+  items={[
+    "El proyecto tiene un projectId de EAS en app.json (extra.eas.projectId)",
+    "La app pide permiso y obtiene el token con getExpoPushTokenAsync en un dispositivo físico",
+    "El token se envía al servidor y se vuelve a registrar en cada arranque",
+    "Envié una notificación de prueba con curl a https://exp.host/--/api/v2/push/send",
+    "Al tocar la notificación, la app navega a la nota indicada en data"
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Cancelar recordatorios"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="55.0.0"
+      dependencies={{ 'expo-notifications': '~55.0.27' }}
+      code={`import { useState } from "react";
+import { Button, StyleSheet, Text, View } from "react-native";
+import * as Notifications from "expo-notifications";
+
+export default function App() {
+  const [count, setCount] = useState(0);
+
+  async function refresh() {
+    const pending = await Notifications.getAllScheduledNotificationsAsync();
+    setCount(pending.length);
+  }
+
+  async function schedule() {
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== "granted") return;
+    await Notifications.scheduleNotificationAsync({
+      content: { title: "Recordatorio", body: "Revisa tus notas" },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 60 }
+    });
+    await refresh();
+  }
+
+  async function cancelAll() {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+    await refresh();
+  }
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.text}>Pendientes: {count}</Text>
+      <Button title="Programar en 60 segundos" onPress={schedule} />
+      <Button title="Cancelar todas" onPress={cancelAll} />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12 },
+  text: { fontSize: 18 }
+});`}
+    />
+  }
+>
+  Crea una pantalla con dos botones: uno programa un recordatorio a 60 segundos y otro cancela todos los pendientes con `cancelAllScheduledNotificationsAsync`. Muestra cuántas notificaciones hay pendientes usando `getAllScheduledNotificationsAsync` después de cada acción.
+</Challenge>
+
+## Errores comunes
+
+**No registrar `setNotificationHandler`.** La notificación nunca aparece mientras pruebas con la app abierta. Ocurre porque, sin manejador, el sistema no muestra notificaciones en primer plano. Se detecta porque sí aparece cuando bloqueas la pantalla. Solución: registra el manejador una vez, fuera de los componentes.
+
+**Intentar obtener el token push en un simulador o en Expo Go para Android.** `getExpoPushTokenAsync` lanza un error o nunca devuelve. Ocurre porque push necesita un dispositivo físico y, en Android, una compilación de desarrollo. Se detecta con `Device.isDevice` en `false` o con el mensaje de error en la consola. Solución: prueba push en un teléfono con una compilación propia y usa notificaciones locales para el resto.
+
+**Olvidar cancelar la suscripción del listener.** Al tocar una notificación, la acción se ejecuta dos o tres veces. Ocurre porque cada montaje del componente agrega otro listener. Se detecta con logs repetidos por cada toque. Solución: devuelve `() => subscription.remove()` desde el efecto.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué diferencia hay entre una notificación local y una push?", back: "La local la programa la app en el propio teléfono; la push la envía un servidor a través de APNs o FCM." },
+    { front: "¿Qué función de expo-notifications programa una notificación local?", back: "scheduleNotificationAsync, con content y un trigger." },
+    { front: "¿Qué necesita getExpoPushTokenAsync para funcionar?", back: "Un dispositivo físico, permiso concedido y el projectId de EAS." },
+    { front: "¿Para qué sirve setNotificationHandler en expo-notifications?", back: "Para decidir si se muestra, suena o marca el icono una notificación que llega con la app abierta." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Quieres recordarle al usuario una nota mañana a las 9:00 sin usar servidor. ¿Qué usas?",
+      options: [
+        { text: "Una notificación push", correct: false, feedback: "Push necesita un servidor; aquí basta el teléfono." },
+        { text: "Una notificación local con un trigger de fecha o diario", correct: true, feedback: "Correcto: la programa la app y no necesita internet." },
+        { text: "Un setTimeout de 24 horas", correct: false, feedback: "El sistema suspende la app; el temporizador no sobrevive." }
+      ]
+    },
+    {
+      prompt: "¿Dónde conviene guardar el identificador de la nota para abrirla al tocar la notificación?",
+      options: [
+        { text: "En content.data", correct: true, feedback: "Correcto: data viaja con la notificación y llega en la respuesta." },
+        { text: "En el título", correct: false, feedback: "El título es para el usuario, no para la app." },
+        { text: "En una variable global", correct: false, feedback: "Si la app estaba cerrada, la variable ya no existe." }
+      ]
+    },
+    {
+      prompt: "¿Por qué el Snack de esta lección no funciona en el reproductor web?",
+      options: [
+        { text: "Porque el código tiene un error", correct: false, feedback: "El código es correcto; falla el entorno." },
+        { text: "Porque expo-notifications no está disponible en web y necesita un teléfono", correct: true, feedback: "Correcto: pruébalo con Expo Go en tu dispositivo." },
+        { text: "Porque falta el projectId", correct: false, feedback: "El projectId solo hace falta para push, no para notificaciones locales." }
+      ]
+    }
+  ]}
+/>

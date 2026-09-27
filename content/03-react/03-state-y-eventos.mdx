@@ -1,0 +1,236 @@
+---
+id: "03-react/03-state-y-eventos"
+title: "State y eventos"
+stage: 3
+module: "Pensar en componentes"
+order: 3
+minutes: 15
+prereqs: ["03-react/02-props"]
+summary: "Aprende a darle memoria a un componente con useState, a responder a eventos y a entender qué dispara un nuevo render."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a poder usar `useState` para que un componente recuerde un valor entre renders, manejar eventos como `onClick` y `onChange`, y explicar qué dispara un nuevo render.
+
+**Prerrequisitos:** `03-react/02-props`
+
+## Concepto
+
+Imagina un operador de un marcador deportivo manual, de esos con números que se dan vuelta. Cada vez que anota un punto, no dibuja el marcador entero desde cero: gira la ficha del número y el resto del marcador sigue como estaba. Pero el operador necesita una libreta aparte donde anota el puntaje actual; si solo confiara en su memoria momentánea, se le olvidaría entre una jugada y la siguiente. `useState` es esa libreta: le da a un componente una memoria que persiste entre una llamada y la siguiente, algo que una variable común no puede hacer.
+
+### Por qué una variable normal no alcanza
+
+Una función de componente se vuelve a ejecutar completa cada vez que React decide volver a renderizarla. Si guardas un valor en una variable común, esa variable se reinicia en cada llamada:
+
+```tsx
+function Counter() {
+  let count = 0; // se reinicia en cada render
+  return (
+    <button
+      onClick={() => {
+        count = count + 1; // este cambio se pierde: React no sabe que debe volver a renderizar
+        console.log(count);
+      }}
+    >
+      Clicks: {count}
+    </button>
+  );
+}
+```
+
+Este botón nunca actualiza lo que se ve en pantalla: `count` cambia en memoria por un instante, pero como nada le avisa a React que debe volver a ejecutar la función, el texto en pantalla queda congelado en `0`.
+
+### useState
+
+```tsx
+function Counter() {
+  const [count, setCount] = useState(0);
+  return <button onClick={() => setCount(count + 1)}>Clicks: {count}</button>;
+}
+```
+
+`useState(0)` hace dos cosas: le pide a React que reserve un espacio de memoria para este componente con valor inicial `0`, y devuelve un par `[valorActual, funciónParaCambiarlo]`. Cuando llamas a `setCount(count + 1)`:
+
+1. React guarda el nuevo valor en su memoria interna, asociado a esta instancia del componente.
+2. React programa un nuevo render: vuelve a llamar a la función `Counter`.
+3. En esa nueva llamada, `useState(0)` ya no devuelve `0`: devuelve el valor guardado, así que `count` en esta segunda llamada ya vale `1`.
+
+Por eso el texto en pantalla cambia: no es que React "edite" el número 0 y lo convierta en 1, es que ejecuta la función de nuevo con un valor distinto y actualiza el DOM real con la diferencia, exactamente como viste en la primera lección de esta etapa.
+
+### Actualizaciones basadas en el valor anterior
+
+`setCount` no cambia `count` en el mismo instante: programa el cambio para el próximo render. Si necesitas encadenar varias actualizaciones que dependen la una de la otra dentro del mismo evento, pasa una función en lugar de un valor:
+
+```tsx
+function handleClick() {
+  setCount((previous) => previous + 1);
+  setCount((previous) => previous + 1);
+}
+```
+
+Con la forma función, cada llamada recibe el valor más reciente calculado hasta ese momento, así que `count` termina aumentando en 2. Si en cambio escribes `setCount(count + 1)` dos veces seguidas, ambas leen el mismo `count` "congelado" del render actual, y el resultado termina aumentando solo en 1.
+
+### Eventos
+
+React envuelve los eventos del navegador (clic, cambio de texto, envío de formulario) en manejadores que se pasan como props especiales: `onClick`, `onChange`, `onSubmit`. El manejador recibe un evento sintético de React, muy parecido al evento nativo del DOM.
+
+```tsx
+function NameInput() {
+  const [name, setName] = useState("");
+  return (
+    <input
+      value={name}
+      onChange={(event) => setName(event.target.value)}
+      placeholder="Tu nombre"
+    />
+  );
+}
+```
+
+Aquí `value={name}` hace que el campo muestre siempre lo que hay en el estado, y `onChange` actualiza ese estado con lo que el usuario escribió. A este patrón se le llama componente controlado, y lo vas a retomar en la lección de formularios.
+
+Documentación oficial: [react.dev/learn/state-a-components-memory](https://react.dev/learn/state-a-components-memory) y [react.dev/learn/responding-to-events](https://react.dev/learn/responding-to-events).
+
+## Práctica
+
+El siguiente Sandpack combina un toggle booleano y un input controlado, ambos con `useState`.
+
+```tsx
+function Toggle() {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <div>
+      <button onClick={() => setIsOpen(!isOpen)}>{isOpen ? "Ocultar" : "Mostrar"} detalles</button>
+      {isOpen && <p>Estos son los detalles.</p>}
+    </div>
+  );
+}
+
+function NameInput() {
+  const [name, setName] = useState("");
+  return (
+    <div>
+      <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Tu nombre" />
+      <p>Hola, {name || "desconocido"}</p>
+    </div>
+  );
+}
+```
+
+<Sandpack
+  files={{
+    '/App.tsx': `import { useState } from "react";
+
+function Toggle() {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <div>
+      <button onClick={() => setIsOpen(!isOpen)}>{isOpen ? "Ocultar" : "Mostrar"} detalles</button>
+      {isOpen && <p>Estos son los detalles.</p>}
+    </div>
+  );
+}
+
+function NameInput() {
+  const [name, setName] = useState("");
+  return (
+    <div>
+      <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Tu nombre" />
+      <p>Hola, {name || "desconocido"}</p>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <div>
+      <Toggle />
+      <hr />
+      <NameInput />
+    </div>
+  );
+}`,
+  }}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Botón de me gusta"
+  solution={
+    <Sandpack
+      files={{
+        '/App.tsx': `import { useState } from "react";
+
+function LikeButton() {
+  const [liked, setLiked] = useState(false);
+  const [count, setCount] = useState(0);
+
+  function handleClick() {
+    setLiked(!liked);
+    setCount((previous) => (liked ? previous - 1 : previous + 1));
+  }
+
+  return (
+    <button onClick={handleClick}>
+      {liked ? "❤" : "♡"} {count}
+    </button>
+  );
+}
+
+export default function App() {
+  return <LikeButton />;
+}`,
+      }}
+    />
+  }
+>
+  Escribe un componente `LikeButton` con dos estados: `liked` (booleano) y `count` (número de likes). Al hacer clic, si no estaba marcado, pasa a `liked` y suma 1 a `count`; si ya estaba marcado, lo desmarca y resta 1. Muestra el corazón y el número en el mismo botón.
+</Challenge>
+
+## Errores comunes
+
+**Usar una variable normal esperando que persista entre renders.** Como viste en el Concepto, `let count = 0` dentro del componente se reinicia en cada llamada y cambiarla no dispara un nuevo render. Se detecta porque la pantalla nunca cambia al interactuar, aunque un `console.log` dentro del manejador muestre el valor "correcto" por un instante.
+
+**Mutar el estado directamente en lugar de llamar al setter.** Escribir `count = count + 1` (o, con un array de estado, `items.push(nuevo)`) no le avisa a React que algo cambió, porque React compara referencias, no revisa el contenido interno de la variable. Se detecta porque el valor cambia en memoria pero la interfaz no se actualiza; la solución siempre es llamar a la función setter que devuelve `useState`.
+
+**Encadenar actualizaciones con el valor "congelado" del render.** Llamar dos veces a `setCount(count + 1)` en el mismo manejador solo suma 1 en total, no 2, porque ambas lecturas de `count` corresponden al mismo render. Se detecta comparando el resultado esperado con el real; la solución es usar la forma función, `setCount((previous) => previous + 1)`.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué devuelve useState(0)?", back: "Un array de dos elementos: el valor actual y una función para actualizarlo." },
+    { front: "¿Por qué una variable normal (let) no sirve como memoria de un componente?", back: "Porque se reinicia cada vez que la función del componente se vuelve a ejecutar." },
+    { front: "¿Qué dispara React al llamar al setter de useState?", back: "Programa un nuevo render del componente con el valor actualizado." },
+    { front: "¿Cuándo conviene usar la forma función del setter, setCount(c => c + 1)?", back: "Cuando el nuevo valor depende del valor anterior y se llama varias veces en el mismo manejador." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué ocurre si reemplazas useState por una variable let dentro de un componente?",
+      options: [
+        { text: "El comportamiento es idéntico", correct: false, feedback: "La variable let se reinicia en cada render y no dispara ninguno nuevo al cambiar." },
+        { text: "El valor se reinicia en cada render y cambiarlo no actualiza la pantalla", correct: true, feedback: "Correcto: por eso useState existe, para darle memoria persistente al componente." },
+        { text: "React lanza un error en tiempo de compilación", correct: false, feedback: "No es un error de sintaxis; el código compila, pero no funciona como se espera." },
+      ],
+    },
+    {
+      prompt: "En el mismo manejador de evento, llamas dos veces a setCount(count + 1). ¿Cuánto aumenta count en total?",
+      options: [
+        { text: "2, porque cada llamada suma 1", correct: false, feedback: "Ambas llamadas leen el mismo count congelado de ese render, así que el efecto no se acumula." },
+        { text: "1, porque ambas llamadas parten del mismo valor de count de ese render", correct: true, feedback: "Correcto: para acumular, hay que usar la forma función del setter." },
+        { text: "0, porque las llamadas se cancelan entre sí", correct: false, feedback: "No se cancelan; simplemente ambas parten del mismo valor y la segunda sobrescribe a la primera." },
+      ],
+    },
+    {
+      prompt: "¿Qué patrón usa <input value={name} onChange={...} />?",
+      options: [
+        { text: "Un componente no controlado, porque el navegador decide el valor", correct: false, feedback: "Al fijar value desde el estado, es React quien decide el valor mostrado, no el navegador." },
+        { text: "Un componente controlado, porque el valor del campo viene del estado de React", correct: true, feedback: "Correcto: el estado es la única fuente de verdad del valor del input." },
+        { text: "Un custom hook", correct: false, feedback: "Un custom hook es una función que empieza con use y encapsula lógica reutilizable; esto es simplemente un input controlado." },
+      ],
+    },
+  ]}
+/>

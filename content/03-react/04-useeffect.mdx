@@ -1,0 +1,211 @@
+---
+id: "03-react/04-useeffect"
+title: "useEffect"
+stage: 3
+module: "Hooks"
+order: 4
+minutes: 15
+prereqs: ["03-react/03-state-y-eventos"]
+summary: "Aprende a sincronizar un componente con un sistema externo usando useEffect, su arreglo de dependencias y su función de limpieza."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a poder usar `useEffect` para sincronizar un componente con un sistema externo al DOM manejado por React, controlar cuándo se ejecuta con el arreglo de dependencias, y limpiar recursos con la función de retorno.
+
+**Prerrequisitos:** `03-react/03-state-y-eventos`
+
+## Concepto
+
+Piensa en una instrucción permanente que le das al conserje de un edificio: "cada vez que cambie la temperatura que configuro en el panel, ajusta el termostato de la sala de máquinas para que coincida". Tú no tocas la sala de máquinas directamente; das una instrucción que se ejecuta cada vez que cambia algo que te importa. `useEffect` es exactamente eso: una forma de decirle a React "después de renderizar, sincroniza esto con un sistema que vive fuera de React", como el título de la pestaña del navegador, una suscripción a un servidor, un temporizador o el `localStorage`.
+
+Es importante lo que **no** es `useEffect`: no es el lugar para calcular un valor que depende de las props o el estado. Si puedes calcular algo directamente mientras renderizas, hazlo así; `useEffect` es solo para sincronizar con algo externo al render.
+
+```tsx
+// Mal: usar un efecto para derivar un valor que ya podrías calcular en el render
+function Greeting({ firstName, lastName }: { firstName: string; lastName: string }) {
+  const [fullName, setFullName] = useState("");
+  useEffect(() => {
+    setFullName(firstName + " " + lastName);
+  }, [firstName, lastName]);
+  return <p>{fullName}</p>;
+}
+
+// Bien: calcularlo directamente durante el render, sin estado ni efecto
+function Greeting2({ firstName, lastName }: { firstName: string; lastName: string }) {
+  const fullName = firstName + " " + lastName;
+  return <p>{fullName}</p>;
+}
+```
+
+### Sincronizar con el título del documento
+
+```tsx
+function PageTitle({ title }: { title: string }) {
+  useEffect(() => {
+    document.title = title;
+  }, [title]);
+  return <h1>{title}</h1>;
+}
+```
+
+El segundo argumento, `[title]`, es el **arreglo de dependencias**: le dice a React "vuelve a ejecutar este efecto solo cuando `title` cambie de un render al siguiente". React siempre ejecuta el efecto después del primer render (el montaje). Si el arreglo fuera `[]`, el efecto se ejecutaría una sola vez, al montar el componente, sin importar qué cambie después. Si omites el arreglo por completo, el efecto se ejecuta después de cada render, lo cual casi nunca es lo que quieres.
+
+### Limpieza: el intervalo de un reloj
+
+Algunos efectos crean algo que necesita destruirse cuando el componente se desmonta o cuando el efecto va a volver a ejecutarse: un temporizador, una suscripción, un event listener. Para eso, la función que le pasas a `useEffect` puede devolver otra función, la **función de limpieza**.
+
+```tsx
+function Clock() {
+  const [time, setTime] = useState(() => new Date());
+
+  useEffect(() => {
+    const id = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  return <p>{time.toLocaleTimeString()}</p>;
+}
+```
+
+React llama a la función de limpieza antes de volver a ejecutar el efecto (si las dependencias cambiaron) y también cuando el componente se desmonta. Sin ese `clearInterval`, cada vez que el componente se montara de nuevo quedaría un intervalo corriendo en segundo plano sin que nadie lo detenga, aunque ya nadie lo necesite.
+
+<Callout kind="tip">
+  En desarrollo, con `StrictMode` activado, React (desde la versión 18, también en React 19) monta, desmonta y vuelve a montar cada componente una vez para ayudarte a detectar efectos sin limpieza. Vas a ver el efecto ejecutarse dos veces al cargar la página: es intencional y solo ocurre en desarrollo, no en producción.
+</Callout>
+
+Documentación oficial: [react.dev/reference/react/useEffect](https://react.dev/reference/react/useEffect) y [react.dev/learn/synchronizing-with-effects](https://react.dev/learn/synchronizing-with-effects).
+
+## Práctica
+
+El siguiente Sandpack sincroniza el título del documento con un estado y muestra un reloj que se actualiza cada segundo con `setInterval`, limpiando el intervalo al desmontar.
+
+```tsx
+function PageTitle({ title }: { title: string }) {
+  useEffect(() => {
+    document.title = title;
+  }, [title]);
+  return <h1>{title}</h1>;
+}
+
+function Clock() {
+  const [time, setTime] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return <p>Hora actual: {time.toLocaleTimeString()}</p>;
+}
+```
+
+<Sandpack
+  files={{
+    '/App.tsx': `import { useEffect, useState } from "react";
+
+function PageTitle({ title }: { title: string }) {
+  useEffect(() => {
+    document.title = title;
+  }, [title]);
+  return <h1>{title}</h1>;
+}
+
+function Clock() {
+  const [time, setTime] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return <p>Hora actual: {time.toLocaleTimeString()}</p>;
+}
+
+export default function App() {
+  const [count, setCount] = useState(0);
+  return (
+    <div>
+      <PageTitle title={"Clicks: " + count} />
+      <button onClick={() => setCount(count + 1)}>Sumar (mira el título de la pestaña)</button>
+      <Clock />
+    </div>
+  );
+}`,
+  }}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Ancho de ventana"
+  solution={
+    <Sandpack
+      files={{
+        '/App.tsx': `import { useEffect, useState } from "react";
+
+function WindowWidth() {
+  const [width, setWidth] = useState(window.innerWidth);
+
+  useEffect(() => {
+    function handleResize() {
+      setWidth(window.innerWidth);
+    }
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  return <p>Ancho de la ventana: {width}px</p>;
+}
+
+export default function App() {
+  return <WindowWidth />;
+}`,
+      }}
+    />
+  }
+>
+  Escribe un componente `WindowWidth` que guarde en el estado el ancho actual de la ventana (`window.innerWidth`) y lo mantenga sincronizado usando un `useEffect` que escuche el evento `resize` de `window`. No olvides quitar el listener en la función de limpieza.
+</Challenge>
+
+## Errores comunes
+
+**Olvidar el arreglo de dependencias.** Si escribes `useEffect(() => { ... })` sin segundo argumento, el efecto corre después de cada render. Si dentro del efecto llamas a un setter de estado sin ninguna condición, eso dispara otro render, que vuelve a ejecutar el efecto, que vuelve a llamar al setter: un bucle infinito. Se detecta porque la pestaña se congela o la consola muestra cientos de renders por segundo.
+
+**No limpiar un intervalo, suscripción o listener.** Si el `useEffect` del reloj no devolviera `() => clearInterval(id)`, cada vez que el componente se desmontara y volviera a montarse quedaría un intervalo corriendo en segundo plano, invisible pero consumiendo memoria y CPU. Se detecta con las herramientas de desarrollo del navegador (pestaña de rendimiento) mostrando temporizadores acumulados, o porque el estado de un componente ya desmontado sigue "actualizándose" en la consola.
+
+**Usar useEffect para calcular algo que ya se puede derivar en el render.** Guardar `fullName` en estado y actualizarlo desde un efecto agrega un render extra innecesario y una fuente más de bugs (¿qué pasa si el efecto no corrió todavía?). Se detecta preguntando: ¿este valor se puede calcular con una simple expresión a partir de las props o el estado que ya tengo? Si la respuesta es sí, no necesitas ni estado ni efecto para eso.
+
+<Flashcards
+  cards={[
+    { front: "¿Para qué sirve useEffect?", back: "Para sincronizar un componente con un sistema externo al render de React, como el DOM fuera de React, un temporizador o una suscripción." },
+    { front: "¿Qué controla el arreglo de dependencias de useEffect?", back: "Cuándo se vuelve a ejecutar el efecto: solo cuando alguno de los valores listados cambió desde el render anterior." },
+    { front: "¿Para qué sirve la función que devuelve un efecto?", back: "Para limpiar lo que el efecto creó (temporizadores, listeners, suscripciones) antes de que se ejecute de nuevo o cuando el componente se desmonta." },
+    { front: "¿Cuándo NO conviene usar useEffect?", back: "Cuando el valor se puede calcular directamente durante el render a partir de props o estado existentes." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué ocurre si un useEffect no tiene arreglo de dependencias?",
+      options: [
+        { text: "Se ejecuta una sola vez, al montar el componente", correct: false, feedback: "Eso ocurre con un arreglo vacío []; sin arreglo, el efecto corre después de cada render." },
+        { text: "Se ejecuta después de cada render", correct: true, feedback: "Correcto: sin arreglo de dependencias, React no tiene forma de saber cuándo saltárselo." },
+        { text: "Nunca se ejecuta", correct: false, feedback: "El efecto siempre se ejecuta al menos una vez, después del primer render." },
+      ],
+    },
+    {
+      prompt: "¿Para qué sirve devolver una función dentro de useEffect?",
+      options: [
+        { text: "Para indicar el valor que debe renderizarse", correct: false, feedback: "Eso lo hace el return del componente, no el del efecto." },
+        { text: "Para limpiar recursos antes de que el efecto se repita o el componente se desmonte", correct: true, feedback: "Correcto: es la función de limpieza." },
+        { text: "Para forzar un nuevo render inmediato", correct: false, feedback: "La función de limpieza no dispara renders por sí misma." },
+      ],
+    },
+    {
+      prompt: "Puedes calcular fullName directamente como firstName + ' ' + lastName durante el render. ¿Es buena idea usar useEffect y estado para eso?",
+      options: [
+        { text: "Sí, siempre es más seguro sincronizarlo con un efecto", correct: false, feedback: "Agrega un render extra y complejidad innecesaria para un valor que ya se puede derivar." },
+        { text: "No, conviene calcularlo directamente en el render sin estado ni efecto", correct: true, feedback: "Correcto: useEffect es para sincronizar con sistemas externos, no para derivar valores." },
+        { text: "Solo si firstName y lastName vienen de props, nunca si vienen de estado", correct: false, feedback: "El origen del valor no cambia la recomendación: si se puede derivar en el render, se deriva en el render." },
+      ],
+    },
+  ]}
+/>

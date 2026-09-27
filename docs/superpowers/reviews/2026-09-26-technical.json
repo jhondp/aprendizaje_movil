@@ -1,0 +1,378 @@
+[
+  {
+    "file": "content/04-react-native-expo/00-como-funciona-react-native.mdx",
+    "line": 88,
+    "severity": "blocker",
+    "category": "snack-typescript-in-app-js",
+    "summary": "The Snack component (src/ui/organisms/interactive/Snack.tsx) passes code via the `code=` query param, which Snack turns into a single App.js file (github.com/expo/snack/blob/main/docs/url-query-parameters.md: \"creates a Snack with a single App.js file\"; App.tsx requires the `files` param); 20 Snacks use TypeScript-only syntax that fails a JS+Flow parse (verified with @babel/parser), e.g. `(globalThis as any)` here.",
+    "fix": "Preferred: change buildSnackUrl to send `files={\"App.tsx\":{\"type\":\"CODE\",\"contents\":code}}` (JSON, URL-encoded) instead of `code`. Otherwise strip TS-only syntax (as casts, useState<T>, as const, !) from: 04/00:88, 04/05:109,177, 04/06:109, 04/09:192, 04/10:137,209, 04/11:266, 06/03:128,199, 06/04:180, 07/09:111,191, 07/11:110, 08/03:104, 09/01:121, 09/03:90, 09/05:109, 09/08:117, 10/09:135."
+  },
+  {
+    "file": "content/10-build-release-operaciones/07-eas-update-y-rollback.mdx",
+    "line": 72,
+    "severity": "blocker",
+    "category": "eas-update-environment",
+    "summary": "`eas update --channel production --message ...` omits `--environment`, which the Expo docs mark \"required in SDK 55 and later\" (docs.expo.dev/eas-update/getting-started/; SDK 55 changelog: \"eas update now requires the --environment flag\"), so the command as taught fails on the SDK the course installs (57).",
+    "fix": "Use `eas update --channel production --environment production --message \"...\"` (and `--channel preview --environment preview`) here (lines 72, 120, 121, 183 script) and in 10-build-release-operaciones/11-proyecto-publicar.mdx lines 102-103 and 11-capstone/03-publicar-y-presentar.mdx lines 39 and 258; update the Terminal outputs accordingly."
+  },
+  {
+    "file": "content/00-aprender-a-programar/04-git-y-github.mdx",
+    "line": 26,
+    "severity": "blocker",
+    "category": "git-default-branch",
+    "summary": "States the default branch is `main` and the exercise runs `git init` then `git push -u origin main`, but Git 2.x still creates `master` unless init.defaultBranch is set (verified with git 2.53: \"hint: Using 'master' as the name for the initial branch\"), so the push fails with \"src refspec main does not match any\"; same flow in 07-proyecto-tu-primer-repo.mdx lines 43-48 and 75-80.",
+    "fix": "Teach `git init -b main` (or `git config --global init.defaultBranch main` once, or `git branch -M main` before the first push) in the concept text, the Terminal steps (line 51) and the Checklist; apply the same change to 07-proyecto-tu-primer-repo.mdx."
+  },
+  {
+    "file": "content/00-aprender-a-programar/03-vs-code-y-node.mdx",
+    "line": 90,
+    "severity": "blocker",
+    "category": "node-cli-resolution",
+    "summary": "Claims `node presentacion` without `.js` fails with \"Cannot find module\", and the quiz (line 122) marks `node app` as wrong; Node resolves the entry point with CommonJS rules and runs app.js (verified: `node app` prints the file output on Node 22.22).",
+    "fix": "Replace the common-mistake with a real one (e.g. running the file from the wrong folder -> \"Cannot find module\"), and change the quiz so `node app.js` is correct without claiming `node app` fails (e.g. use a wrong-folder or `run app.js` distractor only)."
+  },
+  {
+    "file": "content/01-javascript/10-modulos.mdx",
+    "line": 64,
+    "severity": "major",
+    "category": "node-esm-detection",
+    "summary": "Says that without \"type\": \"module\" Node treats `import` as a SyntaxError (also line 151 and the quiz correct answer at line 172), but current LTS Node (22.12+, detection unflagged since 22.7) re-parses as ESM and only emits the MODULE_TYPELESS_PACKAGE_JSON warning (verified on Node 22.22).",
+    "fix": "Rephrase: without \"type\": \"module\" Node LTS detects the ESM syntax and prints a warning with a performance cost; older Node versions throw \"Cannot use import statement outside a module\". Update the error-detection paragraph and make the quiz ask about the warning or the recommended fix instead."
+  },
+  {
+    "file": "content/01-javascript/10-modulos.mdx",
+    "line": 155,
+    "severity": "major",
+    "category": "esm-default-import",
+    "summary": "Says `import add from \"./math.js\"` against named-only exports yields `add` undefined and then \"TypeError: add is not a function\"; ESM linking fails first with \"SyntaxError: The requested module './math.js' does not provide an export named 'default'\" (verified with Node 22.22).",
+    "fix": "Replace the detection text with the real SyntaxError message raised before any code runs."
+  },
+  {
+    "file": "content/01-javascript/11-callbacks-y-promesas.mdx",
+    "line": 73,
+    "severity": "major",
+    "category": "promise-executor",
+    "summary": "\"Nada dentro de la función se ejecuta al crear la Promise\" is false and contradicts the rest of the sentence: the executor runs synchronously when `new Promise` is called (MDN Promise() constructor).",
+    "fix": "Rewrite: the executor function runs immediately and synchronously; it starts the async work (setTimeout) and the result arrives later via resolve/reject."
+  },
+  {
+    "file": "content/01-javascript/13-proyecto-app-de-tareas.mdx",
+    "line": 62,
+    "severity": "major",
+    "category": "closure-encapsulation",
+    "summary": "`listTasks()` returns the internal `tasks` array by reference, so `store.listTasks().push(...)` mutates private state, contradicting line 74 (\"La única forma de leerlos o modificarlos...\") and the checklist item about privacy (also lines 106 and 181 in the Playgrounds).",
+    "fix": "Return a copy (`return [...tasks];` or `tasks.map((t) => ({ ...t }))`) in all three listings, or soften the privacy claim and add a common-mistake about returning internal references."
+  },
+  {
+    "file": "content/02-typescript/05-narrowing.mdx",
+    "line": 167,
+    "severity": "major",
+    "category": "ts-exhaustiveness",
+    "summary": "Claims a switch without the `never` default \"compila igual\" and returns undefined; for the lesson's own `label(status): string` tsc --strict reports TS2366 \"Function lacks ending return statement...\" when a union member is unhandled (verified with tsc 5.9).",
+    "fix": "Say that with an explicit non-undefined return type tsc already flags the missing case (TS2366); the `never` pattern matters for functions returning void or when the default must stay explicit, and it names the missing member in the error."
+  },
+  {
+    "file": "content/02-typescript/07-strict-mode-y-tsconfig.mdx",
+    "line": 20,
+    "severity": "major",
+    "category": "typescript-defaults",
+    "summary": "Says strict \"activa... reglas que por defecto están apagadas\" and the Terminal (line 70) shows the pre-5.9 `tsc --init` output (target es2016, module commonjs, esModuleInterop); npm now installs TypeScript 7.0.2 and since TS 6.0 `strict` defaults to true (devblogs.microsoft.com/typescript/announcing-typescript-6-0), and tsc 5.9+ --init generates module nodenext/target esnext/strict/verbatimModuleSyntax.",
+    "fix": "State the current default (strict is on by default since TS 6.0; keep \"strict\": true explicit for older toolchains), refresh the `tsc --init` output from the current compiler, and align the sample tsconfig.json with it."
+  },
+  {
+    "file": "content/04-react-native-expo/07-dimensiones-y-safearea.mdx",
+    "line": 225,
+    "severity": "major",
+    "category": "safe-area-hook",
+    "summary": "Says useSafeAreaInsets in the component that renders the provider returns 0; without a SafeAreaProvider above it the hook throws \"No safe area value available. Make sure you are rendering <SafeAreaProvider>...\" (react-native-safe-area-context src/SafeAreaContext.tsx, useSafeAreaInsets).",
+    "fix": "Change the symptom to the thrown error message and keep the fix (use the hook in a child of the provider)."
+  },
+  {
+    "file": "content/04-react-native-expo/08-imagenes-fuentes-iconos.mdx",
+    "line": 87,
+    "severity": "major",
+    "category": "vector-icons-sdk56",
+    "summary": "Says @expo/vector-icons \"viene incluido en los proyectos de Expo\", but from SDK 56 `expo` no longer depends on it (expo.dev/changelog/sdk-56) and the SDK 55/57 default templates do not list it (expo-template-default package.json); projects created with create-expo-app@latest (SDK 57) must add it explicitly.",
+    "fix": "Say: install it with `npx expo install @expo/vector-icons` (Snacks on SDK 55 resolve it via dependencies), and move the SDK 56 migration callout (line 102) next to this sentence, mentioning @react-native-vector-icons/* and expo-symbols."
+  },
+  {
+    "file": "content/05-estado-datos-arquitectura/02-tanstack-query.mdx",
+    "line": 66,
+    "severity": "major",
+    "category": "router-layout-path",
+    "summary": "\"Con Expo Router, este proveedor va en `app/_layout.tsx`\" contradicts the `src/app/` layout established in stage 4 (01, 09, 10, 11) and used in 05-10.",
+    "fix": "Change to `src/app/_layout.tsx`. Same normalization needed in 06-calidad-ci/00 (lines 133-141 outputs), 06-calidad-ci/01 challenge, 06-calidad-ci/06 lint output, 09-seguridad-movil/08 line 41, 10-build-release-operaciones/07 line 162, 10-build-release-operaciones/09 line 50 and 11-capstone/01 line 42."
+  },
+  {
+    "file": "content/06-calidad-ci/06-github-actions.mdx",
+    "line": 62,
+    "severity": "major",
+    "category": "package-manager-switch",
+    "summary": "Stage 6 switches to pnpm (pnpm/action-setup, packageManager field, pnpm-lock.yaml, --frozen-lockfile) while every earlier lesson creates and installs the project with npm (create-expo-app output \"npm install\", npx expo install \"using npm\"); no lesson migrates the project, so a learner with package-lock.json cannot pass `pnpm install --frozen-lockfile`.",
+    "fix": "Either keep npm in stages 6-11 (actions/setup-node cache: npm, `npm ci`, `npm audit`) or add an explicit migration step in 06-00/06-06 (install pnpm, `pnpm import`, delete package-lock.json, commit pnpm-lock.yaml) and mention it in 06-07."
+  },
+  {
+    "file": "content/09-seguridad-movil/05-validacion-de-entrada.mdx",
+    "line": 112,
+    "severity": "major",
+    "category": "zod-version-mismatch",
+    "summary": "The Snack pins zod 3.23.8 and uses `z.string().email()`, while stage 5 (05-09, deps \"^4.0.0\") teaches zod 4 and `z.email()`; npm latest is zod 4.6.5.",
+    "fix": "Pin `zod: \"^4.0.0\"` and use `z.email(\"Invalid email\")` so both stages teach the same major version."
+  },
+  {
+    "file": "content/10-build-release-operaciones/09-monitoreo-sentry.mdx",
+    "line": 81,
+    "severity": "major",
+    "category": "sentry-ota-sourcemaps",
+    "summary": "Claims the config plugin also uploads source maps when running `eas update`; Sentry docs say OTA/`expo export` maps need a separate `npx @sentry/expo-upload-sourcemaps dist` run after `eas update` (docs.sentry.io/platforms/react-native/sourcemaps/uploading/expo/).",
+    "fix": "Add the post-update command (`SENTRY_AUTH_TOKEN=... npx @sentry/expo-upload-sourcemaps dist`) to this lesson and to the runbook in 10-11."
+  },
+  {
+    "file": "content/10-build-release-operaciones/11-proyecto-publicar.mdx",
+    "line": 100,
+    "severity": "major",
+    "category": "runtime-version-bump",
+    "summary": "`npm version 1.1.0 --no-git-tag-version` only changes package.json, but 10-00 hardcodes `version: \"1.0.0\"` in app.config.ts and the appVersion runtime policy reads that field, so the following updates would still target runtime 1.0.0 while the output shows \"Runtime version 1.1.0\".",
+    "fix": "Bump `version` in app.config.ts (or make app.config.ts read it from package.json and say so in 10-00/10-08) and keep the Terminal outputs consistent."
+  },
+  {
+    "file": "content/11-capstone/01-arquitectura-y-plan.mdx",
+    "line": 42,
+    "severity": "major",
+    "category": "router-layout-path",
+    "summary": "The capstone tree puts Expo Router routes in root `app/` (and the checklist/quiz refer to `app/`), while create-expo-app@latest (SDK 55+) and stages 4-7 use `src/app/`.",
+    "fix": "Move routes under `src/app/` in the tree (lines 42-44), the checklist item and the quiz option `app/habit/[id].tsx`."
+  },
+  {
+    "file": "content/11-capstone/01-arquitectura-y-plan.mdx",
+    "line": 30,
+    "severity": "major",
+    "category": "architecture-inconsistency",
+    "summary": "The layer table puts ports (repository interfaces) in `domain`, but 05-06 declares `NotesRepository` in the application layer (notesService.ts, line 60) and 05-07 lists \"Puertos\" under `application`.",
+    "fix": "Pick one placement for ports across 05-06, 05-07, 06-04 (which uses domain/NotesRepository.ts) and 11-01, and make the tables and code comments match."
+  },
+  {
+    "file": "content/11-capstone/02-rubrica-y-checklist-final.mdx",
+    "line": 58,
+    "severity": "major",
+    "category": "secret-scan-false-assurance",
+    "summary": "`grep -rl \"service_role\" dist` cannot detect a leaked Supabase service key: the legacy service_role key is a JWT whose role claim is base64url-encoded (the literal text never appears), and new secret keys start with `sb_secret_`; the same check is repeated in the Terminal and checklist.",
+    "fix": "Grep for the actual key prefix/value (`sb_secret_`, or the exact key from the dashboard) and decode any `eyJ...` JWT in the bundle to confirm no `\"role\":\"service_role\"` claim, as 08-02 describes."
+  },
+  {
+    "file": "content/11-capstone/03-publicar-y-presentar.mdx",
+    "line": 39,
+    "severity": "minor",
+    "category": "eas-update-flag-consistency",
+    "summary": "Uses `eas update --branch production` while 10-07 and 10-11 teach `--channel production` (both valid, but the switch is unexplained), and it also lacks `--environment` (see 10-07 blocker).",
+    "fix": "Use `eas update --channel production --environment production --message ...` here and at line 258."
+  },
+  {
+    "file": "content/00-aprender-a-programar/07-proyecto-tu-primer-repo.mdx",
+    "line": 50,
+    "severity": "minor",
+    "category": "terminal-output",
+    "summary": "`git push` after a new commit shows \"Everything up-to-date\", which only appears when there is nothing to push.",
+    "fix": "Show a push output with the new commit (e.g. \"a1b2c3d..5d6e7f8  main -> main\")."
+  },
+  {
+    "file": "content/00-aprender-a-programar/07-proyecto-tu-primer-repo.mdx",
+    "line": 117,
+    "severity": "minor",
+    "category": "git-status-semantics",
+    "summary": "Quiz answer says an already-tracked node_modules \"sigue apareciendo en git status\"; an unchanged tracked file does not appear in git status at all, it simply keeps being tracked.",
+    "fix": "Reword to \"Git lo sigue rastreando: .gitignore no afecta a archivos ya versionados; hay que usar git rm -r --cached node_modules\"."
+  },
+  {
+    "file": "content/01-javascript/12-async-await-y-fetch.mdx",
+    "line": 95,
+    "severity": "minor",
+    "category": "playground-network",
+    "summary": "Says the Playground has no internet access; the Playground iframe is sandbox=\"allow-scripts\" without CSP, so fetch to CORS-enabled APIs such as jsonplaceholder works when online.",
+    "fix": "Say the example is kept as reference so the exercise works offline, not that the editor lacks network."
+  },
+  {
+    "file": "content/02-typescript/00-por-que-tipos.mdx",
+    "line": 49,
+    "severity": "minor",
+    "category": "doc-link-label",
+    "summary": "Link text \"TypeScript for the New Programmer\" points to typescript-in-5-minutes.html, which is \"TypeScript for JavaScript Programmers\".",
+    "fix": "Use https://www.typescriptlang.org/docs/handbook/typescript-from-scratch.html or rename the link text."
+  },
+  {
+    "file": "content/02-typescript/01-tipos-basicos.mdx",
+    "line": 79,
+    "severity": "minor",
+    "category": "ts-error-text",
+    "summary": "Quoted error \"Object is of type 'unknown'\" is the pre-4.9 wording; tsc 5.9 reports TS18046 \"'data' is of type 'unknown'.\" (verified); also at line 144.",
+    "fix": "Update both quotes to the current message."
+  },
+  {
+    "file": "content/02-typescript/02-interfaces-y-types.mdx",
+    "line": 145,
+    "severity": "minor",
+    "category": "ts-strict-null",
+    "summary": "\"aunque compile si el tipo aún no fue acotado\" is wrong under strict: `task.notes.toUpperCase()` fails with TS18048 \"'task.notes' is possibly 'undefined'\" (verified).",
+    "fix": "Say it does not compile with strictNullChecks (the course default) and quote TS18048."
+  },
+  {
+    "file": "content/02-typescript/05-narrowing.mdx",
+    "line": 163,
+    "severity": "minor",
+    "category": "ts-error-text",
+    "summary": "Says `typeof id === \"String\"` silently never narrows; tsc reports TS2367 \"This comparison appears to be unintentional because the types ... and '\"String\"' have no overlap\" (verified).",
+    "fix": "Change the detection to that compiler error."
+  },
+  {
+    "file": "content/02-typescript/08-proyecto-migrar-a-ts.mdx",
+    "line": 114,
+    "severity": "minor",
+    "category": "consistency",
+    "summary": "\"léelo de abajo hacia arriba\" contradicts 01-javascript/09 (read a stack trace top-down) and tsc prints a flat list, not a stack.",
+    "fix": "Say \"lee el primer error de la lista: archivo, línea y columna\"."
+  },
+  {
+    "file": "content/03-react/01-jsx.mdx",
+    "line": 176,
+    "severity": "minor",
+    "category": "react-dom-class",
+    "summary": "Says the style of a `class` attribute is not applied; React DOM warns \"Invalid DOM property `class`. Did you mean `className`?\" but still sets the attribute, and React 19 warnings no longer start with \"Warning:\".",
+    "fix": "Say React warns and the attribute works by accident, but className is the supported prop; drop the \"Warning:\" prefix."
+  },
+  {
+    "file": "content/03-react/04-useeffect.mdx",
+    "line": 74,
+    "severity": "minor",
+    "category": "react-version",
+    "summary": "Callout attributes StrictMode double-mount to \"React 18\"; current React is 19.2 (Expo SDK 55-57 ship React 19.x) and the behavior remains.",
+    "fix": "Write \"desde React 18\" or \"React 18 y 19\"."
+  },
+  {
+    "file": "content/05-estado-datos-arquitectura/04-persistencia-asyncstorage-mmkv.mdx",
+    "line": 26,
+    "severity": "minor",
+    "category": "broken-link",
+    "summary": "https://react-native-async-storage.github.io/async-storage/docs/install returns HTTP 404 (checked with curl -L).",
+    "fix": "Link to https://docs.expo.dev/versions/latest/sdk/async-storage/ only, or to the current async-storage docs URL."
+  },
+  {
+    "file": "content/05-estado-datos-arquitectura/09-react-hook-form-y-zod.mdx",
+    "line": 270,
+    "severity": "minor",
+    "category": "rn-warning",
+    "summary": "Detection relies on the React DOM warning \"changing an uncontrolled input to be controlled\", which React Native TextInput does not emit.",
+    "fix": "Detect it by the field showing stale text after reset() or by typing errors from undefined values instead."
+  },
+  {
+    "file": "content/06-calidad-ci/00-eslint-prettier-y-ts-strict.mdx",
+    "line": 133,
+    "severity": "minor",
+    "category": "router-layout-path",
+    "summary": "Terminal outputs reference `/home/ana/notes/app/index.tsx` and `app/index.tsx`, inconsistent with the `src/app/` layout.",
+    "fix": "Change to `src/app/index.tsx` in lines 133-141 (and in 06-01 challenge and 06-06 lint output)."
+  },
+  {
+    "file": "content/06-calidad-ci/03-jest-y-rntl.mdx",
+    "line": 28,
+    "severity": "minor",
+    "category": "rntl-peer",
+    "summary": "RNTL 14 requires the `test-renderer` 1.x peer (React 19.2 -> test-renderer@1.2) per its migration-v14.md; the install line omits it (npm 7+ may auto-install a non-matching line).",
+    "fix": "Install explicitly: `npx expo install @testing-library/react-native test-renderer --dev` and mention the React-minor match."
+  },
+  {
+    "file": "content/06-calidad-ci/06-github-actions.mdx",
+    "line": 59,
+    "severity": "minor",
+    "category": "outdated-actions",
+    "summary": "Workflow pins actions/checkout@v4, actions/setup-node@v4, pnpm/action-setup@v4 (and setup-java@v4 in 06-07); current majors are checkout v7.0.1, setup-node v7.0.0, pnpm/action-setup v6.1.0, setup-java v6.0.1 (GitHub releases API).",
+    "fix": "Bump to the current major versions in 06-06 and 06-07."
+  },
+  {
+    "file": "content/07-nativo-ux-avanzada/06-accesibilidad.mdx",
+    "line": 24,
+    "severity": "minor",
+    "category": "broken-link",
+    "summary": "https://docs.expo.dev/guides/accessibility/ returns HTTP 404 (checked with curl -L).",
+    "fix": "Keep https://reactnative.dev/docs/accessibility and drop or replace the Expo link."
+  },
+  {
+    "file": "content/07-nativo-ux-avanzada/10-performance.mdx",
+    "line": 57,
+    "severity": "minor",
+    "category": "prereq-claim",
+    "summary": "\"En la etapa 3 viste memo, useMemo y useCallback\" but stage 3 (03-react/05) never teaches React.memo.",
+    "fix": "Say stage 3 covered useMemo/useCallback and introduce memo here in one sentence."
+  },
+  {
+    "file": "content/09-seguridad-movil/02-secretos-fuera-del-bundle.mdx",
+    "line": 71,
+    "severity": "minor",
+    "category": "consistency",
+    "summary": "Server snippet refers to \"your Node backend from stage 8\", but stage 8 uses Supabase and never builds a Node backend.",
+    "fix": "Refer to a Supabase Edge Function or \"tu backend\" without claiming stage 8 built it."
+  },
+  {
+    "file": "content/09-seguridad-movil/03-almacenamiento-seguro.mdx",
+    "line": 78,
+    "severity": "minor",
+    "category": "expo-config",
+    "summary": "Says disabling Android backup needs expo-build-properties or a config plugin; the app config already exposes `android.allowBackup` (Expo app config schema).",
+    "fix": "Show `\"android\": { \"allowBackup\": false }` in app.json."
+  },
+  {
+    "file": "content/09-seguridad-movil/06-supply-chain.mdx",
+    "line": 94,
+    "severity": "minor",
+    "category": "stale-version-output",
+    "summary": "`npx expo install --check` output shows `expo-secure-store@14.0.0 expected 14.0.1`, SDK 52 numbering; SDK 55+ Expo packages use the SDK major (e.g. ~57.0.4 in expo@57 bundledNativeModules.json).",
+    "fix": "Use an SDK 57-style version in the sample output."
+  },
+  {
+    "file": "content/09-seguridad-movil/06-supply-chain.mdx",
+    "line": 33,
+    "severity": "minor",
+    "category": "pnpm-lifecycle-scripts",
+    "summary": "Install-script risk is presented as default behavior while the course uses pnpm, which since v10 does not run dependency lifecycle scripts unless allowlisted (onlyBuiltDependencies).",
+    "fix": "Add one sentence on pnpm 10+ blocking dependency scripts by default and reviewing the allowlist."
+  },
+  {
+    "file": "content/09-seguridad-movil/08-crash-reporting-sin-fugas.mdx",
+    "line": 41,
+    "severity": "minor",
+    "category": "router-layout-path",
+    "summary": "Code comment `// app/_layout.tsx` contradicts the `src/app/` layout.",
+    "fix": "Change to `// src/app/_layout.tsx`."
+  },
+  {
+    "file": "content/10-build-release-operaciones/00-app-config-y-entornos.mdx",
+    "line": 123,
+    "severity": "minor",
+    "category": "stale-version-output",
+    "summary": "Terminal output says \"Installing 2 SDK 52.0.0 compatible native modules... expo-dev-client@~5.0.0 expo-constants@~17.0.0\" while stage 4 shows SDK 57 installs; same \"SDK 52.0.0\" in 10-07 line 119.",
+    "fix": "Use SDK 57 output (e.g. expo-dev-client@~57.0.19, expo-constants ~57.x) in both lessons."
+  },
+  {
+    "file": "content/10-build-release-operaciones/06-store-listing-y-revision.mdx",
+    "line": 32,
+    "severity": "minor",
+    "category": "store-requirements",
+    "summary": "Screenshot row cites iPhone 6.7\" and 6.5\"; App Store Connect now requires 6.9\" iPhone screenshots (6.5\" as fallback). Line 38 lists \"Correo y teléfono de soporte\" but Apple requires a Support URL.",
+    "fix": "Update to 6.9\" (or 6.5\") and \"URL de soporte\"; keep the pointer to the official product-page guide."
+  },
+  {
+    "file": "content/10-build-release-operaciones/07-eas-update-y-rollback.mdx",
+    "line": 162,
+    "severity": "minor",
+    "category": "router-layout-path",
+    "summary": "Challenge classifies `app/(tabs)/notes.tsx`, inconsistent with the `src/app/` layout.",
+    "fix": "Use `src/app/(tabs)/notes.tsx` and update the expected output of the Playground."
+  },
+  {
+    "file": "content/10-build-release-operaciones/09-monitoreo-sentry.mdx",
+    "line": 126,
+    "severity": "minor",
+    "category": "stale-version-output",
+    "summary": "Wizard output says \"Installed @sentry/react-native@~6.x\"; SDK 55-57 bundle ~7.11.0 (bundledNativeModules.json) and npm latest is 8.28.0. Line 50 also places Sentry.init in `app/_layout.tsx` instead of `src/app/_layout.tsx`.",
+    "fix": "Show ~7.11.x (or the version `npx expo install` resolves) and use src/app/_layout.tsx."
+  }
+]

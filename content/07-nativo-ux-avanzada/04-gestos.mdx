@@ -1,0 +1,285 @@
+---
+id: "07-nativo-ux-avanzada/04-gestos"
+title: "Gestos"
+stage: 7
+module: "Movimiento"
+order: 4
+minutes: 15
+prereqs: ["07-nativo-ux-avanzada/03-reanimated"]
+summary: "Arrastra una tarjeta con Gesture.Pan de react-native-gesture-handler y conecta el gesto a Reanimated para que siga el dedo sin tirones."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás crear un gesto de arrastre con `Gesture.Pan` y `GestureDetector`, y usarlo junto a Reanimated para mover una tarjeta que vuelve a su sitio con un resorte.
+
+**Prerrequisitos:** `07-nativo-ux-avanzada/03-reanimated`
+
+## Concepto
+
+Hasta ahora tus interacciones eran toques: `Pressable` y `onPress`. Un gesto es algo más rico: el dedo baja, se mueve, cambia de velocidad y se levanta. Deslizar para borrar una nota, arrastrar para reordenar o pellizcar para hacer zoom son gestos.
+
+La analogía: un toque es tocar el timbre de una casa, un evento único. Un gesto de arrastre es mover una pieza de ajedrez: importa dónde empiezas, todo el recorrido y dónde la sueltas. Si tu mano tuviera que pedir permiso al cerebro para cada milímetro, la pieza avanzaría a saltos. Por eso los gestos, como las animaciones, deben procesarse en el hilo de UI.
+
+Documentación oficial: https://docs.swmansion.com/react-native-gesture-handler/ y https://docs.expo.dev/versions/latest/sdk/gesture-handler/
+
+### Gesture Handler
+
+`react-native-gesture-handler` reconoce gestos en el lado nativo y entrega los datos al hilo de UI, donde Reanimated los usa sin pasar por JavaScript. Se instala con:
+
+```bash
+npx expo install react-native-gesture-handler
+```
+
+La app debe estar envuelta, una sola vez y lo más arriba posible, en `GestureHandlerRootView`. Con Expo Router, ese lugar es `src/app/_layout.tsx`:
+
+```tsx
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { Stack } from "expo-router";
+
+export default function RootLayout() {
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <Stack />
+    </GestureHandlerRootView>
+  );
+}
+```
+
+### Definir un gesto de arrastre
+
+Expo SDK 55 incluye Gesture Handler 2.30, cuya API se basa en objetos gesto. `Gesture.Pan()` crea un gesto de arrastre y le encadenas callbacks para cada fase:
+
+- `onBegin`: el dedo tocó la superficie.
+- `onUpdate`: el dedo se movió. Recibe `translationX` y `translationY`, la distancia desde el inicio del gesto.
+- `onEnd`: el dedo se levantó. Recibe también `velocityX` y `velocityY`.
+- `onFinalize`: el gesto terminó por cualquier motivo, incluso si se canceló.
+
+Luego envuelves la vista con `GestureDetector` y le pasas el gesto:
+
+```tsx
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
+
+const translateX = useSharedValue(0);
+const translateY = useSharedValue(0);
+
+const pan = Gesture.Pan()
+  .onUpdate((event) => {
+    translateX.value = event.translationX;
+    translateY.value = event.translationY;
+  })
+  .onEnd(() => {
+    translateX.value = withSpring(0);
+    translateY.value = withSpring(0);
+  });
+
+const animatedStyle = useAnimatedStyle(() => ({
+  transform: [{ translateX: translateX.value }, { translateY: translateY.value }],
+}));
+
+return (
+  <GestureDetector gesture={pan}>
+    <Animated.View style={[styles.card, animatedStyle]} />
+  </GestureDetector>
+);
+```
+
+Los callbacks del gesto son worklets automáticamente: corren en el hilo de UI y pueden escribir valores compartidos sin la directiva `"worklet"`. El hijo directo de `GestureDetector` debe ser una vista nativa, como `Animated.View`.
+
+### Recordar dónde quedó
+
+`translationX` siempre empieza en 0 en cada gesto. Si quieres que la tarjeta se quede donde la sueltas y el siguiente arrastre continúe desde ahí, guarda la posición inicial en otro valor compartido:
+
+```tsx
+const offsetX = useSharedValue(0);
+const startX = useSharedValue(0);
+
+const pan = Gesture.Pan()
+  .onBegin(() => {
+    startX.value = offsetX.value;
+  })
+  .onUpdate((event) => {
+    offsetX.value = startX.value + event.translationX;
+  });
+```
+
+### Usar la velocidad para decidir
+
+Un gesto típico de "deslizar para descartar" mira la distancia y la velocidad al soltar. Si el usuario arrastró lejos o lanzó la tarjeta rápido, la saca de la pantalla; si no, la devuelve:
+
+```tsx
+.onEnd((event) => {
+  const shouldDismiss = Math.abs(event.translationX) > 150 || Math.abs(event.velocityX) > 800;
+  translateX.value = withSpring(shouldDismiss ? Math.sign(event.translationX) * 500 : 0);
+});
+```
+
+### Combinar gestos
+
+Puedes componer gestos: `Gesture.Simultaneous(pan, pinch)` permite arrastrar y pellizcar a la vez; `Gesture.Exclusive(doubleTap, singleTap)` da prioridad al doble toque. Otros gestos disponibles son `Gesture.Tap()`, `Gesture.LongPress()`, `Gesture.Pinch()` y `Gesture.Rotation()`.
+
+<Callout kind="tip">
+  Gesture Handler 3 introduce una API basada en hooks, como `usePanGesture`, que verás en la documentación más reciente. Los conceptos (fases, traslación, velocidad, composición) son los mismos. Usa siempre la versión que instala `npx expo install` para tu SDK.
+</Callout>
+
+### No memorices, observa
+
+La memoria muscular de los usuarios viene de las apps que ya usan. Antes de inventar un gesto, fíjate en cómo lo resuelven las apps del sistema: deslizar a la izquierda para borrar, mantener pulsado para seleccionar. Todo gesto debe tener además una alternativa accesible con un botón, un tema que verás dos lecciones más adelante.
+
+## Práctica
+
+Arrastra la tarjeta y suéltala: vuelve al centro con un resorte. En la vista previa web puedes arrastrar con el ratón; en tu teléfono, con Expo Go, se siente como en una app nativa.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  dependencies={{ 'react-native-gesture-handler': '~2.30.0', 'react-native-reanimated': '4.2.1', 'react-native-worklets': '0.7.4' }}
+  code={`import { StyleSheet, Text } from "react-native";
+import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
+
+export default function App() {
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const pressed = useSharedValue(false);
+
+  const pan = Gesture.Pan()
+    .onBegin(() => {
+      pressed.value = true;
+    })
+    .onUpdate((event) => {
+      translateX.value = event.translationX;
+      translateY.value = event.translationY;
+    })
+    .onFinalize(() => {
+      pressed.value = false;
+      translateX.value = withSpring(0);
+      translateY.value = withSpring(0);
+    });
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: withSpring(pressed.value ? 1.1 : 1) }
+    ]
+  }));
+
+  return (
+    <GestureHandlerRootView style={styles.container}>
+      <GestureDetector gesture={pan}>
+        <Animated.View style={[styles.card, animatedStyle]}>
+          <Text style={styles.title}>Arrástrame</Text>
+        </Animated.View>
+      </GestureDetector>
+    </GestureHandlerRootView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", alignItems: "center" },
+  card: { width: 200, height: 120, borderRadius: 16, backgroundColor: "#10484a", justifyContent: "center", alignItems: "center" },
+  title: { color: "#ffffff", fontSize: 18, fontWeight: "600" }
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Deslizar para descartar"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="55.0.0"
+      dependencies={{ 'react-native-gesture-handler': '~2.30.0', 'react-native-reanimated': '4.2.1', 'react-native-worklets': '0.7.4' }}
+      code={`import { StyleSheet, Text } from "react-native";
+import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
+
+export default function App() {
+  const translateX = useSharedValue(0);
+
+  const pan = Gesture.Pan()
+    .onUpdate((event) => {
+      translateX.value = event.translationX;
+    })
+    .onEnd((event) => {
+      const dismiss = Math.abs(event.translationX) > 150 || Math.abs(event.velocityX) > 800;
+      translateX.value = dismiss
+        ? withTiming(Math.sign(event.translationX) * 500, { duration: 200 })
+        : withSpring(0);
+    });
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: 1 - Math.min(Math.abs(translateX.value) / 300, 1),
+    transform: [{ translateX: translateX.value }]
+  }));
+
+  return (
+    <GestureHandlerRootView style={styles.container}>
+      <GestureDetector gesture={pan}>
+        <Animated.View style={[styles.card, animatedStyle]}>
+          <Text style={styles.title}>Desliza para descartar</Text>
+        </Animated.View>
+      </GestureDetector>
+    </GestureHandlerRootView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", alignItems: "center" },
+  card: { width: 260, padding: 24, borderRadius: 16, backgroundColor: "#efe6da" },
+  title: { fontSize: 16, textAlign: "center" }
+});`}
+    />
+  }
+>
+  Convierte la tarjeta en una que solo se mueve en horizontal. Al soltarla, si se arrastró más de 150 píxeles o la velocidad horizontal supera 800, sale de la pantalla con `withTiming` hacia el lado del arrastre; si no, vuelve al centro con `withSpring`. Haz que la opacidad baje a medida que se aleja.
+</Challenge>
+
+## Errores comunes
+
+**Olvidar `GestureHandlerRootView`.** Los gestos no responden o aparece un error que menciona `GestureHandlerRootView`. Ocurre porque el detector necesita una raíz que capture los toques. Se detecta porque ningún gesto de la app funciona. Solución: envuelve la app una vez en `src/app/_layout.tsx`.
+
+**Poner un componente propio como hijo directo de `GestureDetector`.** El gesto no se activa. Ocurre porque el detector se engancha a una vista nativa y un componente de función sin vista no le da dónde. Se detecta porque el mismo gesto funciona si el hijo es `Animated.View`. Solución: envuelve el contenido en `Animated.View` o `View`.
+
+**Esperar que `translationX` sea acumulativo.** La tarjeta salta a su posición original al empezar un segundo arrastre. Ocurre porque `translationX` vuelve a 0 en cada gesto. Se detecta al arrastrar dos veces seguidas. Solución: guarda la posición inicial en `onBegin` y súmala.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué componente debe envolver una app para que funcione react-native-gesture-handler?", back: "GestureHandlerRootView, una vez y lo más arriba posible, por ejemplo en src/app/_layout.tsx." },
+    { front: "¿Qué datos recibe onUpdate en un Gesture.Pan?", back: "translationX y translationY (distancia desde el inicio del gesto), entre otros." },
+    { front: "¿En qué hilo corren los callbacks de un gesto de Gesture Handler con Reanimated?", back: "En el hilo de UI, como worklets; pueden escribir valores compartidos directamente." },
+    { front: "¿Para qué sirve Gesture.Simultaneous?", back: "Para que dos gestos, por ejemplo arrastrar y pellizcar, se reconozcan a la vez." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué callback usas para devolver la tarjeta al centro incluso si el gesto se cancela?",
+      options: [
+        { text: "onBegin", correct: false, feedback: "onBegin ocurre al tocar, no al terminar." },
+        { text: "onFinalize", correct: true, feedback: "Correcto: se llama al terminar por cualquier motivo." },
+        { text: "onUpdate", correct: false, feedback: "onUpdate se llama mientras el dedo se mueve." }
+      ]
+    },
+    {
+      prompt: "En el segundo arrastre la tarjeta vuelve a la posición inicial de golpe. ¿Por qué?",
+      options: [
+        { text: "translationX se reinicia a 0 en cada gesto", correct: true, feedback: "Correcto: hay que sumar la posición guardada al empezar." },
+        { text: "Falta GestureHandlerRootView", correct: false, feedback: "Sin la raíz, el gesto no funcionaría en absoluto." },
+        { text: "withSpring no funciona dos veces", correct: false, feedback: "withSpring se puede llamar cuantas veces quieras." }
+      ]
+    },
+    {
+      prompt: "¿Qué dato permite distinguir un lanzamiento rápido de un arrastre lento al soltar?",
+      options: [
+        { text: "velocityX en onEnd", correct: true, feedback: "Correcto: la velocidad al soltar indica un lanzamiento." },
+        { text: "El número de renders", correct: false, feedback: "Los gestos no dependen de renders." },
+        { text: "El ancho de la tarjeta", correct: false, feedback: "El ancho no cambia con el gesto." }
+      ]
+    }
+  ]}
+/>

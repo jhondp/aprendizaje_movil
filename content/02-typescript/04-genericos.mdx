@@ -1,0 +1,183 @@
+---
+id: "02-typescript/04-genericos"
+title: "Genéricos"
+stage: 2
+module: "Tipos avanzados"
+order: 4
+minutes: 15
+prereqs: ["02-typescript/03-unions-y-literales"]
+summary: "Escribe funciones que funcionan con cualquier tipo sin perder la información del tipo concreto usando genéricos."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a poder escribir una función genérica con un parámetro de tipo, explicar qué problema resuelve frente a `any`, y usar genéricos con restricciones simples.
+
+**Prerrequisitos:** `02-typescript/03-unions-y-literales`
+
+## Concepto
+
+Piensa en una caja de mudanza vacía. La misma caja sirve para guardar libros, ropa o vajilla: su forma no depende de lo que metas adentro. Pero una vez que la etiquetas "libros" y la cierras, esperas que al abrirla salgan libros, no platos. Un **genérico** en TypeScript es esa caja: una función o un tipo que funciona con cualquier tipo de dato, pero que recuerda cuál fue el tipo concreto que usaste en cada caso.
+
+### El problema que resuelve
+
+Imagina una función que devuelve el primer elemento de un array. Con `any` funciona, pero pierde toda información:
+
+```ts
+function first(items: any[]): any {
+  return items[0];
+}
+
+const value = first([1, 2, 3]);
+value.toUpperCase(); // no hay ningún error, aunque value es un número
+```
+
+`any` acepta el array de números pero también deja que trates el resultado como si fuera un texto, sin avisar. Lo que se necesita es una función que diga: "recibo un array de un tipo `T` cualquiera, y devuelvo un valor de ese mismo `T`", sin fijar de antemano cuál es `T`.
+
+### La sintaxis genérica
+
+```ts
+function first<T>(items: T[]): T | undefined {
+  return items[0];
+}
+
+const num = first([1, 2, 3]);       // T se infiere como number
+const word = first(["a", "b"]);     // T se infiere como string
+```
+
+`<T>` declara un **parámetro de tipo**: un marcador de posición que TypeScript reemplaza por el tipo real cada vez que llamas a la función. Cuando llamas `first([1, 2, 3])`, TypeScript infiere `T = number`, así que el resultado tiene tipo `number | undefined` (la unión con `undefined` porque el array podría estar vacío). Cuando llamas `first(["a", "b"])`, infiere `T = string`. La misma función, sin repetir código, se especializa según lo que reciba, y el compilador recuerda esa especialización para revisar el resto del programa.
+
+```ts
+const num = first([1, 2, 3]);
+num.toUpperCase(); // error: Property 'toUpperCase' does not exist on type 'number'.
+```
+
+Esto es justo lo que `any` no podía darte: seguridad de tipos sin sacrificar reutilización.
+
+### Genéricos con más de un parámetro
+
+Una función puede tener varios parámetros de tipo, por ejemplo para emparejar dos valores:
+
+```ts
+function pair<A, B>(first: A, second: B): [A, B] {
+  return [first, second];
+}
+
+const p = pair("edad", 32); // [string, number]
+```
+
+### Restringir un genérico con `extends`
+
+A veces `T` no puede ser absolutamente cualquier cosa: necesita tener al menos cierta forma. `extends` restringe el genérico a los tipos que cumplen esa forma:
+
+```ts
+interface HasLength {
+  length: number;
+}
+
+function logLength<T extends HasLength>(value: T): T {
+  console.log(value.length);
+  return value;
+}
+
+logLength("hola");        // string tiene length
+logLength([1, 2, 3]);     // los arrays tienen length
+logLength(42);             // error: number no tiene length
+```
+
+`T extends HasLength` no significa herencia de clases: significa "T debe ser un tipo que al menos tenga una propiedad `length: number`". Cualquier valor que cumpla esa forma es válido, y el compilador rechaza los que no la cumplen. Documentación oficial: [Generics](https://www.typescriptlang.org/docs/handbook/2/generics.html).
+
+## Práctica
+
+Ejecuta el código y observa cómo `first` se especializa según el array que recibe, y cómo `pair` combina dos tipos distintos en una tupla.
+
+<Playground
+  lang="ts"
+  code={`function first<T>(items: T[]): T | undefined {
+  return items[0];
+}
+
+function pair<A, B>(a: A, b: B): [A, B] {
+  return [a, b];
+}
+
+const num = first([10, 20, 30]);
+const word = first(["uno", "dos"]);
+const combo = pair("edad", 32);
+
+console.log(num);
+console.log(word);
+console.log(combo);`}
+  expected={`10
+uno
+["edad",32]`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Último elemento genérico"
+  solution={
+    <Playground
+      lang="ts"
+      code={`function last<T>(items: T[]): T | undefined {
+  return items[items.length - 1];
+}
+
+console.log(last([1, 2, 3]));
+console.log(last(["a", "b", "c"]));
+console.log(String(last<number>([]))); // String() turns undefined into visible text`}
+      expected={`3
+c
+undefined`}
+    />
+  }
+>
+  Escribe una función genérica `last<T>(items: T[]): T | undefined` que devuelva el último elemento de un array, usando `items[items.length - 1]`. Pruébala con un array de números, uno de textos, y un array vacío (debe devolver `undefined`).
+</Challenge>
+
+## Errores comunes
+
+**Usar `any` en vez de un genérico cuando el tipo de entrada y salida están relacionados.** Con `any`, `first([1, 2, 3])` devuelve `any`, y el compilador deja de avisar si tratas ese resultado como un texto. Cómo detectarlo: si el resultado de una función debería "recordar" el tipo del argumento y en cambio es `any`, falta un genérico.
+
+**Olvidar que `T | undefined` puede realmente ser `undefined`.** `first([])` devuelve `undefined` porque el array está vacío, y usar el resultado sin comprobarlo (`first([]).toString()`) es un error de compilación, no solo un descuido. Cómo detectarlo: el compilador exige una comprobación (`if (result !== undefined)`) antes de usar el valor como si fuera siempre `T`.
+
+**Restringir de más o de menos con `extends`.** Escribir `function logLength<T>(value: T)` sin restricción y luego usar `value.length` dentro falla, porque no todo `T` tiene `length`. Cómo detectarlo: el compilador dice algo como "Property 'length' does not exist on type 'T'"; la solución es agregar `T extends HasLength`.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué es un parámetro de tipo como el T en function first<T>(items: T[])?", back: "Un marcador de posición que TypeScript reemplaza por el tipo real en cada llamada, según lo que reciba la función." },
+    { front: "¿Qué ventaja tiene un genérico sobre usar any?", back: "Mantiene la relación entre el tipo de entrada y el de salida, permitiendo que el compilador siga revisando el resultado en vez de aceptar cualquier operación sobre él." },
+    { front: "¿Qué significa T extends HasLength en un genérico?", back: "Que T debe ser un tipo que al menos tenga la forma de HasLength (por ejemplo, una propiedad length: number), no que herede de una clase." },
+    { front: "¿Por qué first<T>(items: T[]): T | undefined devuelve una unión con undefined?", back: "Porque el array podría estar vacío, y en ese caso no hay ningún elemento T que devolver." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué problema tiene function first(items: any[]): any frente a la versión genérica?",
+      options: [
+        { text: "No funciona con arrays de números", correct: false, feedback: "Sí funciona con cualquier array; el problema es que pierde la información del tipo del resultado." },
+        { text: "El resultado es any, así que el compilador deja de revisar cómo se usa después", correct: true, feedback: "Correcto: any desactiva la revisión sobre el valor devuelto, aunque el array de entrada tuviera un tipo concreto." },
+        { text: "Genera un error de compilación siempre", correct: false, feedback: "any no genera errores; ese es justamente el problema, porque no avisa de usos incorrectos." },
+      ],
+    },
+    {
+      prompt: "En function pair<A, B>(a: A, b: B): [A, B], al llamar pair(\"edad\", 32), ¿qué tipos infiere TypeScript?",
+      options: [
+        { text: "A = any, B = any", correct: false, feedback: "TypeScript infiere los tipos concretos de los argumentos, no any." },
+        { text: "A = string, B = number", correct: true, feedback: "Correcto: A se infiere del primer argumento (\"edad\"), B del segundo (32)." },
+        { text: "A y B deben declararse explícitamente siempre, TypeScript no los infiere", correct: false, feedback: "TypeScript infiere los parámetros de tipo a partir de los argumentos cuando es posible." },
+      ],
+    },
+    {
+      prompt: "¿Qué significa T extends HasLength en function logLength<T extends HasLength>(value: T)?",
+      options: [
+        { text: "Que T hereda de una clase llamada HasLength", correct: false, feedback: "extends en un genérico no es herencia de clases: es una restricción de forma." },
+        { text: "Que T debe ser un tipo que tenga al menos una propiedad length: number", correct: true, feedback: "Correcto: restringe qué tipos son válidos para T según la forma que exige HasLength." },
+        { text: "Que T solo puede ser number", correct: false, feedback: "T puede ser cualquier tipo que cumpla la forma de HasLength, como string o array, no solo number." },
+      ],
+    },
+  ]}
+/>

@@ -1,0 +1,254 @@
+---
+id: "02-typescript/08-proyecto-migrar-a-ts"
+title: "Proyecto: migrar la app de tareas a TS"
+stage: 2
+module: "Proyecto"
+order: 8
+minutes: 25
+prereqs: ["02-typescript/07-strict-mode-y-tsconfig"]
+summary: "Migra la app de tareas de consola de la etapa anterior a TypeScript, con interface Task, type Filter y compilación estricta sin errores."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a poder migrar un programa JavaScript existente a TypeScript de forma incremental, tipando su estado con `interface` y `type`, y comprobando que compila sin errores con `strict: true`.
+
+**Prerrequisitos:** `02-typescript/07-strict-mode-y-tsconfig`
+
+## Concepto
+
+Piensa en renovar una casa mientras sigues viviendo en ella: no la demoles entera de un día para otro, renuevas una habitación, compruebas que todo sigue funcionando, y sigues con la siguiente. Migrar un proyecto JavaScript a TypeScript se hace igual: no se reescribe todo de golpe, se avanza pieza por pieza, comprobando con `tsc` después de cada cambio que nada quedó roto.
+
+Esta lección retoma la app de tareas en consola de `01-javascript/13-proyecto-app-de-tareas` y la convierte en `todo.ts`, aplicando todo lo aprendido en esta etapa: `interface` para el objeto `Task`, `type` para los estados válidos, genéricos donde hace falta reutilizar lógica, narrowing en las ramas, utility types para no repetir formas ya declaradas, y `strict: true` como red de seguridad final.
+
+### El punto de partida en JavaScript
+
+La versión original no distingue qué valores son válidos para filtrar la lista: `filter` es un `string` cualquiera.
+
+```js
+let nextId = 1;
+const tasks = [];
+
+function addTask(title) {
+  const task = { id: nextId, title, done: false };
+  nextId += 1;
+  tasks.push(task);
+  return task;
+}
+
+function toggleTask(id) {
+  const task = tasks.find((t) => t.id === id);
+  if (task) {
+    task.done = !task.done;
+  }
+}
+
+function listTasks(filter) {
+  if (filter === "pending") return tasks.filter((t) => !t.done);
+  if (filter === "done") return tasks.filter((t) => t.done);
+  return tasks;
+}
+```
+
+Nada impide llamar `listTasks("pendiente")` con una falta de ortografía: como ninguno de los dos `if` coincide, la función devuelve silenciosamente todas las tareas, y el error pasa inadvertido hasta que alguien nota que el filtro "no filtra nada".
+
+### La misma app en TypeScript
+
+```ts
+interface Task {
+  id: number;
+  title: string;
+  done: boolean;
+}
+
+type Filter = "all" | "pending" | "done";
+
+let nextId = 1;
+const tasks: Task[] = [];
+
+function addTask(title: string): Task {
+  const task: Task = { id: nextId, title, done: false };
+  nextId += 1;
+  tasks.push(task);
+  return task;
+}
+
+function toggleTask(id: number): void {
+  const task = tasks.find((t) => t.id === id);
+  if (task) {
+    task.done = !task.done;
+  }
+}
+
+function listTasks(filter: Filter): Task[] {
+  if (filter === "pending") return tasks.filter((t) => !t.done);
+  if (filter === "done") return tasks.filter((t) => t.done);
+  return tasks;
+}
+```
+
+Tres cambios concretos, cada uno de una lección anterior:
+
+- `interface Task` (lección 2) documenta la forma exacta de una tarea: sin ella, `tasks.push(task)` aceptaría cualquier objeto, con ella el compilador rechaza uno al que le falte `done`.
+- `type Filter = "all" | "pending" | "done"` (lección 3) reemplaza el `string` libre de `filter`. Ahora `listTasks("pendiente")` no compila: `Argument of type '"pendiente"' is not assignable to parameter of type 'Filter'.` El error de tipeo se detecta antes de ejecutar, no después de que alguien reporte que el filtro no funciona.
+- `const tasks: Task[] = []` anota el array vacío. Sin la anotación, TypeScript no tiene forma de saber qué vas a guardar ahí y lo infiere como `any[]`, perdiendo toda revisión sobre lo que se agrega con `push`.
+
+Ninguna función cambió su lógica: cada `if` y cada `return` son idénticos a la versión JavaScript. Migrar no significa reescribir el comportamiento, significa anotar lo que el comportamiento ya asumía en silencio.
+
+### Reutilizar formas con utility types
+
+Cuando una función solo necesita parte de `Task`, conviene derivarla en vez de declarar una interfaz nueva. Para crear una tarea, `id` lo genera `addTask` y `done` siempre arranca en `false`, así que quien llama a la función solo debería poder pasar `title`:
+
+```ts
+function createTask(input: Omit<Task, "id" | "done">): Task {
+  const task: Task = { id: nextId, ...input, done: false };
+  nextId += 1;
+  return task;
+}
+```
+
+`Omit<Task, "id" | "done">` (lección 6) es, en este caso, exactamente `{ title: string }`, pero declararlo así dice explícitamente "esto es Task sin id ni done", y si mañana `Task` gana un campo nuevo, `createTask` lo hereda sin que nadie tenga que tocar esta firma.
+
+### Compilar y confirmar
+
+Con el `tsconfig.json` de la lección anterior (`strict: true`), correr `npx tsc` sobre `todo.ts` debe terminar sin imprimir nada. Si aparecen errores, lee el primero de la lista: el compilador señala archivo, línea y columna exactos, igual que en la lección 0. Corregir el primero a menudo hace desaparecer otros que dependían de él. La guía oficial para este proceso, con más casos que los que cubre esta lección, está en [Migrating from JavaScript](https://www.typescriptlang.org/docs/handbook/migrating-from-javascript.html).
+
+## Práctica
+
+Ejecuta la versión migrada y observa cómo `listTasks` devuelve subconjuntos distintos de `tasks` según el filtro, todo con datos que ya pasaron por `interface Task` y `type Filter`.
+
+<Playground
+  lang="ts"
+  code={`interface Task {
+  id: number;
+  title: string;
+  done: boolean;
+}
+
+type Filter = "all" | "pending" | "done";
+
+let nextId = 1;
+const tasks: Task[] = [];
+
+function addTask(title: string): Task {
+  const task: Task = { id: nextId, title, done: false };
+  nextId += 1;
+  tasks.push(task);
+  return task;
+}
+
+function toggleTask(id: number): void {
+  const task = tasks.find((t) => t.id === id);
+  if (task) {
+    task.done = !task.done;
+  }
+}
+
+function listTasks(filter: Filter): Task[] {
+  if (filter === "pending") return tasks.filter((t) => !t.done);
+  if (filter === "done") return tasks.filter((t) => t.done);
+  return tasks;
+}
+
+addTask("Comprar leche");
+addTask("Llamar al dentista");
+addTask("Leer un capítulo");
+toggleTask(2);
+
+console.log(listTasks("all"));
+console.log(listTasks("pending"));
+console.log(listTasks("done"));`}
+  expected={`[{"id":1,"title":"Comprar leche","done":false},{"id":2,"title":"Llamar al dentista","done":true},{"id":3,"title":"Leer un capítulo","done":false}]
+[{"id":1,"title":"Comprar leche","done":false},{"id":3,"title":"Leer un capítulo","done":false}]
+[{"id":2,"title":"Llamar al dentista","done":true}]`}
+/>
+
+Antes de continuar, repasa que la migración cubrió cada punto:
+
+<Checklist
+  id="02-typescript/08-proyecto-migrar-a-ts/migracion"
+  items={[
+    "El archivo se llama todo.ts, no todo.js.",
+    "interface Task declara id, title y done con sus tipos.",
+    "type Filter limita los valores a \"all\" | \"pending\" | \"done\".",
+    "addTask, toggleTask y listTasks tienen parámetros y retorno anotados.",
+    "npx tsc no imprime ningún error con strict: true activo."
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Crear tareas con Omit"
+  solution={
+    <Playground
+      lang="ts"
+      code={`interface Task {
+  id: number;
+  title: string;
+  done: boolean;
+}
+
+let nextId = 1;
+
+function createTask(input: Omit<Task, "id" | "done">): Task {
+  const task: Task = { id: nextId, ...input, done: false };
+  nextId += 1;
+  return task;
+}
+
+console.log(createTask({ title: "Regar las plantas" }));
+console.log(createTask({ title: "Pagar el alquiler" }));`}
+      expected={`{"id":1,"title":"Regar las plantas","done":false}
+{"id":2,"title":"Pagar el alquiler","done":false}`}
+    />
+  }
+>
+  Declara `interface Task` con `id: number`, `title: string` y `done: boolean`. Escribe una función `createTask(input: Omit<Task, "id" | "done">): Task` que reciba solo `title`, genere `id` con un contador `nextId` y arranque siempre con `done: false`. Pruébala creando dos tareas seguidas y muestra el resultado de cada una por consola.
+</Challenge>
+
+## Errores comunes
+
+**Dejar el estado sin anotar (`const tasks = []`).** Un array vacío sin anotación ni contexto que lo aclare se infiere como `any[]`, así que `tasks.push(42)` no produce ningún error aunque el resto del programa espere `Task`. Cómo detectarlo: revisa la declaración de `tasks`; si no dice `: Task[]`, el editor no distingue esa lista de un array de cualquier cosa.
+
+**Pasar un string cualquiera donde se espera un `Filter`.** Antes de migrar, `listTasks("pendiente")` compilaba y fallaba en silencio; después de migrar, con `filter: Filter`, esa misma llamada no compila. Cómo detectarlo: el mensaje dice `Argument of type '"pendiente"' is not assignable to parameter of type 'Filter'`, señalando el literal exacto que sobra.
+
+**Anotar donde ya se infiere y dejar sin anotar donde realmente hace falta.** Escribir `const first: Task = tasks[0]` cuando `tasks` ya es `Task[]` es ruido innecesario, porque TypeScript ya lo infiere; en cambio, dejar sin tipo el parámetro de una función usada por otro archivo sí pierde protección real. Cómo detectarlo: con `noImplicitAny` (lección 7) activo, un parámetro de función sin tipo y sin forma de inferirlo marca error de inmediato; una variable local cuyo tipo ya es evidente por el valor asignado, no.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué reemplaza type Filter = \"all\" | \"pending\" | \"done\" respecto a usar filter: string?", back: "Restringe los valores válidos a esos tres literales exactos; cualquier otro string produce un error de compilación." },
+    { front: "¿Qué tipo infiere TypeScript para const tasks = []; sin anotación ni uso posterior que lo aclare?", back: "any[], perdiendo la revisión de tipos sobre lo que se agregue con push." },
+    { front: "¿Qué representa Omit<Task, \"id\" | \"done\"> al tipar la entrada de createTask?", back: "Task sin las propiedades id y done, es decir, en este caso, solo title." },
+    { front: "¿Qué comando confirma que la migración terminó sin errores bajo strict?", back: "npx tsc, que no imprime nada si el proyecto compila sin errores." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Después de migrar filter a type Filter, ¿qué ocurre al llamar listTasks(\"pendiente\") (con una falta de ortografía)?",
+      options: [
+        { text: "Se ejecuta igual y devuelve todas las tareas, como en la versión JavaScript", correct: false, feedback: "Eso pasaba antes de migrar; con filter: Filter, ese mismo llamado ya no compila." },
+        { text: "El compilador rechaza la llamada porque \"pendiente\" no es uno de los literales de Filter", correct: true, feedback: "Correcto: la unión de literales solo acepta \"all\", \"pending\" y \"done\"." },
+        { text: "TypeScript corrige automáticamente el string a \"pending\"", correct: false, feedback: "TypeScript nunca corrige valores por ti; solo señala el error para que lo corrijas." },
+      ],
+    },
+    {
+      prompt: "¿Qué tipo infiere TypeScript para const tasks = []; si no se anota ni se usa después de forma que lo aclare?",
+      options: [
+        { text: "Task[]", correct: false, feedback: "Sin anotación explícita ni contexto, TypeScript no puede saber que vas a guardar objetos Task." },
+        { text: "any[]", correct: true, feedback: "Correcto: un array vacío sin anotación se infiere como any[], perdiendo la revisión de tipos." },
+        { text: "Un error de compilación inmediato", correct: false, feedback: "La declaración en sí no falla; el problema aparece después, al perder protección sobre lo que se agrega." },
+      ],
+    },
+    {
+      prompt: "¿Qué describe Omit<Task, \"id\" | \"done\"> usado como tipo del parámetro de createTask?",
+      options: [
+        { text: "Un tipo con únicamente title, porque excluye id y done de Task", correct: true, feedback: "Correcto: Omit se queda con todas las propiedades de Task excepto las listadas." },
+        { text: "Un tipo idéntico a Task pero con id y done opcionales", correct: false, feedback: "Eso sería Partial<Task>; Omit elimina las propiedades listadas, no las vuelve opcionales." },
+        { text: "Un error, porque Omit no admite excluir dos propiedades a la vez", correct: false, feedback: "Omit acepta una unión de claves, como \"id\" | \"done\", para excluir varias propiedades en una sola vez." },
+      ],
+    },
+  ]}
+/>

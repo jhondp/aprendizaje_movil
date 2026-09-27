@@ -1,0 +1,249 @@
+---
+id: "09-seguridad-movil/05-validacion-de-entrada"
+title: "Validación de entrada"
+stage: 9
+module: "Red y entrada"
+order: 5
+minutes: 12
+prereqs: ["09-seguridad-movil/04-https-y-certificate-pinning"]
+summary: "Trata toda entrada como no confiable: valida con esquemas en las fronteras de la app y usa consultas parametrizadas para que un texto nunca se vuelva código."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás identificar las fronteras de confianza de tu app, validar lo que cruza cada una con un esquema zod y garantizar que ninguna consulta SQL se construye concatenando texto del usuario.
+
+**Prerrequisitos:** `09-seguridad-movil/04-https-y-certificate-pinning`
+
+## Concepto
+
+Esta lección cubre **MASVS-CODE-4**: la app valida y sanea toda entrada no confiable. Toca también **MASVS-PLATFORM-1**, porque los deep links son una de esas entradas.
+
+### El control de acceso del edificio
+
+En un edificio de oficinas nadie llega a su escritorio sin pasar por recepción: se comprueba quién eres y a dónde vas, y solo entonces se abre el torno. Dentro, ya no te vuelven a pedir identificación en cada puerta. Una app funciona igual: define **fronteras de confianza** y valida todo lo que las cruza, para que el código interior pueda trabajar con datos que ya sabe correctos. Si la recepción falla, el resto del edificio queda expuesto.
+
+### Dónde están las fronteras
+
+Toda entrada que no generó tu propio código es no confiable, aunque venga de una fuente que parece amiga:
+
+- **Formularios**: el usuario puede escribir cualquier cosa, incluidos textos enormes o caracteres que tu base de datos interpreta.
+- **Deep links y parámetros de ruta**: cualquier app o página web puede abrir `notes://note/abc` con el valor que quiera.
+- **Respuestas de tu API**: un servidor comprometido, un proxy o simplemente una versión vieja del backend pueden devolver algo distinto de lo que esperas.
+- **Archivos importados y portapapeles**: contenido que el usuario trae de fuera.
+
+La validación del cliente mejora la experiencia y reduce la superficie de ataque, pero **la validación autoritativa vive en el servidor**: la app puede ser modificada, el servidor no. Valida en ambos lados y nunca confíes en que el cliente lo hizo.
+
+### Validar con esquemas
+
+Un esquema describe la forma exacta que aceptas y rechaza todo lo demás. Con `zod` ([https://zod.dev](https://zod.dev)), el esquema es también el tipo de TypeScript, así que no hay dos definiciones que puedan desalinearse:
+
+```ts
+import { z } from "zod";
+
+export const noteInputSchema = z.object({
+  title: z.string().trim().min(1).max(80),
+  body: z.string().max(10_000),
+  tag: z.enum(["work", "personal", "ideas"]),
+});
+
+export type NoteInput = z.infer<typeof noteInputSchema>;
+
+export function parseNoteInput(raw: unknown): NoteInput | null {
+  const result = noteInputSchema.safeParse(raw);
+  return result.success ? result.data : null;
+}
+```
+
+Tres reglas para escribir buenos esquemas:
+
+1. **Listas permitidas, no prohibidas.** `z.enum([...])` acepta solo tres etiquetas; intentar prohibir "caracteres peligrosos" siempre deja alguno fuera.
+2. **Límites de longitud en todo texto.** Sin `max`, un cuerpo de nota de 50 MB llega a la base de datos y a la red.
+3. **`safeParse` en las fronteras, tipos dentro.** Una vez validado, el resto del código recibe `NoteInput` y no vuelve a comprobar nada.
+
+El mismo esquema sirve para la respuesta de tu API: `noteSchema.array().safeParse(await res.json())` convierte una respuesta inesperada en un error controlado en lugar de en una pantalla en blanco.
+
+### Cuando el texto se convierte en código: inyección
+
+El caso clásico de MASVS-CODE-4 es la inyección SQL. Ocurre cuando construyes una consulta pegando texto del usuario, porque la base de datos no distingue qué parte escribiste tú y qué parte escribió él. Este es el patrón que **no** debes usar, con `expo-sqlite`:
+
+```ts
+// WRONG: the title becomes part of the SQL statement
+await db.execAsync(`INSERT INTO notes (title) VALUES ('${title}')`);
+```
+
+Si el título contiene una comilla y algo más, la sentencia resultante ya no es la que escribiste:
+
+```sql
+-- title typed by the user:  x'); DELETE FROM notes; --
+INSERT INTO notes (title) VALUES ('x'); DELETE FROM notes; --');
+```
+
+La solución no es "escapar comillas": es **no mezclar nunca datos con código**. Las consultas parametrizadas envían la sentencia y los valores por separado, y el motor garantiza que un valor es siempre un valor:
+
+```ts
+// RIGHT: placeholders keep data and SQL apart
+await db.runAsync("INSERT INTO notes (title, body, tag) VALUES (?, ?, ?)", [
+  input.title,
+  input.body,
+  input.tag,
+]);
+```
+
+Con `?` como marcador, el título puede contener comillas, punto y coma o lo que sea: se guarda tal cual. Revisa en tu proyecto toda llamada a `execAsync`, `runAsync` o `getAllAsync` y confirma que la cadena SQL es un literal sin interpolación.
+
+### Otras entradas que se olvidan
+
+- **Deep links.** `notes://note/{id}`: valida que `id` tenga el formato que esperas (por ejemplo, un UUID) y que la nota pertenezca al usuario con sesión antes de mostrarla. Un deep link no es una prueba de identidad.
+- **Nombres de archivo.** Si guardas adjuntos con el nombre que trae el usuario, `../../` puede escribir fuera del directorio previsto. Genera tú el nombre y guarda el original como dato.
+- **HTML en WebView.** Si alguna vez muestras contenido del usuario en un WebView, es MASVS-PLATFORM-2: el texto debe codificarse como HTML, no insertarse crudo.
+
+<Callout kind="tip">
+  Regla corta para revisar código: si ves una plantilla de cadena con `${...}` que forma una consulta SQL, una ruta de archivo o HTML, es un hallazgo. Si ves un valor que cruza una frontera sin pasar por `safeParse`, también.
+</Callout>
+
+## Práctica
+
+Este formulario valida con zod antes de "guardar". Prueba un título vacío, un correo sin dominio y una etiqueta que no está en la lista; luego corrige cada campo y observa qué devuelve `safeParse`.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  dependencies={{ zod: '^4.0.0' }}
+  code={`import { useState } from "react";
+import { View, Text, TextInput, Pressable, StyleSheet } from "react-native";
+import { z } from "zod";
+
+const noteSchema = z.object({
+  title: z.string().trim().min(1, "Title is required").max(80, "Max 80 characters"),
+  email: z.string().trim().pipe(z.email("Invalid email")),
+  tag: z.enum(["work", "personal", "ideas"]),
+});
+
+export default function App() {
+  const [title, setTitle] = useState("");
+  const [email, setEmail] = useState("ana@example");
+  const [tag, setTag] = useState("urgent");
+  const [result, setResult] = useState<string[]>([]);
+
+  function onSubmit() {
+    const parsed = noteSchema.safeParse({ title, email, tag });
+    if (parsed.success) {
+      setResult(["OK: " + JSON.stringify(parsed.data)]);
+      return;
+    }
+    setResult(parsed.error.issues.map((issue) => issue.path.join(".") + ": " + issue.message));
+  }
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>New note</Text>
+      <TextInput style={styles.input} placeholder="Title" value={title} onChangeText={setTitle} />
+      <TextInput style={styles.input} placeholder="Email" value={email} onChangeText={setEmail} autoCapitalize="none" />
+      <TextInput style={styles.input} placeholder="Tag: work | personal | ideas" value={tag} onChangeText={setTag} autoCapitalize="none" />
+      <Pressable style={styles.button} onPress={onSubmit}>
+        <Text style={styles.buttonText}>Validate and save</Text>
+      </Pressable>
+      {result.map((line, i) => (
+        <Text key={i} style={line.startsWith("OK") ? styles.ok : styles.error}>{line}</Text>
+      ))}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, padding: 24, paddingTop: 64, gap: 12 },
+  title: { fontSize: 24, fontWeight: "600" },
+  input: { borderWidth: 1, borderColor: "#999", borderRadius: 8, padding: 10 },
+  button: { backgroundColor: "#1d6b6e", padding: 12, borderRadius: 8, alignItems: "center" },
+  buttonText: { color: "white", fontWeight: "600" },
+  ok: { color: "#1d6b6e", fontFamily: "Courier", fontSize: 12 },
+  error: { color: "#b00020" }
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Validador a mano para un deep link"
+  solution={
+    <Playground
+      lang="ts"
+      code={`const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const TAGS = ["work", "personal", "ideas"];
+
+function validateDeepLink(params: Record<string, string | undefined>): string[] {
+  const errors: string[] = [];
+  if (!params.id || !UUID.test(params.id)) errors.push("id: must be a UUID");
+  if (params.tag !== undefined && !TAGS.includes(params.tag)) errors.push("tag: unknown value");
+  if (params.title !== undefined && params.title.length > 80) errors.push("title: max 80 characters");
+  return errors;
+}
+
+const cases = [
+  { id: "3f1e2d4c-5b6a-4c7d-8e9f-0a1b2c3d4e5f", tag: "work" },
+  { id: "42", tag: "work" },
+  { id: "3f1e2d4c-5b6a-4c7d-8e9f-0a1b2c3d4e5f", tag: "urgent", title: "x".repeat(81) },
+];
+
+for (const c of cases) {
+  const errors = validateDeepLink(c);
+  console.log(errors.length === 0 ? "valid" : errors.join(" | "));
+}`}
+      expected={`valid
+id: must be a UUID
+tag: unknown value | title: max 80 characters`}
+    />
+  }
+>
+  Sin usar zod, escribe una función `validateDeepLink(params)` para la ruta `notes://note/:id?tag=&title=`. Debe devolver una lista de errores: `id` obligatorio con formato UUID; `tag`, si viene, dentro de la lista permitida; `title`, si viene, de máximo 80 caracteres. Pruébala con tres casos: uno válido, uno con `id` numérico y uno con etiqueta desconocida y título demasiado largo. Imprime `valid` o los errores unidos con ` | `.
+</Challenge>
+
+## Errores comunes
+
+**Validar solo en el cliente.** La app rechaza títulos vacíos, pero el endpoint acepta cualquier cosa porque "la app ya valida". Ocurre por olvidar que la app puede modificarse o sustituirse por un script. Se detecta enviando una petición directa al endpoint con `curl` y un cuerpo inválido: si responde 200, el servidor no valida.
+
+**Construir SQL con plantillas de cadena.** Una plantilla con el título interpolado dentro de `execAsync` funciona en todas las pruebas hasta que un usuario escribe una comilla. Ocurre porque es más corto de escribir. Se detecta buscando el símbolo de dólar seguido de llave dentro de cadenas que contengan `SELECT`, `INSERT`, `UPDATE` o `DELETE`.
+
+**Prohibir caracteres en lugar de permitir formatos.** Se filtra `'` y `;` del título, y el siguiente ataque usa otro carácter. Ocurre por pensar la validación como lista negra. Se detecta cuando la validación es una lista de `replace`; la solución es describir el formato aceptado (longitud, enum, expresión regular) y usar consultas parametrizadas.
+
+**Confiar en la respuesta de la propia API.** `const notes = await res.json()` se usa directamente y la app se cae cuando el backend cambia un campo. Ocurre porque la API "es nuestra". Se detecta cuando un error de red o de versión produce una excepción dentro de un componente en lugar de un mensaje controlado.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué es una frontera de confianza en una app móvil?", back: "Cualquier punto por donde entran datos que tu código no generó: formularios, deep links, respuestas de la API, archivos." },
+    { front: "¿Dónde vive la validación autoritativa, en la app o en el servidor?", back: "En el servidor. La app valida para UX y defensa en profundidad, pero puede ser modificada." },
+    { front: "¿Por qué las consultas parametrizadas evitan la inyección SQL?", back: "Envían la sentencia y los valores por separado; el motor nunca interpreta un valor como código." },
+    { front: "¿Qué prefiere una buena validación: lista permitida o lista prohibida?", back: "Lista permitida (formato, longitud, enum). Las listas prohibidas siempre dejan casos fuera." },
+    { front: "¿Un deep link válido demuestra que el usuario puede ver esa nota?", back: "No. Hay que validar el formato del id y comprobar que la nota pertenece a la sesión actual." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Cuál de estas llamadas con expo-sqlite es segura frente a inyección?",
+      options: [
+        { text: "db.execAsync(`INSERT INTO notes (title) VALUES ('${title}')`)", correct: false, feedback: "Interpola el título dentro del SQL; una comilla en el título cambia la sentencia." },
+        { text: "db.runAsync(\"INSERT INTO notes (title) VALUES (?)\", [title])", correct: true, feedback: "Correcto: el valor viaja separado de la sentencia." },
+        { text: "db.execAsync(`INSERT INTO notes (title) VALUES ('${title.replace(\"'\", \"''\")}')`)", correct: false, feedback: "Escapar a mano es frágil; la solución es parametrizar." }
+      ]
+    },
+    {
+      prompt: "¿Qué devuelve schema.safeParse(raw) cuando la entrada no cumple el esquema?",
+      options: [
+        { text: "Lanza una excepción", correct: false, feedback: "Eso hace parse; safeParse nunca lanza." },
+        { text: "Un objeto con success: false y los errores en error.issues", correct: true, feedback: "Correcto: por eso es la forma adecuada en una frontera." },
+        { text: "null", correct: false, feedback: "Devuelve un objeto de resultado, no null." }
+      ]
+    },
+    {
+      prompt: "La app valida el formulario de nota con zod. ¿Qué falta para cumplir MASVS-CODE-4?",
+      options: [
+        { text: "Nada, el cliente ya valida", correct: false, feedback: "El cliente puede ser modificado; la validación autoritativa es del servidor." },
+        { text: "Que el servidor valide la misma entrada y que las consultas usen parámetros", correct: true, feedback: "Correcto: validar en ambos lados y nunca mezclar datos con código." },
+        { text: "Ofuscar el esquema para que no se pueda leer", correct: false, feedback: "Ofuscar no cambia lo que el servidor acepta." }
+      ]
+    }
+  ]}
+/>

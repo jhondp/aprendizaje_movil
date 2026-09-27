@@ -1,0 +1,161 @@
+---
+id: "04-react-native-expo/02-expo-go-y-dev-client"
+title: "Expo Go y development builds"
+stage: 4
+module: "Cómo funciona React Native"
+order: 2
+minutes: 12
+prereqs: ["04-react-native-expo/01-crear-proyecto-con-expo"]
+summary: "Distingue Expo Go de un development build y decide cuál usar según las librerías nativas de tu proyecto."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás explicar la diferencia entre Expo Go y un development build, y crear un development build local con `expo-dev-client`.
+
+**Prerrequisitos:** `04-react-native-expo/01-crear-proyecto-con-expo`
+
+## Concepto
+
+Una app de React Native tiene dos capas. La capa **nativa** es el binario que se instala en el teléfono: código Swift, Kotlin y C++ compilado, con todas las librerías nativas que usa tu app. La capa **JavaScript** es tu bundle: componentes, pantallas y lógica. Metro sirve la capa JavaScript; la capa nativa hay que compilarla.
+
+Documentación oficial: https://docs.expo.dev/develop/development-builds/introduction/
+
+### Una analogía: la consola de videojuegos
+
+Expo Go es como una consola de videojuegos que ya compraste: trae un hardware fijo y puedes insertar cualquier juego (tu bundle de JavaScript) siempre que ese juego no pida un accesorio que la consola no tiene. Un development build es fabricar tu propia consola: tarda más, pero puedes conectarle cualquier accesorio que necesites.
+
+### Expo Go
+
+Expo Go es una app que Expo publica con una capa nativa ya compilada. Incluye los módulos del SDK de Expo (cámara, ubicación, notificaciones básicas, sensores, entre otros) y el cliente para conectarse a Metro. Por eso puedes crear un proyecto y verlo en tu teléfono en un minuto, sin instalar Xcode ni Android Studio.
+
+Sus límites son los de la consola fija:
+
+- Solo puedes usar las librerías nativas que ya vienen dentro de Expo Go. Si instalas una librería con código nativo propio que no está incluida, la app falla al importarla.
+- No puedes cambiar la configuración nativa: el nombre del paquete, los permisos, el ícono o los plugins de configuración no se aplican.
+- Soporta un solo SDK de Expo por versión.
+
+Expo describe a Expo Go como un entorno para aprender y prototipar, no para construir apps de producción.
+
+### Development build
+
+Un development build es **tu propia versión de Expo Go**: un binario compilado con exactamente las librerías nativas y la configuración de tu proyecto, más la librería `expo-dev-client`, que agrega un menú de desarrollo, un selector de servidores y mejores herramientas de depuración.
+
+Para crear uno local:
+
+```bash
+npx expo install expo-dev-client
+npx expo run:ios      # macOS with Xcode
+npx expo run:android  # Android Studio and an emulator or a device
+```
+
+`npx expo install` es distinto de `npm install`: consulta qué versión de cada paquete es compatible con el SDK de tu proyecto e instala esa. Úsalo siempre para paquetes de Expo y de React Native.
+
+`npx expo run:ios` hace tres cosas: genera las carpetas nativas `ios/` y `android/` a partir de `app.json` y de tus dependencias (este paso se llama **prebuild**), compila el binario e instala la app en el simulador o dispositivo. La primera vez tarda varios minutos. Después, mientras solo cambies JavaScript, basta con `npx expo start`: el development build se conecta a Metro igual que Expo Go.
+
+Las carpetas `ios/` y `android/` son generadas. Expo recomienda no editarlas a mano y regenerarlas cuando cambias la configuración nativa; esta idea se llama Continuous Native Generation.
+
+Si no tienes macOS o no quieres instalar Android Studio, también puedes compilar el development build en la nube con EAS Build. Lo verás en detalle en la etapa dedicada a builds y publicación.
+
+### Cuándo reconstruir
+
+Necesitas compilar de nuevo el development build solo cuando cambia la capa nativa:
+
+- instalas o actualizas una librería con código nativo,
+- cambias `app.json` en algo que afecta al binario (permisos, ícono, plugins),
+- actualizas el SDK de Expo.
+
+Si solo cambias componentes, estilos o lógica, Fast Refresh se encarga y no hace falta compilar.
+
+### Cuál elegir
+
+Para esta etapa, Expo Go o Snack alcanzan: todo lo que usarás viene incluido en el SDK. En cuanto tu proyecto necesite una librería nativa externa o una configuración propia, pasa a un development build. En un proyecto profesional, lo habitual es trabajar con development builds desde el principio, porque es el mismo binario que después se publica.
+
+## Práctica
+
+Recorre los pasos para convertir tu proyecto en un development build de iOS.
+
+<Terminal
+  steps={[
+    { cmd: "npx expo install expo-dev-client", out: "› Installing 1 SDK 57.0.0 compatible native module using npm\n> npm install expo-dev-client@~57.0.0\n\nadded 12 packages in 6s" },
+    { cmd: "npx expo run:ios", out: "› Generating native project files (prebuild)\n✔ Created native directory\n✔ Finished prebuild\n› Installing CocoaPods\n› Building my-notes\n› Build Succeeded\n› Installing on iPhone 17\n› Opening on iPhone 17 (com.example.mynotes)" },
+    { cmd: "npx expo start", out: "Starting Metro Bundler\n› Using development build\n› Metro waiting on http://localhost:8081\n\n› Press a │ open Android\n› Press i │ open iOS simulator\n› Press s │ switch to Expo Go" }
+  ]}
+/>
+
+Marca las situaciones que ya reconoces como señales para pasar a un development build:
+
+<Checklist
+  id="04-react-native-expo/02-expo-go-y-dev-client-cuando"
+  items={[
+    "Si solo uso módulos del SDK de Expo, Expo Go o Snack alcanzan para aprender",
+    "Si instalo una librería con código nativo que Expo Go no incluye, necesito un development build",
+    "Si cambio permisos, ícono o plugins en app.json, necesito reconstruir el development build",
+    "Si actualizo el SDK de Expo, reconstruyo el development build",
+    "Si solo cambio componentes o estilos, no reconstruyo: basta con Fast Refresh",
+    "Instalo paquetes de Expo con npx expo install, no con npm install"
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Development build en Android"
+  solution={
+    <Terminal
+      steps={[
+        { cmd: "npx expo install expo-dev-client", out: "› Installing 1 SDK compatible native module using npm" },
+        { cmd: "npx expo run:android", out: "› Generating native project files (prebuild)\n› Building app with Gradle\n› Installing on Pixel_9_API_36\n› Opening com.example.mynotes" },
+        { cmd: "npx expo start", out: "› Using development build\n› Metro waiting on http://localhost:8081" }
+      ]}
+    />
+  }
+>
+  Escribe, en orden, los tres comandos que usarías para crear un development build de tu proyecto en un emulador de Android y luego trabajar en él con Fast Refresh. Explica en una frase por qué el segundo comando no hace falta repetirlo cuando solo cambias un componente.
+</Challenge>
+
+## Errores comunes
+
+**Instalar una librería nativa y seguir usando Expo Go.** La app muestra un error como "Cannot find native module" o "TurboModuleRegistry.getEnforcing(...) could not be found". Ocurre porque Expo Go no incluye esa librería y no se puede agregar. Se detecta porque el error aparece justo al importar la librería. Solución: crear un development build.
+
+**Usar npm install para paquetes de Expo.** La app compila pero falla al arrancar, o aparecen advertencias de versiones incompatibles. Ocurre porque npm instala la última versión publicada, que puede pertenecer a otro SDK. Se detecta con `npx expo install --check`, que lista los paquetes con versión incorrecta.
+
+**Editar a mano las carpetas ios/ y android/.** Los cambios desaparecen la próxima vez que se ejecuta prebuild. Ocurre porque esas carpetas se generan desde `app.json` y las dependencias. Se detecta porque `git diff` muestra que tus cambios se perdieron tras reconstruir. Solución: usar la configuración de `app.json` o un config plugin.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué es un development build en Expo?", back: "Tu propia versión de Expo Go, compilada con las librerías nativas y la configuración de tu proyecto." },
+    { front: "¿Qué hace npx expo install a diferencia de npm install?", back: "Instala la versión del paquete compatible con el SDK de Expo del proyecto." },
+    { front: "¿Cuándo hay que reconstruir un development build?", back: "Al agregar librerías nativas, cambiar la configuración nativa o actualizar el SDK." },
+    { front: "¿Qué limitación principal tiene Expo Go?", back: "Solo incluye las librerías nativas que Expo empaquetó; no puedes agregar otras." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Instalaste una librería con código nativo que no viene en el SDK de Expo. ¿Qué necesitas?",
+      options: [
+        { text: "Reiniciar Metro con npx expo start --clear", correct: false, feedback: "Limpiar la caché no agrega código nativo a Expo Go." },
+        { text: "Un development build", correct: true, feedback: "Correcto: el código nativo debe compilarse en tu propio binario." },
+        { text: "Actualizar Expo Go desde la tienda", correct: false, feedback: "Expo Go solo trae las librerías que Expo decidió incluir." }
+      ]
+    },
+    {
+      prompt: "Cambiaste el color de un botón. ¿Tienes que volver a ejecutar npx expo run:ios?",
+      options: [
+        { text: "Sí, cada cambio requiere compilar", correct: false, feedback: "Solo los cambios nativos requieren compilar." },
+        { text: "No, Fast Refresh aplica el cambio de JavaScript", correct: true, feedback: "Correcto: el binario no cambió, solo el bundle." },
+        { text: "Solo si usas TypeScript", correct: false, feedback: "TypeScript se transforma en Metro; no afecta al binario." }
+      ]
+    },
+    {
+      prompt: "¿Qué hace el paso prebuild?",
+      options: [
+        { text: "Genera las carpetas nativas ios/ y android/ a partir de la configuración", correct: true, feedback: "Correcto: por eso no conviene editarlas a mano." },
+        { text: "Publica la app en las tiendas", correct: false, feedback: "Publicar es otro proceso que verás más adelante." },
+        { text: "Compila TypeScript a JavaScript", correct: false, feedback: "Eso lo hace Metro al crear el bundle." }
+      ]
+    }
+  ]}
+/>

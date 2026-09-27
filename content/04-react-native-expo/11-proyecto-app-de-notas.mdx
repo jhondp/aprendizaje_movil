@@ -1,0 +1,480 @@
+---
+id: "04-react-native-expo/11-proyecto-app-de-notas"
+title: "Proyecto: app de notas local"
+stage: 4
+module: "Navegación"
+order: 11
+minutes: 30
+prereqs: ["04-react-native-expo/10-tabs-stack-y-plataformas"]
+summary: "Construye una app de notas con Expo Router: lista, detalle con ruta dinámica, crear y editar, estado en un provider y áreas seguras resueltas."
+---
+
+## Objetivo
+
+Al terminar esta lección tendrás una app de notas con Expo Router que lista, muestra, crea y edita notas, con el estado en un provider de nivel superior y la interfaz protegida por las áreas seguras.
+
+**Prerrequisitos:** `04-react-native-expo/10-tabs-stack-y-plataformas`
+
+## Concepto
+
+Este proyecto junta todo lo de la etapa en una app real. Es la versión móvil del [tablero de tareas](/etapa/03-react/11-proyecto-tablero-de-tareas) que construiste al cerrar la etapa de React: la misma idea de una lista que el usuario modifica, ahora con componentes nativos, varias pantallas y navegación. La etapa 5 conectará esta app a persistencia y a una arquitectura por capas, así que conviene que quede ordenada.
+
+Documentación de referencia: https://docs.expo.dev/router/introduction/ y https://react.dev/reference/react/useContext
+
+### Una analogía: la libreta y sus páginas
+
+Piensa en una libreta de notas con un índice al principio. El índice (la lista) te dice qué notas hay; abres una página (el detalle) para leerla; tachas y reescribes una página (la edición). Hay una sola libreta: si corriges una nota en su página, el índice también cambia, porque ambos miran el mismo papel. En la app, esa libreta única es el **provider**: todas las pantallas leen y modifican las mismas notas.
+
+### Qué vas a construir
+
+Una app con tres pantallas:
+
+1. **Lista** (`/`): todas las notas, con un botón para crear una nueva. Si no hay notas, un mensaje lo indica.
+2. **Detalle** (`/note/[id]`): el título y el contenido de una nota, con un botón para editarla.
+3. **Edición** (`/edit`): un formulario con título y contenido. Sin parámetro crea una nota; con `?id=3` edita la nota 3. El botón Guardar se desactiva si el título está vacío.
+
+Las notas viven en memoria: al cerrar la app se pierden. Es intencional; guardarlas en el dispositivo es el primer tema de la etapa 5.
+
+### Estructura de archivos
+
+```text
+my-notes/
+└── src/
+    ├── app/
+    │   ├── _layout.tsx      # NotesProvider + root Stack
+    │   ├── index.tsx        # "/" : notes list
+    │   ├── edit.tsx         # "/edit" and "/edit?id=3" : create or edit
+    │   └── note/
+    │       └── [id].tsx     # "/note/:id" : note detail
+    └── notes/
+        └── NotesContext.tsx # notes state, shared by every screen
+```
+
+`NotesContext.tsx` está fuera de `src/app/` porque no es una pantalla, como viste en la lección de Expo Router.
+
+### El provider de notas
+
+El estado vive en un Context de React, igual que en la etapa anterior. El provider expone la lista y dos acciones; el hook `useNotes` falla con un mensaje claro si alguien lo usa fuera del provider.
+
+```tsx
+// src/notes/NotesContext.tsx
+import { createContext, useContext, useState, type ReactNode } from "react";
+
+export type Note = { id: string; title: string; body: string };
+
+type NotesContextValue = {
+  notes: Note[];
+  addNote: (title: string, body: string) => string;
+  updateNote: (id: string, title: string, body: string) => void;
+};
+
+const NotesContext = createContext<NotesContextValue | null>(null);
+
+export function NotesProvider({ children }: { children: ReactNode }) {
+  const [notes, setNotes] = useState<Note[]>([]);
+
+  function addNote(title: string, body: string) {
+    const id = String(Date.now());
+    setNotes((prev) => [{ id, title, body }, ...prev]);
+    return id;
+  }
+
+  function updateNote(id: string, title: string, body: string) {
+    setNotes((prev) => prev.map((note) => (note.id === id ? { ...note, title, body } : note)));
+  }
+
+  return (
+    <NotesContext.Provider value={{ notes, addNote, updateNote }}>{children}</NotesContext.Provider>
+  );
+}
+
+export function useNotes() {
+  const value = useContext(NotesContext);
+  if (!value) throw new Error("useNotes must be used inside NotesProvider");
+  return value;
+}
+```
+
+### El layout raíz
+
+El provider envuelve al `Stack`, así todas las pantallas comparten las mismas notas. La edición se presenta como modal: en iOS sube desde abajo.
+
+```tsx
+// src/app/_layout.tsx
+import { Stack } from "expo-router";
+import { NotesProvider } from "../notes/NotesContext";
+
+export default function RootLayout() {
+  return (
+    <NotesProvider>
+      <Stack>
+        <Stack.Screen name="index" options={{ title: "Notas" }} />
+        <Stack.Screen name="note/[id]" options={{ title: "Nota" }} />
+        <Stack.Screen name="edit" options={{ title: "Editar", presentation: "modal" }} />
+      </Stack>
+    </NotesProvider>
+  );
+}
+```
+
+### La lista
+
+El header del `Stack` ya protege el borde superior. El botón inferior suma el inset de la barra de gestos con `useSafeAreaInsets`.
+
+```tsx
+// src/app/index.tsx
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { Link } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useNotes } from "../notes/NotesContext";
+
+export default function NotesList() {
+  const { notes } = useNotes();
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View style={styles.screen}>
+      <FlatList
+        data={notes}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <Link href={{ pathname: "/note/[id]", params: { id: item.id } }} asChild>
+            <Pressable style={styles.row}>
+              <Text style={styles.rowTitle}>{item.title}</Text>
+            </Pressable>
+          </Link>
+        )}
+        ListEmptyComponent={<Text style={styles.empty}>Todavía no hay notas</Text>}
+      />
+      <Link href="/edit" asChild>
+        <Pressable style={[styles.button, { marginBottom: insets.bottom + 16 }]}>
+          <Text style={styles.buttonText}>Nueva nota</Text>
+        </Pressable>
+      </Link>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: "#fff" },
+  row: { padding: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: "#c7c7cc" },
+  rowTitle: { fontSize: 17 },
+  empty: { padding: 32, textAlign: "center", color: "#888" },
+  button: { marginHorizontal: 16, padding: 14, borderRadius: 12, alignItems: "center", backgroundColor: "#007aff" },
+  buttonText: { color: "#fff", fontSize: 17, fontWeight: "600" },
+});
+```
+
+### El detalle
+
+```tsx
+// src/app/note/[id].tsx
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Link, Stack, useLocalSearchParams } from "expo-router";
+import { useNotes } from "../../notes/NotesContext";
+
+export default function NoteDetail() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const note = useNotes().notes.find((item) => item.id === id);
+
+  if (!note) return <Text style={styles.body}>No encontramos esta nota.</Text>;
+
+  return (
+    <View style={styles.screen}>
+      <Stack.Screen options={{ title: note.title }} />
+      <Text style={styles.body}>{note.body || "Sin contenido"}</Text>
+      <Link href={{ pathname: "/edit", params: { id: note.id } }} asChild>
+        <Pressable style={styles.button}>
+          <Text style={styles.buttonText}>Editar</Text>
+        </Pressable>
+      </Link>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, padding: 16, gap: 16, backgroundColor: "#fff" },
+  body: { fontSize: 17, lineHeight: 24, padding: 16 },
+  button: { padding: 14, borderRadius: 12, alignItems: "center", backgroundColor: "#007aff" },
+  buttonText: { color: "#fff", fontSize: 17, fontWeight: "600" },
+});
+```
+
+### La edición
+
+Una sola pantalla crea y edita: si llega un `id`, precarga la nota. Al guardar, `router.back()` cierra el modal.
+
+```tsx
+// src/app/edit.tsx
+import { useState } from "react";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { router, useLocalSearchParams } from "expo-router";
+import { useNotes } from "../notes/NotesContext";
+
+export default function EditNote() {
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { notes, addNote, updateNote } = useNotes();
+  const existing = notes.find((note) => note.id === id);
+  const [title, setTitle] = useState(existing?.title ?? "");
+  const [body, setBody] = useState(existing?.body ?? "");
+  const canSave = title.trim().length > 0;
+
+  function save() {
+    if (!canSave) return;
+    if (existing) updateNote(existing.id, title.trim(), body);
+    else addNote(title.trim(), body);
+    router.back();
+  }
+
+  return (
+    <View style={styles.screen}>
+      <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="Título" />
+      <TextInput
+        style={[styles.input, styles.multiline]}
+        value={body}
+        onChangeText={setBody}
+        placeholder="Contenido"
+        multiline
+      />
+      <Pressable style={[styles.button, !canSave && styles.disabled]} disabled={!canSave} onPress={save}>
+        <Text style={styles.buttonText}>Guardar</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, padding: 16, gap: 12, backgroundColor: "#fff" },
+  input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 12, fontSize: 16 },
+  multiline: { minHeight: 160, textAlignVertical: "top" },
+  button: { padding: 14, borderRadius: 12, alignItems: "center", backgroundColor: "#007aff" },
+  disabled: { backgroundColor: "#a0c4ff" },
+  buttonText: { color: "#fff", fontSize: 17, fontWeight: "600" },
+});
+```
+
+`textAlignVertical: "top"` es un ejemplo de detalle de plataforma: en Android el texto de un campo multilínea aparece centrado en vertical si no lo indicas.
+
+### Qué significa "terminado"
+
+La app está terminada cuando cumple todos los requisitos de la lista de la práctica en un teléfono o emulador real, no solo en la vista web. Prueba en especial: crear una nota, abrirla, editarla y volver a la lista viendo el título nuevo sin recargar.
+
+## Práctica
+
+Primero prueba la versión en Snack. Como Snack solo admite un archivo, las tres pantallas son componentes y un state `route` hace de `Stack`; el provider y la lógica son los mismos que en el proyecto real.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  dependencies={{ "react-native-safe-area-context": "*" }}
+  code={`import { createContext, useContext, useState, type ReactNode } from "react";
+import { Text, TextInput, Pressable, FlatList, StyleSheet } from "react-native";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+
+type Note = { id: string; title: string; body: string };
+type Route = { name: "list" } | { name: "detail"; id: string } | { name: "edit"; id?: string };
+type Nav = { go: (route: Route) => void };
+
+const NotesContext = createContext<{ notes: Note[]; save: (note: Note) => void } | null>(null);
+
+function NotesProvider({ children }: { children: ReactNode }) {
+  const [notes, setNotes] = useState<Note[]>([{ id: "1", title: "Bienvenida", body: "Toca una nota para verla." }]);
+  const save = (note: Note) =>
+    setNotes((prev) =>
+      prev.some((n) => n.id === note.id) ? prev.map((n) => (n.id === note.id ? note : n)) : [note, ...prev]
+    );
+  return <NotesContext.Provider value={{ notes, save }}>{children}</NotesContext.Provider>;
+}
+
+function useNotes() {
+  const store = useContext(NotesContext);
+  if (!store) throw new Error("useNotes must be used inside NotesProvider");
+  return store;
+}
+
+function List({ go }: Nav) {
+  const { notes } = useNotes();
+  return (
+    <>
+      <Text style={s.title}>Notas ({notes.length})</Text>
+      <FlatList data={notes} keyExtractor={(n) => n.id} renderItem={({ item }) => (
+        <Pressable style={s.row} onPress={() => go({ name: "detail", id: item.id })}>
+          <Text style={s.rowText}>{item.title}</Text>
+        </Pressable>
+      )} />
+      <Pressable style={s.button} onPress={() => go({ name: "edit" })}>
+        <Text style={s.buttonText}>Nueva nota</Text>
+      </Pressable>
+    </>
+  );
+}
+
+function Detail({ id, go }: Nav & { id: string }) {
+  const note = useNotes().notes.find((n) => n.id === id);
+  return (
+    <>
+      <Pressable onPress={() => go({ name: "list" })}><Text style={s.link}>‹ Notas</Text></Pressable>
+      <Text style={s.title}>{note?.title ?? "No encontrada"}</Text>
+      <Text style={s.body}>{note?.body}</Text>
+      <Pressable style={s.button} onPress={() => go({ name: "edit", id })}>
+        <Text style={s.buttonText}>Editar</Text>
+      </Pressable>
+    </>
+  );
+}
+
+function Edit({ id, go }: Nav & { id?: string }) {
+  const { notes, save } = useNotes();
+  const existing = notes.find((n) => n.id === id);
+  const [title, setTitle] = useState(existing?.title ?? "");
+  const [body, setBody] = useState(existing?.body ?? "");
+  const canSave = title.trim().length > 0;
+  function onSave() {
+    const noteId = existing?.id ?? String(Date.now());
+    save({ id: noteId, title: title.trim(), body });
+    go({ name: "detail", id: noteId });
+  }
+  return (
+    <>
+      <Text style={s.title}>{existing ? "Editar nota" : "Nueva nota"}</Text>
+      <TextInput style={s.input} value={title} onChangeText={setTitle} placeholder="Título" />
+      <TextInput style={[s.input, s.multiline]} value={body} onChangeText={setBody} placeholder="Contenido" multiline />
+      <Pressable style={[s.button, !canSave && s.disabled]} disabled={!canSave} onPress={onSave}>
+        <Text style={s.buttonText}>Guardar</Text>
+      </Pressable>
+    </>
+  );
+}
+
+export default function App() {
+  const [route, setRoute] = useState<Route>({ name: "list" });
+  return (
+    <SafeAreaProvider>
+      <NotesProvider>
+        <SafeAreaView style={s.screen}>
+          {route.name === "list" && <List go={setRoute} />}
+          {route.name === "detail" && <Detail id={route.id} go={setRoute} />}
+          {route.name === "edit" && <Edit id={route.id} go={setRoute} />}
+        </SafeAreaView>
+      </NotesProvider>
+    </SafeAreaProvider>
+  );
+}
+
+const s = StyleSheet.create({
+  screen: { flex: 1, paddingHorizontal: 16, gap: 12, backgroundColor: "#fff" },
+  title: { fontSize: 28, fontWeight: "700", marginTop: 8 },
+  row: { paddingVertical: 14, borderBottomWidth: 1, borderColor: "#eee" },
+  rowText: { fontSize: 17 },
+  body: { fontSize: 17, lineHeight: 24 },
+  link: { color: "#007aff", fontSize: 17, marginTop: 8 },
+  input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 12, fontSize: 16 },
+  multiline: { minHeight: 120, textAlignVertical: "top" },
+  button: { padding: 14, borderRadius: 12, alignItems: "center", backgroundColor: "#007aff", marginBottom: 8 },
+  disabled: { backgroundColor: "#a0c4ff" },
+  buttonText: { color: "#fff", fontSize: 17, fontWeight: "600" },
+});`}
+/>
+
+Después construye la versión con Expo Router en tu proyecto `my-notes`, con los archivos de la sección de concepto, y marca cada requisito cuando lo compruebes en un dispositivo o emulador:
+
+<Checklist
+  id="04-react-native-expo/11-proyecto-app-de-notas-requisitos"
+  items={[
+    "La lista está en src/app/index.tsx y muestra un mensaje cuando no hay notas",
+    "El detalle está en src/app/note/[id].tsx y lee el id con useLocalSearchParams",
+    "La pantalla src/app/edit.tsx crea una nota sin id y edita una nota existente con id",
+    "Guardar está desactivado cuando el título está vacío",
+    "Las notas viven en un NotesProvider fuera de src/app, envolviendo el Stack raíz",
+    "Al editar una nota, la lista y el detalle muestran el título nuevo sin recargar",
+    "Todos los estilos usan StyleSheet.create",
+    "Ningún contenido queda bajo el notch ni bajo la barra de gestos",
+    "Probé la app en iOS y en Android, o en un emulador de cada uno si no tengo ambos dispositivos"
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Borrar notas con funciones puras"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type Note = { id: string; title: string; body: string };
+
+function addNote(notes: Note[], note: Note): Note[] {
+  return [note, ...notes];
+}
+
+function updateNote(notes: Note[], changed: Note): Note[] {
+  return notes.map((note) => (note.id === changed.id ? changed : note));
+}
+
+function deleteNote(notes: Note[], id: string): Note[] {
+  return notes.filter((note) => note.id !== id);
+}
+
+let notes: Note[] = [];
+notes = addNote(notes, { id: "1", title: "Pan", body: "" });
+notes = addNote(notes, { id: "2", title: "Dentista", body: "" });
+notes = updateNote(notes, { id: "1", title: "Pan integral", body: "Dos" });
+console.log(notes.map((note) => note.title).join(", "));
+
+notes = deleteNote(notes, "2");
+console.log(notes.length + " " + notes.map((note) => note.title).join(", "));
+
+// In NotesProvider:
+// const removeNote = (id: string) => setNotes((prev) => deleteNote(prev, id));`}
+      expected={`Dentista, Pan integral
+1 Pan integral`}
+    />
+  }
+>
+  Agrega la opción de borrar notas. Primero escribe tres funciones puras que reciben la lista y devuelven una lista nueva sin modificar la original: `addNote(notes, note)`, `updateNote(notes, changed)` y `deleteNote(notes, id)`. Pruébalas agregando dos notas, editando una y borrando la otra, e imprime los títulos en cada paso. Luego úsalas dentro de `NotesProvider` (por ejemplo `setNotes((prev) => deleteNote(prev, id))`) y agrega en el detalle un botón "Borrar" que borre la nota y llame a `router.back()`. Separar la lógica en funciones puras hace que puedas probarla sin pantallas, una idea que la etapa 5 lleva mucho más lejos.
+</Challenge>
+
+## Errores comunes
+
+**Usar useNotes en una pantalla que no está dentro del provider.** La app muestra el error "useNotes must be used inside NotesProvider". Ocurre cuando el provider envuelve solo una parte del árbol, o cuando se olvida en `_layout.tsx`. Se detecta por ese mensaje, que existe justamente para eso. Solución: el `NotesProvider` va en el layout raíz, envolviendo al `Stack`.
+
+**El formulario de edición muestra datos viejos.** Abres la edición de una nota y los campos aparecen vacíos o con otra nota. Ocurre porque `useState(existing?.title ?? "")` solo usa su valor inicial al montar la pantalla; si la pantalla se reutiliza con otro `id`, el state no cambia solo. Se detecta editando dos notas seguidas. Solución: que cada edición monte la pantalla de nuevo, como hace el modal de este proyecto al cerrarse con `router.back()`.
+
+**Mutar la lista en lugar de crear una nueva.** Editas `note.title = title` dentro del arreglo y la lista no se actualiza. Ocurre porque React compara referencias: si el arreglo es el mismo, no vuelve a renderizar. Se detecta porque el cambio solo aparece al tocar otra cosa. Solución: `map` y `filter` devuelven arreglos nuevos, como en las funciones puras del ejercicio.
+
+<Flashcards
+  cards={[
+    { front: "¿Dónde va el provider de estado compartido en una app con Expo Router?", back: "En src/app/_layout.tsx, envolviendo al Stack raíz, para que todas las pantallas lo compartan." },
+    { front: "¿Cómo usa una sola pantalla de Expo Router para crear y editar?", back: "Lee un parámetro opcional con useLocalSearchParams: sin id crea, con id precarga y edita." },
+    { front: "¿Qué hace presentation: \"modal\" en un Stack.Screen?", back: "Presenta la pantalla como modal; en iOS sube desde abajo." },
+    { front: "¿Por qué las notas de este proyecto se pierden al cerrar la app?", back: "Porque viven solo en memoria, en el state del provider; la persistencia llega en la etapa 5." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Editas una nota y al volver la lista sigue mostrando el título viejo. ¿Cuál es la causa más probable?",
+      options: [
+        { text: "La lista y la edición no comparten el mismo provider, o la nota se mutó sin crear un arreglo nuevo", correct: true, feedback: "Correcto: ambas pantallas deben leer el mismo state y actualizarlo de forma inmutable." },
+        { text: "FlatList no puede mostrar títulos editados", correct: false, feedback: "FlatList vuelve a renderizar cuando recibe un arreglo nuevo en data." },
+        { text: "Falta recompilar el development build", correct: false, feedback: "Es un cambio de JavaScript; no afecta al binario." }
+      ]
+    },
+    {
+      prompt: "¿Por qué NotesContext.tsx está en src/notes y no en src/app?",
+      options: [
+        { text: "Porque cada archivo dentro de src/app es tratado como una ruta", correct: true, feedback: "Correcto: los módulos que no son pantallas van fuera de la carpeta de rutas." },
+        { text: "Porque los Context no funcionan dentro de src/app", correct: false, feedback: "Funcionan en cualquier archivo; el problema es que se trataría como pantalla." },
+        { text: "Porque Expo Router lo exige para los hooks", correct: false, feedback: "Los hooks pueden vivir donde quieras; la regla es sobre las rutas." }
+      ]
+    },
+    {
+      prompt: "Desde el detalle de la nota 3 quieres abrir su edición. ¿Qué href usas?",
+      options: [
+        { text: "{ pathname: \"/edit\", params: { id: \"3\" } }", correct: true, feedback: "Correcto: produce /edit?id=3, que la pantalla lee con useLocalSearchParams." },
+        { text: "\"/note/3/edit\"", correct: false, feedback: "Esa ruta no existe en la estructura del proyecto." },
+        { text: "\"edit.tsx?id=3\"", correct: false, feedback: "Las rutas no llevan la extensión del archivo." }
+      ]
+    }
+  ]}
+/>

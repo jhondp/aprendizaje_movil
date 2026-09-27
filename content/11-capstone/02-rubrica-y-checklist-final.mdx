@@ -1,0 +1,207 @@
+---
+id: "11-capstone/02-rubrica-y-checklist-final"
+title: "Rúbrica y checklist final"
+stage: 11
+module: "Entrega"
+order: 2
+minutes: 20
+prereqs: ["11-capstone/01-arquitectura-y-plan", "06-calidad-ci/07-proyecto-pipeline-verde", "09-seguridad-movil/09-proyecto-auditoria", "10-build-release-operaciones/11-proyecto-publicar"]
+summary: "Evalúa tu app con la rúbrica del capstone: arquitectura, calidad, seguridad, release y producto, con un criterio de aprobación y una evidencia por ítem."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás evaluar tu app con la rúbrica del capstone, reunir una evidencia verificable para cada ítem y saber exactamente qué falta para darla por terminada.
+
+**Prerrequisitos:** `11-capstone/01-arquitectura-y-plan`, `06-calidad-ci/07-proyecto-pipeline-verde`, `09-seguridad-movil/09-proyecto-auditoria`, `10-build-release-operaciones/11-proyecto-publicar`
+
+## Concepto
+
+Una rúbrica convierte "mi app está lista" en una lista de afirmaciones que cualquiera puede comprobar. Esta lección no enseña nada nuevo: reúne en un solo lugar los criterios de las etapas 5 a 10 y te dice qué evidencia demuestra que cumples cada uno.
+
+### La inspección técnica de un vehículo
+
+Cuando llevas un auto a la inspección técnica, nadie te pregunta si "crees" que los frenos funcionan. El inspector mide la frenada, revisa las luces una por una y anota el resultado. Si una luz falla, el auto no aprueba, aunque el motor esté perfecto. Al final recibes un informe con cada punto revisado y su resultado.
+
+La rúbrica del capstone funciona igual:
+
+- **Cada ítem tiene un criterio de aprobación.** No es "tiene pruebas", es "al menos 10 pruebas unitarias pasan con `npx jest`".
+- **Cada ítem tiene una evidencia.** La salida de un comando, una captura, un enlace a una ejecución de CI o a una fila de la tabla de auditoría.
+- **Un área aprueba solo si aprueban todos sus ítems.** Una app sin RLS no aprueba seguridad aunque use SecureStore perfectamente.
+
+### Las cinco áreas
+
+| Área | Qué demuestra | Lecciones de origen |
+| --- | --- | --- |
+| Arquitectura | El código se organiza por feature y el dominio no depende del framework | [05-estado-datos-arquitectura/06-arquitectura-hexagonal](/etapa/05-estado-datos-arquitectura/06-arquitectura-hexagonal), [05-estado-datos-arquitectura/07-screaming-architecture](/etapa/05-estado-datos-arquitectura/07-screaming-architecture), [05-estado-datos-arquitectura/08-atomic-design](/etapa/05-estado-datos-arquitectura/08-atomic-design) |
+| Calidad | Cada cambio se verifica automáticamente | [06-calidad-ci/00-eslint-prettier-y-ts-strict](/etapa/06-calidad-ci/00-eslint-prettier-y-ts-strict), [06-calidad-ci/03-jest-y-rntl](/etapa/06-calidad-ci/03-jest-y-rntl), [06-calidad-ci/05-e2e-con-maestro](/etapa/06-calidad-ci/05-e2e-con-maestro), [06-calidad-ci/06-github-actions](/etapa/06-calidad-ci/06-github-actions) |
+| Seguridad | La app cumple MASVS L1 y protege los datos de cada usuario | [08-autenticacion-backend/03-base-de-datos-y-rls](/etapa/08-autenticacion-backend/03-base-de-datos-y-rls), [08-autenticacion-backend/05-securestore-y-refresh-tokens](/etapa/08-autenticacion-backend/05-securestore-y-refresh-tokens), [09-seguridad-movil/02-secretos-fuera-del-bundle](/etapa/09-seguridad-movil/02-secretos-fuera-del-bundle), [09-seguridad-movil/06-supply-chain](/etapa/09-seguridad-movil/06-supply-chain), [09-seguridad-movil/07-privacidad-y-permisos-minimos](/etapa/09-seguridad-movil/07-privacidad-y-permisos-minimos), [09-seguridad-movil/08-crash-reporting-sin-fugas](/etapa/09-seguridad-movil/08-crash-reporting-sin-fugas), [09-seguridad-movil/09-proyecto-auditoria](/etapa/09-seguridad-movil/09-proyecto-auditoria) |
+| Release | La app se construye, firma, publica, actualiza y monitorea de forma repetible | [10-build-release-operaciones/02-eas-build-perfiles](/etapa/10-build-release-operaciones/02-eas-build-perfiles), [10-build-release-operaciones/03-firma-ios-android](/etapa/10-build-release-operaciones/03-firma-ios-android), [10-build-release-operaciones/05-eas-submit-testflight-internal](/etapa/10-build-release-operaciones/05-eas-submit-testflight-internal), [10-build-release-operaciones/07-eas-update-y-rollback](/etapa/10-build-release-operaciones/07-eas-update-y-rollback), [10-build-release-operaciones/08-versionado-y-changelog](/etapa/10-build-release-operaciones/08-versionado-y-changelog), [10-build-release-operaciones/09-monitoreo-sentry](/etapa/10-build-release-operaciones/09-monitoreo-sentry) |
+| Producto | Otra persona entiende qué resuelve la app y puede ejecutarla | [00-aprender-a-programar/07-proyecto-tu-primer-repo](/etapa/00-aprender-a-programar/07-proyecto-tu-primer-repo), [11-capstone/03-publicar-y-presentar](/etapa/11-capstone/03-publicar-y-presentar) |
+
+### Cómo reunir la evidencia
+
+La mayoría de los criterios se comprueban con un comando. Guarda la salida en un archivo `docs/rubric.md` de tu repositorio, con una fila por ítem: criterio, resultado y evidencia. Estos son los comandos base:
+
+```bash
+# Architecture: the domain must not import the framework (no output means pass)
+grep -rEn "from .(react|react-native|expo|@supabase)" src/features/*/domain
+
+# Quality
+npx expo lint
+npx tsc --noEmit
+npx jest
+maestro test flows/
+
+# Security: no secret key or private key in the exported bundle (no output means pass)
+npx expo export --platform all
+grep -rlE "sb_secret_|PRIVATE KEY" dist
+# Every JWT in the bundle must be the anon key: decode its payload and check the role claim
+grep -arhoE "eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+" dist | sort -u | cut -d. -f2 \
+  | node -e 'const payloads = require("fs").readFileSync(0, "utf8").trim().split("\n").filter(Boolean); if (payloads.length === 0) { console.log("no JWTs found"); } else { payloads.forEach((p) => console.log(JSON.parse(Buffer.from(p, "base64url")).role)); }'
+pnpm audit --audit-level high
+```
+
+Buscar el texto `service_role` no sirve: la clave de servicio antigua es un JWT y su claim `role` está codificado en base64url, así que esa palabra nunca aparece literal en el bundle; las claves secretas nuevas de Supabase empiezan con `sb_secret_`. Por eso el control busca ese prefijo y claves privadas, y decodifica cada JWT que encuentre: la única salida aceptable es sin salida o solo `anon` (los proyectos nuevos de Supabase usan claves publicables, no JWT, así que no encontrar ninguno también es correcto), como viste en la lección de configuración de Supabase de la etapa 8.
+
+Otros criterios no se comprueban con un comando, sino con una captura o un enlace: la política RLS de cada tabla en el panel de Supabase, la build en TestFlight, el evento de prueba en Sentry sin datos personales. Para la parte de seguridad, reutiliza la tabla de autoauditoría MASVS L1 que construiste en la etapa 9; el catálogo oficial de controles está en https://mas.owasp.org/checklists/. Para el release, la referencia es la documentación de EAS en https://docs.expo.dev/.
+
+### Cuándo está terminado el proyecto
+
+Tu capstone está terminado cuando se cumplen tres condiciones al mismo tiempo:
+
+1. Todos los ítems de la checklist de abajo están marcados y cada uno tiene su evidencia en `docs/rubric.md`.
+2. La app está instalable desde TestFlight y desde las pruebas internas de Google Play.
+3. La rama principal tiene CI en verde en el último commit.
+
+Si un ítem no aprueba, no lo marques "casi". Anota qué falta, conviértelo en una tarea y vuelve a medir cuando esté hecho.
+
+## Práctica
+
+Esta es una ejecución de los comandos de verificación sobre el registro de hábitos. Ejecútalos en tu proyecto y guarda las salidas como evidencia.
+
+<Terminal
+  steps={[
+    { cmd: "grep -rEn \"from .(react|react-native|expo|@supabase)\" src/features/*/domain; echo \"exit $?\"", out: "exit 1" },
+    { cmd: "npx expo lint && echo \"lint ok\"", out: "lint ok" },
+    { cmd: "npx tsc --noEmit && echo \"types ok\"", out: "types ok" },
+    { cmd: "npx jest", out: "Test Suites: 6 passed, 6 total\nTests:       14 passed, 14 total\nSnapshots:   0 total\nTime:        3.1 s" },
+    { cmd: "maestro test flows/complete-habit.yaml", out: "Launch app \"com.example.habittracker\"... COMPLETED\nTap on \"Read 10 pages\"... COMPLETED\nAssert that \"Streak: 1\" is visible... COMPLETED" },
+    { cmd: "grep -rlE \"sb_secret_|PRIVATE KEY\" dist; echo \"exit $?\"", out: "exit 1" },
+    { cmd: "grep -arhoE \"eyJ[A-Za-z0-9_-]+\\.eyJ[A-Za-z0-9_-]+\" dist | sort -u | cut -d. -f2 | node -e '<same role script as above>'", out: "anon" },
+    { cmd: "pnpm audit --audit-level high", out: "No known vulnerabilities found" }
+  ]}
+/>
+
+Esta es la rúbrica completa. Cada ítem incluye su criterio de aprobación y la lección donde lo aprendiste. Marca un ítem solo cuando tengas la evidencia guardada.
+
+<Checklist
+  id="11-capstone/02-rubrica-y-checklist-final/rubrica"
+  items={[
+    "Arquitectura. El dominio no importa React ni Expo: el grep de imports de react, react-native, expo y @supabase en src/features/*/domain no devuelve resultados (05-estado-datos-arquitectura/06-arquitectura-hexagonal)",
+    "Arquitectura. Cada feature tiene las cuatro capas: toda carpeta de src/features contiene domain, application, infrastructure y ui (05-estado-datos-arquitectura/07-screaming-architecture)",
+    "Arquitectura. Atomic design en ui: los componentes compartidos están en atoms, molecules y organisms, y las pantallas los reutilizan en lugar de duplicar estilos (05-estado-datos-arquitectura/08-atomic-design)",
+    "Calidad. Lint: npx expo lint termina sin errores (06-calidad-ci/00-eslint-prettier-y-ts-strict)",
+    "Calidad. Tipos: npx tsc --noEmit termina sin errores con strict activado en tsconfig.json (06-calidad-ci/00-eslint-prettier-y-ts-strict)",
+    "Calidad. Pruebas unitarias: al menos 10 pruebas pasan con npx jest, incluidas las reglas de dominio de tus historias (06-calidad-ci/03-jest-y-rntl)",
+    "Calidad. E2E: al menos un flujo de Maestro que recorre la historia 1 pasa en un emulador o dispositivo (06-calidad-ci/05-e2e-con-maestro)",
+    "Calidad. CI: el workflow de GitHub Actions ejecuta lint, typecheck y pruebas, y está en verde en la rama principal (06-calidad-ci/06-github-actions)",
+    "Seguridad. Sin secretos en el bundle: buscar sb_secret_ y claves privadas en el resultado de npx expo export no devuelve nada y todo JWT del bundle tiene role anon; solo viajan variables EXPO_PUBLIC_ públicas (09-seguridad-movil/02-secretos-fuera-del-bundle)",
+    "Seguridad. Tokens en SecureStore: el cliente de Supabase usa un adaptador de SecureStore en auth.storage y ningún token se guarda en AsyncStorage (08-autenticacion-backend/05-securestore-y-refresh-tokens)",
+    "Seguridad. RLS en todas las tablas: cada tabla tiene RLS activado y políticas con auth.uid(), comprobado con un segundo usuario que no ve datos ajenos (08-autenticacion-backend/03-base-de-datos-y-rls)",
+    "Seguridad. Dependencias auditadas: pnpm audit --audit-level high no reporta vulnerabilidades y el lockfile está en el repositorio (09-seguridad-movil/06-supply-chain)",
+    "Seguridad. Etiquetas de privacidad completas: App Privacy en App Store Connect y Data safety en Play Console coinciden con tu tabla de clasificación de datos (09-seguridad-movil/07-privacidad-y-permisos-minimos)",
+    "Seguridad. Reportes de errores depurados: beforeSend elimina correos y tokens, y un evento de prueba en Sentry no muestra datos personales (09-seguridad-movil/08-crash-reporting-sin-fugas)",
+    "Seguridad. Autoauditoría MASVS L1 completa, con resultado y evidencia por control (09-seguridad-movil/09-proyecto-auditoria)",
+    "Release. eas.json tiene tres perfiles: development, preview y production (10-build-release-operaciones/02-eas-build-perfiles)",
+    "Release. Credenciales respaldadas: el keystore de Android y las credenciales de iOS están descargadas con eas credentials y guardadas fuera del repositorio (10-build-release-operaciones/03-firma-ios-android)",
+    "Release. La app está en TestFlight y en las pruebas internas de Google Play, instalada por al menos un tester en cada tienda (10-build-release-operaciones/05-eas-submit-testflight-internal)",
+    "Release. Se publicó al menos una actualización OTA con eas update en el canal de producción y llegó a un dispositivo (10-build-release-operaciones/07-eas-update-y-rollback)",
+    "Release. CHANGELOG.md tiene una entrada por versión con número semver (10-build-release-operaciones/08-versionado-y-changelog)",
+    "Release. Sentry recibe errores de la build de producción con source maps legibles (10-build-release-operaciones/09-monitoreo-sentry)",
+    "Producto. El README explica el problema, muestra capturas de las pantallas principales y dice cómo ejecutar el proyecto (00-aprender-a-programar/07-proyecto-tu-primer-repo)",
+    "Producto. El guion de demo está escrito y ensayado en 5 minutos o menos (11-capstone/03-publicar-y-presentar)"
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Automatiza el primer ítem de la rúbrica"
+  solution={
+    <Playground
+      lang="ts"
+      code={`const files: Record<string, string> = {
+  "src/features/habits/domain/habit.ts": 'export type Habit = { id: string; name: string };',
+  "src/features/habits/domain/streak.ts": 'import { useState } from "react";',
+  "src/features/habits/ui/HabitRow.tsx": 'import { Text } from "react-native";',
+  "src/features/auth/domain/session.ts": 'import * as SecureStore from "expo-secure-store";',
+  "src/features/auth/infrastructure/client.ts": 'import { createClient } from "@supabase/supabase-js";',
+};
+
+const forbiddenImport = /from ["'](react|react-native|expo[a-z-]*|@supabase[a-z/-]*)["']/;
+
+function findDomainViolations(sources: Record<string, string>): string[] {
+  return Object.entries(sources)
+    .filter(([path]) => path.includes("/domain/"))
+    .filter(([, source]) => forbiddenImport.test(source))
+    .map(([path]) => path);
+}
+
+const violations = findDomainViolations(files);
+console.log(violations.length);
+violations.forEach((path) => console.log(path));`}
+      expected={`2
+src/features/habits/domain/streak.ts
+src/features/auth/domain/session.ts`}
+    />
+  }
+>
+  Escribe una función `findDomainViolations(sources)` que reciba un objeto con rutas de archivo como claves y su código fuente como valores, y devuelva las rutas de los archivos de `domain` que importan `react`, `react-native`, cualquier paquete `expo` o cualquier paquete `@supabase`. Los archivos de `ui` e `infrastructure` sí pueden importar esas librerías, así que no deben aparecer. Pruébala con un archivo de dominio limpio, uno que importa `react`, uno de `ui` que importa `react-native`, uno de dominio que importa `expo-secure-store` y uno de `infrastructure` que importa `@supabase/supabase-js`: el resultado debe tener exactamente dos rutas.
+</Challenge>
+
+## Errores comunes
+
+**Marcar ítems sin evidencia.** Se ve como una checklist completa pero un `docs/rubric.md` vacío o con frases como "funciona". Ocurre porque el ítem parece obvio cuando acabas de programarlo. Se detecta pidiendo a otra persona que verifique un ítem al azar solo con tu evidencia: si necesita preguntarte algo, la evidencia no basta.
+
+**Aprobar un área con un ítem pendiente.** Se ve como "seguridad aprobada, salvo RLS en la tabla de recordatorios". Ocurre porque la mayoría de los ítems están bien y el faltante parece menor. Se detecta leyendo la regla del área: aprueba solo si aprueban todos sus ítems. Una sola tabla sin RLS expone los datos de todos los usuarios.
+
+**Medir en tu máquina en lugar de en CI.** Se ve como pruebas que pasan localmente y fallan en GitHub Actions por una variable de entorno o una zona horaria distinta. Ocurre porque tu entorno tiene configuración que el runner no tiene. Se detecta tomando como evidencia el enlace a la ejecución de CI del último commit de la rama principal, no una salida local.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué tres elementos tiene cada ítem de una rúbrica verificable?", back: "Un criterio de aprobación, una evidencia y la lección de origen." },
+    { front: "¿Cuándo aprueba un área de la rúbrica del capstone?", back: "Solo cuando aprueban todos sus ítems; un ítem pendiente deja el área sin aprobar." },
+    { front: "¿Cómo se comprueba que el dominio de una feature no importa React ni Expo?", back: "Buscando imports de react, react-native, expo y @supabase en src/features/*/domain; ningún resultado significa que aprueba." },
+    { front: "¿Cuáles son las tres condiciones para dar por terminado el capstone?", back: "Todos los ítems de la rúbrica marcados con evidencia, la app instalable desde TestFlight y Play internal testing, y CI en verde en la rama principal." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Tu app pasa todos los ítems de seguridad salvo que una tabla no tiene RLS. ¿Qué resultado tiene el área de seguridad?",
+      options: [
+        { text: "Aprobada, porque la mayoría de los ítems pasan", correct: false, feedback: "Un área aprueba solo si aprueban todos sus ítems." },
+        { text: "No aprobada hasta activar RLS y verificarlo con un segundo usuario", correct: true, feedback: "Correcto: una tabla sin RLS expone los datos de todos los usuarios." },
+        { text: "Aprobada con observaciones", correct: false, feedback: "La rúbrica no tiene aprobación parcial." }
+      ]
+    },
+    {
+      prompt: "¿Cuál de estas es una evidencia válida para el ítem de CI en verde?",
+      options: [
+        { text: "La frase: las pruebas pasan en mi computadora", correct: false, feedback: "No es verificable por otra persona y no demuestra que CI pase." },
+        { text: "El enlace a la ejecución de GitHub Actions del último commit de la rama principal", correct: true, feedback: "Correcto: cualquiera puede abrirlo y comprobar el resultado." },
+        { text: "Una captura del editor sin errores subrayados", correct: false, feedback: "El editor no ejecuta lint, typecheck ni pruebas como lo hace CI." }
+      ]
+    },
+    {
+      prompt: "El grep de imports prohibidos en src/features/*/domain devuelve una línea con import { useState } from \"react\". ¿Qué haces?",
+      options: [
+        { text: "Mover la lógica con estado a un hook en ui y dejar en domain solo la regla pura", correct: true, feedback: "Correcto: el estado de React pertenece a ui; el dominio queda sin dependencias del framework." },
+        { text: "Excluir ese archivo del grep", correct: false, feedback: "Ocultar la violación no la corrige; el dominio seguiría acoplado a React." },
+        { text: "Mover el archivo completo a infrastructure", correct: false, feedback: "infrastructure es para adaptadores a servicios externos, no para estado de UI." }
+      ]
+    }
+  ]}
+/>

@@ -1,0 +1,319 @@
+---
+id: "04-react-native-expo/10-tabs-stack-y-plataformas"
+title: "Tabs, Stack y diferencias iOS/Android"
+stage: 4
+module: "Navegación"
+order: 10
+minutes: 15
+prereqs: ["04-react-native-expo/09-expo-router-basico"]
+summary: "Combina tabs y stack con grupos de rutas de Expo Router y adapta estilos y comportamiento a cada plataforma con Platform."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás organizar una app con tabs dentro de un stack usando el grupo `(tabs)` de Expo Router, y adaptar estilos a iOS y Android con `Platform.OS` y `Platform.select`.
+
+**Prerrequisitos:** `04-react-native-expo/09-expo-router-basico`
+
+## Concepto
+
+En la lección anterior apilaste pantallas con `Stack`. La mayoría de las apps combinan ese patrón con otro: una **barra de tabs** abajo que cambia entre secciones principales (Notas, Buscar, Ajustes). Además, una app que se siente bien en iOS no se comporta exactamente igual en Android. En esta lección juntas ambas ideas.
+
+Documentación oficial: https://docs.expo.dev/router/advanced/tabs/ y https://reactnative.dev/docs/platform-specific-code
+
+### Una analogía: un edificio con pisos y habitaciones
+
+Piensa en un edificio. El ascensor te lleva a un piso: cada piso es una sección independiente (las tabs). Dentro de cada piso entras de una habitación a otra y vuelves por la misma puerta (el stack). Cambiar de piso no cierra las puertas que dejaste abiertas en el piso anterior: cuando vuelves, todo sigue como lo dejaste.
+
+### Stack y Tabs juntos
+
+La estructura habitual es un `Stack` en la raíz que contiene un grupo de tabs y las pantallas que se abren encima de ellas:
+
+```text
+src/app/
+├── _layout.tsx          # root Stack
+├── (tabs)/
+│   ├── _layout.tsx      # Tabs navigator
+│   ├── index.tsx        # "/" : Notes tab
+│   └── settings.tsx     # "/settings" : Settings tab
+└── note/
+    └── [id].tsx         # "/note/:id" : opens on top of the tabs
+```
+
+Los paréntesis de `(tabs)` crean un **grupo de rutas**: sirven para organizar archivos y darles un layout propio, pero no aparecen en la URL. Por eso `(tabs)/settings.tsx` es la ruta `/settings`, no `/tabs/settings`.
+
+El layout raíz declara el grupo y oculta su header, porque cada tab dibuja el suyo:
+
+```tsx
+// src/app/_layout.tsx
+import { Stack } from "expo-router";
+
+export default function RootLayout() {
+  return (
+    <Stack>
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="note/[id]" options={{ title: "Nota" }} />
+    </Stack>
+  );
+}
+```
+
+El layout del grupo usa `Tabs` y define cada pestaña:
+
+```tsx
+// src/app/(tabs)/_layout.tsx
+import { Tabs } from "expo-router";
+import Ionicons from "@expo/vector-icons/Ionicons";
+
+export default function TabLayout() {
+  return (
+    <Tabs screenOptions={{ tabBarActiveTintColor: "#007aff" }}>
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: "Notas",
+          tabBarIcon: ({ color, size }) => <Ionicons name="document-text" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: "Ajustes",
+          tabBarIcon: ({ color, size }) => <Ionicons name="settings" color={color} size={size} />,
+        }}
+      />
+    </Tabs>
+  );
+}
+```
+
+- `name` es el nombre del archivo sin extensión.
+- `tabBarIcon` es una función que recibe el `color` (activo o inactivo) y el `size` que corresponden, y devuelve el ícono.
+- Desde una tab, `router.push("/note/3")` abre el detalle **encima** de la barra de tabs, porque `note/[id]` pertenece al `Stack` raíz. Al volver, la tab conserva su scroll y su state.
+
+Expo Router también ofrece **native tabs**, que usan la barra de tabs del sistema operativo en lugar de una dibujada con JavaScript. La API es distinta; si te interesa, la documentación de tabs enlaza a ella.
+
+### Diferencias entre iOS y Android
+
+React Native comparte casi todo el código, pero cada plataforma tiene convenciones propias:
+
+- **Volver atrás.** iOS usa el gesto de deslizar desde el borde izquierdo; Android tiene el botón o gesto de sistema. El `Stack` de Expo Router maneja ambos.
+- **Header.** iOS centra el título; Android lo alinea a la izquierda. `Stack` lo hace por defecto.
+- **Sombras.** Tradicionalmente iOS usa `shadowColor`, `shadowOpacity`, `shadowRadius` y `shadowOffset`, y Android usa `elevation`. Las versiones actuales de React Native también aceptan `boxShadow` en ambas plataformas, con la sintaxis de CSS.
+- **Fuente del sistema.** San Francisco en iOS y Roboto en Android, así que el mismo texto puede ocupar un ancho distinto.
+
+### Platform.OS y Platform.select
+
+`Platform` te dice en qué plataforma corre el código:
+
+```tsx
+import { Platform, StyleSheet } from "react-native";
+
+const isIOS = Platform.OS === "ios"; // "ios" | "android" | "web"
+
+const styles = StyleSheet.create({
+  card: {
+    padding: 16,
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
+      android: { elevation: 3 },
+      default: {},
+    }),
+  },
+});
+```
+
+- `Platform.OS` sirve para decisiones puntuales: `if (Platform.OS === "android") ...`.
+- `Platform.select` recibe un objeto con claves `ios`, `android`, `web` o `default` y devuelve el valor de la plataforma actual. Es ideal para estilos.
+
+### Archivos por plataforma
+
+Si un componente es muy distinto entre plataformas, puedes crear dos archivos: `NoteCard.ios.tsx` y `NoteCard.android.tsx`. Al importar `./NoteCard`, Metro elige el archivo correcto. Úsalo con moderación: dos archivos significan mantener dos versiones. Nunca pongas archivos de plataforma dentro de `src/app/` sin una versión base, porque cada ruta necesita un archivo que exista en todas las plataformas.
+
+## Práctica
+
+El Snack imita la barra de tabs con state y aplica estilos distintos por plataforma con `Platform.select`. Cambia entre iOS y Android en el selector de Snack: la sombra, el color de la barra y el texto de plataforma cambian.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  dependencies={{ "@expo/vector-icons": "*", "react-native-safe-area-context": "*" }}
+  code={`import { useState } from "react";
+import { View, Text, Pressable, Platform, StyleSheet } from "react-native";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import Ionicons from "@expo/vector-icons/Ionicons";
+
+const tabs = [
+  { name: "notes", title: "Notas", icon: "document-text" },
+  { name: "settings", title: "Ajustes", icon: "settings" },
+] as const;
+
+type TabName = (typeof tabs)[number]["name"];
+
+export default function App() {
+  const [active, setActive] = useState<TabName>("notes");
+  const current = tabs.find((tab) => tab.name === active)!;
+
+  return (
+    <SafeAreaProvider>
+      <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
+        <View style={styles.content}>
+          <Text style={styles.title}>{current.title}</Text>
+          <View style={styles.card}>
+            <Text>Plataforma: {Platform.OS}</Text>
+          </View>
+        </View>
+        <View style={styles.tabBar}>
+          {tabs.map((tab) => {
+            const color = tab.name === active ? "#007aff" : "#8e8e93";
+            return (
+              <Pressable key={tab.name} onPress={() => setActive(tab.name)} style={styles.tab} accessibilityRole="tab">
+                <Ionicons name={tab.icon} size={24} color={color} />
+                <Text style={[styles.tabLabel, { color }]}>{tab.title}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </SafeAreaView>
+    </SafeAreaProvider>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: "#f2f2f7" },
+  content: { flex: 1, padding: 16, gap: 16 },
+  title: { fontSize: 28, fontWeight: "700" },
+  card: {
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: "#fff",
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
+      android: { elevation: 3 },
+      default: {},
+    }),
+  },
+  tabBar: {
+    flexDirection: "row",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: "#c7c7cc",
+    backgroundColor: Platform.select({ ios: "#f9f9f9", default: "#ffffff" }),
+  },
+  tab: { flex: 1, alignItems: "center", paddingVertical: 8 },
+  tabLabel: { fontSize: 11, marginTop: 2 },
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Tercera tab con información de plataforma"
+  solution={
+    <Snack
+      platform="android"
+      sdkVersion="55.0.0"
+      dependencies={{ "@expo/vector-icons": "*" }}
+      code={`import { useState } from "react";
+import { View, Text, Pressable, Platform, StyleSheet } from "react-native";
+import Ionicons from "@expo/vector-icons/Ionicons";
+
+// With Expo Router: src/app/(tabs)/index.tsx, search.tsx and settings.tsx
+const tabs = [
+  { name: "notes", title: "Notas", icon: "document-text" },
+  { name: "search", title: "Buscar", icon: "search" },
+  { name: "settings", title: "Ajustes", icon: "settings" },
+] as const;
+
+type TabName = (typeof tabs)[number]["name"];
+
+const platformName = Platform.select({ ios: "iOS", android: "Android", default: "Web" });
+
+export default function App() {
+  const [active, setActive] = useState<TabName>("settings");
+
+  return (
+    <View style={styles.screen}>
+      <View style={styles.content}>
+        {active === "settings" ? (
+          <>
+            <Text style={styles.title}>Ajustes</Text>
+            <Text>Sistema: {platformName}</Text>
+            <Text>Versión: {String(Platform.Version)}</Text>
+          </>
+        ) : (
+          <Text style={styles.title}>{tabs.find((tab) => tab.name === active)!.title}</Text>
+        )}
+      </View>
+      <View style={styles.tabBar}>
+        {tabs.map((tab) => {
+          const color = tab.name === active ? "#007aff" : "#8e8e93";
+          return (
+            <Pressable key={tab.name} onPress={() => setActive(tab.name)} style={styles.tab}>
+              <Ionicons name={tab.icon} size={24} color={color} />
+              <Text style={{ color, fontSize: 11 }}>{tab.title}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, paddingTop: 48, backgroundColor: "#fff" },
+  content: { flex: 1, padding: 16, gap: 8 },
+  title: { fontSize: 28, fontWeight: "700" },
+  tabBar: { flexDirection: "row", paddingBottom: Platform.OS === "ios" ? 24 : 8, borderTopWidth: 1, borderColor: "#eee" },
+  tab: { flex: 1, alignItems: "center", paddingTop: 8 },
+});`}
+    />
+  }
+>
+  Agrega una tercera tab "Buscar" con el ícono `search` entre Notas y Ajustes. En la tab Ajustes, muestra el nombre del sistema ("iOS", "Android" o "Web") calculado con `Platform.select` y la versión del sistema con `Platform.Version`. Da a la barra de tabs un padding inferior de 24 en iOS y de 8 en Android usando `Platform.OS`. Luego escribe, como comentario en tu código, cómo se llamarían los tres archivos dentro de `src/app/(tabs)/` en un proyecto real con Expo Router.
+</Challenge>
+
+## Errores comunes
+
+**Esperar que el grupo aparezca en la URL.** Navegas a `"/(tabs)/settings"` o a `"/tabs/settings"` y llegas a una pantalla de "no encontrada". Ocurre porque los paréntesis crean un grupo que no forma parte de la ruta. Se detecta porque la ruta del error incluye el nombre del grupo. Solución: navega a `"/settings"`.
+
+**Poner el detalle dentro del grupo de tabs sin querer.** Abres una nota y la barra de tabs sigue visible debajo, o al cambiar de tab el detalle desaparece. Ocurre porque `note/[id].tsx` quedó dentro de `(tabs)/` y se trata como parte de una pestaña. Se detecta revisando el árbol de archivos. Solución: deja las pantallas que se abren encima de las tabs fuera del grupo, en el `Stack` raíz.
+
+**Sombras que solo se ven en una plataforma.** Pones `shadowColor` y `shadowOpacity` y en Android la tarjeta sale plana. Ocurre porque esas propiedades son de iOS y Android usa `elevation`. Se detecta probando en ambas plataformas, por ejemplo con el selector de Snack. Solución: `Platform.select` con `elevation` para Android, o `boxShadow`, que funciona en ambas.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué efecto tienen los paréntesis en una carpeta como (tabs) en Expo Router?", back: "Crean un grupo de rutas: organizan archivos y comparten layout, pero no aparecen en la URL." },
+    { front: "¿Qué devuelve Platform.select en React Native?", back: "El valor de la clave de la plataforma actual (ios, android, web) o el de default." },
+    { front: "¿Cómo se define el ícono de una tab en Expo Router?", back: "Con options.tabBarIcon, una función que recibe color y size y devuelve el ícono." },
+    { front: "¿Dónde va una pantalla de detalle que debe abrirse encima de las tabs?", back: "Fuera del grupo (tabs), en el Stack del layout raíz." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué ruta corresponde al archivo src/app/(tabs)/settings.tsx?",
+      options: [
+        { text: "/settings", correct: true, feedback: "Correcto: el grupo (tabs) no forma parte de la URL." },
+        { text: "/(tabs)/settings", correct: false, feedback: "Los paréntesis indican un grupo que no aparece en la ruta." },
+        { text: "/tabs/settings", correct: false, feedback: "El grupo no se convierte en un segmento de la URL." }
+      ]
+    },
+    {
+      prompt: "Quieres una sombra en iOS y elevation en Android en el mismo estilo. ¿Qué usas?",
+      options: [
+        { text: "Platform.select con claves ios y android", correct: true, feedback: "Correcto: devuelve el estilo de la plataforma actual." },
+        { text: "Dos StyleSheet.create con el mismo nombre", correct: false, feedback: "El segundo reemplazaría al primero sin distinguir plataformas." },
+        { text: "Una media query de CSS", correct: false, feedback: "React Native no usa CSS ni media queries." }
+      ]
+    },
+    {
+      prompt: "Desde la tab Notas llamas a router.push(\"/note/3\") y note/[id] está en el Stack raíz. ¿Qué ocurre?",
+      options: [
+        { text: "El detalle se abre encima de la barra de tabs y al volver la tab conserva su estado", correct: true, feedback: "Correcto: el Stack raíz apila el detalle sobre todo el grupo de tabs." },
+        { text: "Se crea una tab nueva llamada note", correct: false, feedback: "Solo son tabs las pantallas declaradas dentro del grupo." },
+        { text: "La app reinicia la tab Notas", correct: false, feedback: "Las tabs conservan su state al abrir pantallas encima." }
+      ]
+    }
+  ]}
+/>

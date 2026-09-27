@@ -1,0 +1,186 @@
+---
+id: "10-build-release-operaciones/11-proyecto-publicar"
+title: "Proyecto: publicar la app en ambas tiendas"
+stage: 10
+module: "Proyecto"
+order: 11
+minutes: 45
+prereqs: ["10-build-release-operaciones/10-salir-de-managed"]
+summary: "Publica la app de notas en TestFlight y Google Play internal testing con EAS, OTA con rollback, Sentry y un runbook de release que otra persona pueda seguir."
+---
+
+## Objetivo
+
+Al terminar este proyecto tendrás la app de notas instalable desde TestFlight y desde Google Play internal testing, con toda la infraestructura de release de la etapa en su sitio y un runbook que cualquier persona del equipo pueda seguir para publicar la siguiente versión.
+
+**Prerrequisitos:** `10-build-release-operaciones/10-salir-de-managed`
+
+## Concepto
+
+Este proyecto no introduce conceptos nuevos: junta todo lo que hiciste lección a lección sobre la app de notas que auditaste en el [proyecto de la etapa de seguridad](/etapa/09-seguridad-movil/09-proyecto-auditoria). La diferencia respecto a los proyectos anteriores es que el resultado no vive solo en tu repositorio: vive en las cuentas de Apple y Google, en EAS y en Sentry, y tiene que poder repetirse.
+
+Piensa en el primer vuelo de una aerolínea nueva. El avión ya vuela desde hace meses en pruebas; lo que se certifica el primer día es el **procedimiento**: quién revisa qué, en qué orden, y qué se hace si algo falla. Por eso el entregable principal de este proyecto es el runbook, no el `.ipa`.
+
+### Qué vas a construir
+
+Partes de la app de notas con la auditoría de seguridad aplicada. Al terminar, el repositorio y las cuentas tienen:
+
+1. **Configuración por entorno**: `app.config.ts` con `APP_VARIANT` resolviendo nombre e identificador para `development`, `preview` y `production` ([lección 00](/etapa/10-build-release-operaciones/00-app-config-y-entornos)).
+2. **Variables en EAS**: `EXPO_PUBLIC_API_URL` (si la app la usa), `EXPO_PUBLIC_SENTRY_DSN` y `SENTRY_AUTH_TOKEN` como secret, en los tres entornos; ningún `.env` con valores reales en Git ([lección 01](/etapa/10-build-release-operaciones/01-secrets-en-eas)).
+3. **`eas.json`** con los perfiles `development`, `preview` y `production`, `appVersionSource: "remote"` y `autoIncrement` en producción, y la sección `submit.production` con `ascAppId`, `appleTeamId` y `track: "internal"` ([lección 02](/etapa/10-build-release-operaciones/02-eas-build-perfiles), [lección 05](/etapa/10-build-release-operaciones/05-eas-submit-testflight-internal)).
+4. **Credenciales gestionadas por EAS y respaldadas**: `credentials.json` y la carpeta `credentials/` descargados, fuera del repositorio, en almacenamiento cifrado ([lección 03](/etapa/10-build-release-operaciones/03-firma-ios-android)).
+5. **Cuentas y fichas**: Apple Developer Program y Google Play Console activos; ficha de la app en App Store Connect y en Play Console; primer `.aab` subido a mano ([lección 04](/etapa/10-build-release-operaciones/04-cuentas-apple-google)).
+6. **Build de producción en ambas tiendas**: `eas submit` a TestFlight (testers internos) y a la pista internal de Google Play, con al menos dos personas que instalaron y abrieron la app.
+7. **Ficha completa**: capturas, descripción, política de privacidad publicada (que menciona Sentry), App Privacy y Data safety declarados. No hace falta enviar a revisión para aprobar el proyecto ([lección 06](/etapa/10-build-release-operaciones/06-store-listing-y-revision)).
+8. **EAS Update operativo**: `expo-updates` configurado con `runtimeVersion` `appVersion`; una actualización publicada en `preview`, luego en `production`, y revertida con `eas update:rollback` ([lección 07](/etapa/10-build-release-operaciones/07-eas-update-y-rollback)).
+9. **Versionado y changelog**: `version` en semver, contadores remotos en EAS, `CHANGELOG.md` con `1.0.0`, la OTA y el rollback anotados ([lección 08](/etapa/10-build-release-operaciones/08-versionado-y-changelog)).
+10. **Sentry activo**: plugin configurado, source maps subidos, un error de prueba visible en el panel con archivo y línea, objetivo de crash-free rate escrito ([lección 09](/etapa/10-build-release-operaciones/09-monitoreo-sentry)).
+11. **Runbook de release**: un archivo `docs/RELEASE.md` con el procedimiento completo, descrito más abajo.
+
+Si en el camino necesitas un permiso o una clave nativa, resuélvelo con un campo de configuración o un config plugin local, no editando `ios/` ni `android/` ([lección 10](/etapa/10-build-release-operaciones/10-salir-de-managed)).
+
+### El orden recomendado
+
+Las dependencias entre pasos son reales: no puedes enviar sin cuentas, ni publicar OTA sin un build que incluya `expo-updates`. Un orden que evita esperas:
+
+1. Día 1: abre las cuentas de Apple y Google (tardan). Mientras, escribe `app.config.ts`, `eas.json`, crea las variables en EAS y ejecuta el primer `eas build --profile preview --platform android`. Descarga y respalda las credenciales.
+2. Día 2: instala `expo-updates` y Sentry (ambos nativos, un solo build nuevo). Crea el token de Sentry como secret. Build de preview, error de prueba en Sentry, OTA de prueba en el canal `preview`.
+3. Cuando las cuentas estén activas: registra identificadores, crea las fichas, sube a mano el primer `.aab`. `eas build --profile production --platform all` y `eas submit` en ambas plataformas. Invita testers.
+4. Con la app en los teléfonos de los testers: publica una OTA en `production` con un cambio visible y pequeño (un texto), confirma que llega, haz `eas update:rollback` y confirma que vuelve. Anota ambas en el changelog.
+5. Escribe el runbook con lo que realmente hiciste, no con lo que planeabas hacer.
+
+### El runbook de release
+
+`docs/RELEASE.md` responde, en orden, a estas preguntas. Escríbelo para alguien que nunca ha publicado esta app:
+
+- **Antes de empezar**: qué accesos hacen falta (cuenta de Expo con rol en el proyecto, App Store Connect, Play Console, Sentry) y dónde está el respaldo de credenciales.
+- **Decidir el tipo de release**: cambio solo JS (OTA) o cambio nativo (build + tienda). Incluye la lista de la lección de EAS Update para clasificar.
+- **Release OTA**: comandos exactos para publicar en `preview`, verificar, publicar en `production` (siempre con `--environment` igual al canal), subir los source maps de la OTA a Sentry con `npx @sentry/expo-upload-sourcemaps dist`, y el comando de rollback. Qué anotar en el changelog.
+- **Release de tienda**: subir `version` con `npm version` (que `app.config.ts` lee de `package.json`), actualizar `CHANGELOG.md`, `eas build --profile production --platform all`, probar en TestFlight e internal testing, `eas submit`, completar notas de la versión en las fichas, enviar a revisión (o promover), y qué vigilar en Sentry durante las primeras 24 horas.
+- **Si algo falla**: rollback OTA, detener un despliegue gradual en Play, qué hacer si la tienda rechaza, y a quién avisar.
+- **Después**: verificar crash-free rate contra el objetivo, cerrar la sección `Unreleased` del changelog.
+
+### Qué significa "terminado"
+
+El proyecto está terminado cuando otra persona, con el runbook y los accesos, puede publicar una actualización OTA y un build de producción sin preguntarte nada. Para comprobarlo de verdad, pide a alguien que siga el runbook para publicar una OTA con un cambio trivial mientras tú no intervienes. Cada pregunta que te haga es una línea que falta en el documento.
+
+<Callout kind="tip">
+  Guarda las URL de los builds, envíos y actualizaciones que generas durante el proyecto. Son la evidencia de que cada paso ocurrió y las necesitarás para la rúbrica del capstone.
+</Callout>
+
+## Práctica
+
+Este es el runbook en forma de lista. Marca cada punto solo cuando esté hecho en las cuentas reales y tengas la evidencia (URL, captura o commit).
+
+<Checklist
+  id="10-build-release-operaciones/11-proyecto-publicar/runbook"
+  items={[
+    "app.config.ts resuelve name, bundleIdentifier y package por APP_VARIANT y npx expo config --type public lo confirma para las tres variantes",
+    "eas env:list muestra las variables en development, preview y production; SENTRY_AUTH_TOKEN es secret; no hay .env con valores reales en Git",
+    "eas.json tiene los tres perfiles con distribution, developmentClient, channel, environment y env, más submit.production completo",
+    "credentials.json y credentials/ están descargados, fuera del repositorio y en almacenamiento cifrado; .gitignore los excluye",
+    "Apple Developer Program y Google Play Console activos; App ID registrado; fichas creadas; ascAppId anotado; primer .aab subido a mano",
+    "eas build --profile production --platform all terminó para iOS y Android",
+    "eas submit dejó el build en TestFlight (testers internos) y en la pista internal de Google Play",
+    "Al menos dos personas instalaron la app de producción desde TestFlight y desde Google Play y la abrieron sin errores",
+    "La política de privacidad está publicada y menciona Sentry; App Privacy y Data safety están declarados; capturas y textos completos en ambas fichas",
+    "expo-updates configurado con updates.url y runtimeVersion appVersion; el build de producción incluye la dependencia",
+    "Una OTA publicada en preview, verificada en un dispositivo, publicada en production y revertida con eas update:rollback",
+    "Sentry recibe un error de prueba desde el build de producción con archivo y línea reales; hay un objetivo de crash-free sessions escrito",
+    "Después de cada eas update, npx @sentry/expo-upload-sourcemaps dist sube los source maps de la OTA",
+    "CHANGELOG.md tiene 1.0.0 con fecha, la OTA y el rollback anotados, y una sección Unreleased",
+    "docs/RELEASE.md existe con las secciones: antes de empezar, decidir tipo de release, release OTA, release de tienda, si algo falla, después",
+    "Otra persona siguió el runbook para publicar una OTA trivial sin preguntarte nada",
+  ]}
+/>
+
+La secuencia de comandos del runbook, tal como la ejecutarías para una release de tienda seguida de una OTA de corrección:
+
+<Terminal
+  steps={[
+    { cmd: "git switch -c release/1.1.0 && npm version 1.1.0 --no-git-tag-version", out: "Switched to a new branch 'release/1.1.0'\nv1.1.0" },
+    { cmd: "npx expo config --type public | grep '\"version\"'", out: "  \"version\": \"1.1.0\"," },
+    { cmd: "eas build --profile production --platform all --auto-submit", out: "✔ Using remote iOS credentials (Expo server)\n✔ Using remote Android credentials (Expo server)\n✔ Incremented buildNumber to 8 and versionCode to 8\n✔ iOS build finished\n✔ Android build finished\n✔ Submitted your app to Apple App Store Connect!\n✔ Submitted your app to the Google Play Store! Release uploaded to track: internal" },
+    { cmd: "eas update --channel preview --environment preview --message \"1.1.0: fix empty state copy\"", out: "✔ Published!\nBranch             preview\nRuntime version    1.1.0\nMessage            1.1.0: fix empty state copy" },
+    { cmd: "eas update --channel production --environment production --message \"1.1.0: fix empty state copy\"", out: "✔ Published!\nBranch             production\nRuntime version    1.1.0\nMessage            1.1.0: fix empty state copy" },
+    { cmd: "SENTRY_AUTH_TOKEN=<token> npx @sentry/expo-upload-sourcemaps dist", out: "✔ Uploaded source maps for android and ios update bundles" },
+    { cmd: "eas channel:view production", out: "Channel: production\nBranch: production\nLatest update: 1.1.0 · 1.1.0: fix empty state copy · android, ios · 1 minute ago" },
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Generar el esqueleto del runbook"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type Section = { title: string; questions: string[] };
+
+const runbook: Section[] = [
+  { title: "Before you start", questions: ["Which accounts and roles are required?", "Where is the credentials backup?"] },
+  { title: "Decide the release type", questions: ["Did anything native change?", "OTA or store build?"] },
+  { title: "OTA release", questions: ["Publish to preview", "Verify on a device", "Publish to production", "Rollback command"] },
+  { title: "Store release", questions: ["Bump version and changelog", "eas build production", "Test on TestFlight and internal testing", "eas submit", "Watch Sentry for 24h"] },
+  { title: "If something fails", questions: ["OTA rollback", "Halt staged rollout", "Store rejection response"] },
+  { title: "Afterwards", questions: ["Crash-free rate vs target", "Close Unreleased in changelog"] },
+];
+
+function render(sections: Section[]): string {
+  return sections
+    .map((s) => "## " + s.title + "\\n" + s.questions.map((q) => "- [ ] " + q).join("\\n"))
+    .join("\\n\\n");
+}
+
+console.log(render(runbook));`}
+    />
+  }
+>
+  Define un arreglo `runbook` con las seis secciones del runbook (`Before you start`, `Decide the release type`, `OTA release`, `Store release`, `If something fails`, `Afterwards`), cada una con sus preguntas o pasos como cadenas. Escribe una función `render(sections)` que devuelva el markdown con un encabezado `##` por sección y una casilla `- [ ]` por paso, e imprímelo. Copia el resultado a `docs/RELEASE.md` y complétalo con los comandos y accesos reales de tu proyecto.
+</Challenge>
+
+## Errores comunes
+
+**Dejar el runbook para el final y escribirlo de memoria.** Faltan pasos que "eran obvios" (subir el primer `.aab` a mano, crear el token de Sentry en `preview`) y la siguiente persona se atasca. Ocurre porque durante el proyecto los pasos parecen únicos. Se detecta con la prueba de la lección: otra persona lo sigue y pregunta. Escribe cada paso justo después de hacerlo.
+
+**Probar la OTA solo en producción.** El cambio llega directamente a las personas de TestFlight e internal testing, y si rompe algo el rollback es la primera cosa que ven. Ocurre por saltarse el canal `preview` para ahorrar un paso. Se detecta porque la primera evidencia de un problema viene de un tester. Publica primero en `preview`, siempre.
+
+**Considerar el proyecto terminado con la app en la tienda pero sin respaldo de credenciales ni Sentry.** Todo funciona hasta la primera emergencia: un crash del que no te enteras o un keystore que nadie tiene. Ocurre porque estos dos entregables no producen nada visible en el teléfono. Se detecta repasando la lista de la práctica: los ítems de respaldo y monitoreo no tienen evidencia. No marques el proyecto como terminado sin ellos.
+
+<Flashcards
+  cards={[
+    { front: "¿Cuál es el entregable principal del proyecto de publicación y por qué?", back: "El runbook de release (docs/RELEASE.md): la app en la tienda es el resultado de una vez; el runbook permite repetirlo sin depender de una persona." },
+    { front: "¿Qué prueba demuestra que un runbook de release está completo?", back: "Que otra persona, con el documento y los accesos, publica una OTA trivial sin hacer preguntas." },
+    { front: "¿En qué orden se publica una OTA en el runbook?", back: "Primero en el canal preview, verificar en un dispositivo, después en production; anotar en el changelog y tener el rollback listo." },
+    { front: "¿Qué dos entregables del proyecto no se ven en el teléfono pero son obligatorios?", back: "El respaldo de credenciales fuera de EAS y Sentry activo con source maps y un objetivo de crash-free rate." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Cuál es la condición que define el proyecto como terminado?",
+      options: [
+        { text: "La app aprobó la revisión de App Store y Google Play", correct: false, feedback: "La revisión no es requisito del proyecto; el objetivo es TestFlight e internal testing más el procedimiento." },
+        { text: "Otra persona puede publicar una OTA y un build de producción siguiendo el runbook sin preguntarte", correct: true, feedback: "Correcto: el resultado repetible es lo que se evalúa." },
+        { text: "El build de producción está en EAS", correct: false, feedback: "Es un paso intermedio; faltan envío, monitoreo, respaldo y runbook." },
+      ],
+    },
+    {
+      prompt: "¿Por qué el orden recomendado abre las cuentas de Apple y Google el primer día?",
+      options: [
+        { text: "Porque EAS Build no funciona sin ellas", correct: false, feedback: "Un build de preview de Android funciona sin ninguna cuenta de tienda." },
+        { text: "Porque su aprobación tarda días y bloquea el envío; mientras, se avanza en lo que no depende de ellas", correct: true, feedback: "Correcto: es el paso con más latencia y menos control." },
+        { text: "Porque Sentry las necesita", correct: false, feedback: "Sentry es independiente de las tiendas." },
+      ],
+    },
+    {
+      prompt: "En la secuencia del runbook, ¿qué hace eas build --profile production --platform all --auto-submit?",
+      options: [
+        { text: "Construye ambas plataformas y envía cada build con el perfil de submit del mismo nombre", correct: true, feedback: "Correcto: encadena build y submit usando submit.production de eas.json." },
+        { text: "Publica una actualización OTA en production", correct: false, feedback: "Las OTA se publican con eas update; build produce binarios." },
+        { text: "Envía la app a revisión de las tiendas", correct: false, feedback: "Deja el build en TestFlight y en la pista internal; la revisión se solicita desde cada consola." },
+      ],
+    },
+  ]}
+/>

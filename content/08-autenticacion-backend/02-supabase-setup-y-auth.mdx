@@ -1,0 +1,313 @@
+---
+id: "08-autenticacion-backend/02-supabase-setup-y-auth"
+title: "Supabase: proyecto y autenticación"
+stage: 8
+module: "Supabase"
+order: 2
+minutes: 15
+prereqs: ["08-autenticacion-backend/01-oauth2-oidc-y-jwt"]
+summary: "Crea un proyecto de Supabase, conecta el cliente desde Expo con variables de entorno públicas y registra e inicia sesión con email y contraseña."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás crear un cliente de Supabase en una app Expo, explicar qué claves son públicas y cuáles nunca deben salir del servidor, y registrar, iniciar y cerrar sesión con email y contraseña.
+
+**Prerrequisitos:** `08-autenticacion-backend/01-oauth2-oidc-y-jwt`
+
+## Concepto
+
+Supabase es un backend como servicio construido sobre PostgreSQL. Te da, listos para usar, un servidor de autenticación, una base de datos con API automática y un almacén de archivos. En esta etapa lo usas para que la app de notas tenga usuarios reales sin escribir un servidor desde cero.
+
+### La analogía del edificio de oficinas
+
+Imagina un edificio de oficinas. La dirección del edificio y el número de la recepción están impresos en todas las tarjetas de visita: son públicos, cualquiera puede presentarse. Lo que impide entrar donde no debes son los tornos y las cerraduras de cada planta. Y existe una llave maestra que solo tiene el personal de mantenimiento y que jamás se entrega a un visitante.
+
+En Supabase:
+
+- La **URL del proyecto** es la dirección del edificio.
+- La **anon key** (en proyectos nuevos, la **publishable key**) es el número de la recepción: identifica tu proyecto y es **pública por diseño**.
+- Las **políticas Row Level Security** son las cerraduras: deciden qué filas puede ver cada usuario. Las verás en la próxima lección.
+- La **service role key** (o **secret key**) es la llave maestra: se salta todas las políticas. **Nunca va en la app**, solo en servidores que tú controlas.
+
+### Crear el proyecto
+
+1. Entra en https://supabase.com/dashboard y crea un proyecto nuevo. Elige una región cercana a tus usuarios y guarda la contraseña de la base de datos en tu gestor de contraseñas.
+2. En **Project Settings, API** copia la URL del proyecto y la anon key (o publishable key).
+3. En **Authentication, Providers** comprueba que **Email** está activo. Por defecto Supabase pide confirmar el email antes de permitir el inicio de sesión.
+
+La guía oficial de autenticación está en https://supabase.com/docs/guides/auth y el tutorial para Expo en https://supabase.com/docs/guides/getting-started/tutorials/with-expo-react-native.
+
+### Variables de entorno con `EXPO_PUBLIC_`
+
+Expo carga automáticamente un archivo `.env` en la raíz del proyecto. Las variables cuyo nombre empieza por `EXPO_PUBLIC_` se sustituyen por su valor **dentro del bundle de JavaScript** al compilar.
+
+```bash
+# .env (add it to .gitignore anyway, so each developer uses their own project)
+EXPO_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+```
+
+Que vayan en el bundle significa que cualquiera que descargue tu app puede leerlas. Eso es aceptable para la URL y la anon key, porque son públicas por diseño. Es inaceptable para cualquier secreto: si alguna vez te ves escribiendo `EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY`, detente. Más detalles en https://docs.expo.dev/guides/environment-variables/.
+
+### El cliente
+
+Crea un único cliente en un módulo propio y reutilízalo en toda la app. En esta lección la sesión solo vive en memoria (`persistSession: false`): al cerrar la app hay que volver a iniciar sesión. En la lección de SecureStore aprenderás a guardarla de forma segura.
+
+```ts
+// src/lib/supabase.ts
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error("Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY");
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: true,
+    detectSessionInUrl: false,
+  },
+});
+```
+
+`detectSessionInUrl: false` le dice al cliente que no busque tokens en la URL del navegador, algo que solo tiene sentido en la web.
+
+### Registro, inicio y cierre de sesión
+
+```ts
+// Sign up: creates the user. With email confirmation on, session is null until confirmed.
+const { data, error } = await supabase.auth.signUp({ email, password });
+
+// Sign in: returns a session with access_token and refresh_token.
+const result = await supabase.auth.signInWithPassword({ email, password });
+
+// Sign out: revokes the refresh token on the server and clears the local session.
+await supabase.auth.signOut();
+```
+
+Todas las funciones devuelven `{ data, error }` en lugar de lanzar excepciones: comprueba siempre `error` antes de usar `data`.
+
+### Escuchar los cambios de sesión
+
+La sesión cambia por muchas razones: inicio de sesión, cierre, renovación automática del token. En lugar de consultar el estado a mano, suscríbete:
+
+```ts
+const { data } = supabase.auth.onAuthStateChange((event, session) => {
+  console.log(event, session?.user.email);
+});
+
+// Later, for example when a component unmounts:
+data.subscription.unsubscribe();
+```
+
+`event` vale, entre otros, `INITIAL_SESSION`, `SIGNED_IN`, `SIGNED_OUT` o `TOKEN_REFRESHED`. Tu navegación puede decidir con esto si muestra la pantalla de login o la lista de notas.
+
+## Práctica
+
+Primero instala el cliente en tu proyecto Expo:
+
+<Terminal
+  steps={[
+    { cmd: "npx expo install @supabase/supabase-js", out: "› Installing 1 other package using npm\n> npm install @supabase/supabase-js\n\nadded 12 packages in 4s" },
+    { cmd: "printf 'EXPO_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co\\nEXPO_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY\\n' > .env", out: "" },
+    { cmd: "npx expo start --clear", out: "env: load .env\nenv: export EXPO_PUBLIC_SUPABASE_URL EXPO_PUBLIC_SUPABASE_ANON_KEY\n› Metro waiting on exp://192.168.1.10:8081" }
+  ]}
+/>
+
+Snack no lee archivos `.env`, así que el ejemplo usa marcadores como valor de respaldo. Con los marcadores verás un error de red al pulsar "Entrar". Sustitúyelos por la URL y la anon key de tu proyecto (nunca la service role key), crea un usuario desde **Authentication, Users** y vuelve a probar.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  dependencies={{ "@supabase/supabase-js": "*" }}
+  code={`import { useState } from "react";
+import { View, Text, TextInput, Pressable, StyleSheet } from "react-native";
+import { createClient } from "@supabase/supabase-js";
+
+// Placeholders: Snack cannot read .env. Use your own project values.
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "https://YOUR_PROJECT_REF.supabase.co";
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "YOUR_SUPABASE_ANON_KEY";
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: false, autoRefreshToken: true, detectSessionInUrl: false },
+});
+
+export default function App() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
+
+  const signIn = async () => {
+    setMessage("Conectando...");
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setUserEmail(data.user.email ?? null);
+    setMessage("");
+  };
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setUserEmail(null);
+  };
+
+  if (userEmail) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>Sesión iniciada como {userEmail}</Text>
+        <Pressable style={styles.button} onPress={signOut}>
+          <Text style={styles.buttonText}>Cerrar sesión</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Iniciar sesión</Text>
+      <TextInput style={styles.input} placeholder="Email" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} />
+      <TextInput style={styles.input} placeholder="Contraseña" secureTextEntry value={password} onChangeText={setPassword} />
+      <Pressable style={styles.button} onPress={signIn}>
+        <Text style={styles.buttonText}>Entrar</Text>
+      </Pressable>
+      <Text style={styles.message}>{message}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", padding: 24, gap: 12 },
+  title: { fontSize: 20, fontWeight: "600" },
+  input: { borderWidth: 1, borderColor: "#999", borderRadius: 8, padding: 10 },
+  button: { backgroundColor: "#10484a", padding: 12, borderRadius: 8, alignItems: "center" },
+  buttonText: { color: "#fff", fontWeight: "600" },
+  message: { color: "#b00020" },
+});`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Registro y estado de sesión"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="55.0.0"
+      dependencies={{ "@supabase/supabase-js": "*" }}
+      code={`import { useEffect, useState } from "react";
+import { View, Text, TextInput, Pressable, StyleSheet } from "react-native";
+import { createClient } from "@supabase/supabase-js";
+
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "https://YOUR_PROJECT_REF.supabase.co";
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "YOUR_SUPABASE_ANON_KEY";
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: false, autoRefreshToken: true, detectSessionInUrl: false },
+});
+
+export default function App() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [event, setEvent] = useState("sin eventos");
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    const { data } = supabase.auth.onAuthStateChange((authEvent, session) => {
+      setEvent(authEvent + ": " + (session?.user.email ?? "sin sesión"));
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
+
+  const signUp = async () => {
+    if (password.length < 8) {
+      setMessage("La contraseña necesita al menos 8 caracteres");
+      return;
+    }
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) setMessage(error.message);
+    else if (!data.session) setMessage("Revisa tu correo para confirmar la cuenta");
+    else setMessage("Cuenta creada");
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Crear cuenta</Text>
+      <TextInput style={styles.input} placeholder="Email" autoCapitalize="none" value={email} onChangeText={setEmail} />
+      <TextInput style={styles.input} placeholder="Contraseña" secureTextEntry value={password} onChangeText={setPassword} />
+      <Pressable style={styles.button} onPress={signUp}>
+        <Text style={styles.buttonText}>Registrarme</Text>
+      </Pressable>
+      <Text>{message}</Text>
+      <Text style={styles.event}>{event}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", padding: 24, gap: 12 },
+  title: { fontSize: 20, fontWeight: "600" },
+  input: { borderWidth: 1, borderColor: "#999", borderRadius: 8, padding: 10 },
+  button: { backgroundColor: "#10484a", padding: 12, borderRadius: 8, alignItems: "center" },
+  buttonText: { color: "#fff", fontWeight: "600" },
+  event: { color: "#555" },
+});`}
+    />
+  }
+>
+  Crea una pantalla de registro con `supabase.auth.signUp`. Valida en el cliente que la contraseña tenga al menos 8 caracteres (solo para dar feedback rápido: el servidor aplica su propia regla). Si la respuesta no trae `session`, muestra "Revisa tu correo para confirmar la cuenta". Además, suscríbete con `onAuthStateChange` y muestra el último evento recibido, cancelando la suscripción al desmontar.
+</Challenge>
+
+## Errores comunes
+
+**Poner la service role key en la app.** El código funciona "mejor" porque ninguna política bloquea nada. Ocurre al copiar la primera clave que aparece en el panel. Se detecta buscando `service_role` o `SERVICE_ROLE` en el repositorio y decodificando la clave usada por la app: si su claim `role` vale `service_role`, cualquiera que descargue la app tiene acceso total. Rótala de inmediato desde el panel.
+
+**Creer que `EXPO_PUBLIC_` oculta algo.** Se guarda un secreto en `.env` con ese prefijo pensando que el archivo `.env` no se publica. Ocurre porque se confunde "no está en Git" con "no está en la app". Se detecta buscando el valor en el bundle generado con `npx expo export`: las variables `EXPO_PUBLIC_` aparecen en texto plano.
+
+**Ignorar `error` en las respuestas.** El código usa `data.user` directamente y falla con "Cannot read properties of null". Ocurre porque el cliente no lanza excepciones en errores de autenticación. Se detecta porque los fallos de login no muestran ningún mensaje. Comprueba siempre `error` primero.
+
+**Esperar una sesión tras `signUp`.** Con la confirmación de email activa, `data.session` es `null` hasta que el usuario pulsa el enlace. Se detecta porque la app se queda en el registro sin avanzar; muestra un mensaje que pida revisar el correo.
+
+<Flashcards
+  cards={[
+    { front: "¿La anon key de Supabase es un secreto?", back: "No. Es pública por diseño; lo que protege los datos son las políticas Row Level Security." },
+    { front: "¿Dónde puede usarse la service role key de Supabase?", back: "Solo en servidores que controlas; se salta RLS y nunca debe ir en la app." },
+    { front: "¿Qué ocurre con las variables EXPO_PUBLIC_ al compilar una app Expo?", back: "Se sustituyen por su valor dentro del bundle de JavaScript, legible por cualquiera." },
+    { front: "¿Qué devuelven las funciones de supabase.auth en lugar de lanzar excepciones?", back: "Un objeto con data y error; hay que comprobar error antes de usar data." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué protege realmente los datos si la anon key es pública?",
+      options: [
+        { text: "Las políticas Row Level Security de la base de datos", correct: true, feedback: "Correcto: RLS decide qué filas puede tocar cada usuario." },
+        { text: "Ocultar la anon key en una variable EXPO_PUBLIC_", correct: false, feedback: "Esas variables quedan en el bundle en texto plano." },
+        { text: "Ofuscar el código de la app", correct: false, feedback: "La ofuscación solo retrasa la extracción, no la impide." }
+      ]
+    },
+    {
+      prompt: "Tras llamar a signUp, data.session es null. ¿Cuál es la causa más probable?",
+      options: [
+        { text: "La confirmación de email está activa y el usuario aún no confirmó", correct: true, feedback: "Correcto: la sesión llega después de confirmar." },
+        { text: "La anon key es incorrecta", correct: false, feedback: "Con una clave incorrecta recibirías un error, no un usuario creado." },
+        { text: "signUp nunca devuelve sesión", correct: false, feedback: "Devuelve sesión cuando la confirmación de email está desactivada." }
+      ]
+    },
+    {
+      prompt: "¿Qué variable de entorno NO debería existir nunca en una app Expo?",
+      options: [
+        { text: "EXPO_PUBLIC_SUPABASE_URL", correct: false, feedback: "La URL del proyecto es pública." },
+        { text: "EXPO_PUBLIC_SUPABASE_ANON_KEY", correct: false, feedback: "La anon key es pública por diseño." },
+        { text: "EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY", correct: true, feedback: "Correcto: esa clave se salta RLS y quedaría expuesta en el bundle." }
+      ]
+    }
+  ]}
+/>

@@ -1,0 +1,250 @@
+---
+id: "09-seguridad-movil/03-almacenamiento-seguro"
+title: "Almacenamiento seguro"
+stage: 9
+module: "Datos y secretos"
+order: 3
+minutes: 15
+prereqs: ["09-seguridad-movil/02-secretos-fuera-del-bundle"]
+summary: "Clasifica los datos que tu app guarda en el dispositivo y elige el almacenamiento correcto para cada clase: AsyncStorage, SQLite o SecureStore."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás clasificar cada dato que tu app guarda localmente, justificar por qué el token de sesión vive en SecureStore y las notas en SQLite, y comprobar en tu código que ningún dato sensible está en AsyncStorage.
+
+**Prerrequisitos:** `09-seguridad-movil/02-secretos-fuera-del-bundle`
+
+## Concepto
+
+Esta lección cubre **MASVS-STORAGE-1** (la app guarda los datos sensibles de forma segura) y complementa **MASVS-STORAGE-2** con los canales por los que esos datos se fugan sin querer: backups, portapapeles y capturas.
+
+### Una casa con cajones distintos
+
+En tu casa no guardas todo en el mismo lugar. Las revistas están en la mesa, los documentos en un cajón, y el pasaporte y las joyas en una caja fuerte. No porque las revistas no importen, sino porque el costo de proteger cada cosa debe ser proporcional al daño de perderla. El almacenamiento de una app funciona igual: hay tres cajones con distintos niveles de protección, y el trabajo consiste en decidir qué va en cada uno.
+
+### Clasificar antes de guardar
+
+Antes de elegir una API, clasifica el dato. Una escala de cuatro niveles basta para la app de notas:
+
+| Clase     | Ejemplo en la app de notas                    | Daño si se filtra                       |
+| --------- | --------------------------------------------- | --------------------------------------- |
+| Pública   | Tema claro/oscuro, idioma                     | Ninguno                                 |
+| Interna   | Caché de la lista de notas, último sync       | Molestia; se puede regenerar            |
+| Sensible  | Contenido de las notas, correo del usuario    | Daño al usuario; no se puede deshacer   |
+| Secreta   | Token de sesión, refresh token                | Acceso a la cuenta; suplantación        |
+
+La clase decide el cajón. Cuando dudes entre dos clases, elige la más alta.
+
+### Los tres cajones
+
+**AsyncStorage** (`@react-native-async-storage/async-storage`) es un almacén clave-valor **sin cifrar**: en Android son archivos en el directorio privado de la app; en iOS, un archivo dentro del sandbox. Está protegido por el sandbox del sistema, que impide que otras apps lo lean en un dispositivo normal, pero no resiste a un dispositivo con root o jailbreak, a un backup sin cifrar ni a alguien con acceso físico y herramientas de extracción. La guía oficial de React Native lo dice: es para datos no sensibles como estado de la app, nunca para tokens ni secretos ([https://reactnative.dev/docs/security](https://reactnative.dev/docs/security)). Cajón para las clases pública e interna.
+
+**SQLite** (`expo-sqlite`) es una base de datos relacional en un archivo dentro del mismo sandbox, tampoco cifrada por defecto. Es el lugar natural para las notas: datos sensibles pero voluminosos, con los que el usuario trabaja constantemente. La protección viene de tres capas que ya existen: el sandbox del sistema, el cifrado de disco del dispositivo (activo cuando hay bloqueo de pantalla) y tu decisión de **no** guardar ahí nada de clase secreta. Si el modelo de amenazas de tu app exigiera más, existen extensiones de cifrado para SQLite, pero para MAS-L1 en una app de notas no es un requisito.
+
+**SecureStore** (`expo-secure-store`) usa el almacén seguro de cada plataforma: en iOS el Keychain (`kSecClassGenericPassword`) y en Android `SharedPreferences` cifradas con claves del Android Keystore. Es el cajón de la clase secreta: tokens, refresh tokens, claves que la app genera. Documentación: [https://docs.expo.dev/versions/latest/sdk/securestore/](https://docs.expo.dev/versions/latest/sdk/securestore/).
+
+```ts
+import * as SecureStore from "expo-secure-store";
+
+const SESSION_KEY = "session-token";
+
+export async function saveSession(token: string) {
+  await SecureStore.setItemAsync(SESSION_KEY, token, {
+    keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+  });
+}
+
+export async function readSession() {
+  return SecureStore.getItemAsync(SESSION_KEY);
+}
+
+export async function clearSession() {
+  await SecureStore.deleteItemAsync(SESSION_KEY);
+}
+```
+
+Cuatro detalles de SecureStore que conviene saber:
+
+- **Tamaño.** Guarda cadenas cortas. Versiones anteriores de iOS rechazaban valores de más de unos 2048 bytes y Expo no impone límite propio, así que maneja el error. Un token JWT cabe; una lista de notas no.
+- **Accesibilidad en iOS.** `keychainAccessible` controla cuándo se puede leer el valor. Elige la clase más restrictiva que funcione: `WHEN_UNLOCKED_THIS_DEVICE_ONLY` solo permite leerlo con el teléfono desbloqueado, y el sufijo `_THIS_DEVICE_ONLY` impide que el valor migre a otro dispositivo al restaurar un backup. Relájalo a `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY` (legible tras el primer desbloqueo desde el arranque, aunque el teléfono vuelva a bloquearse) solo si una tarea en segundo plano necesita leer el token.
+- **Persistencia tras desinstalar.** En iOS, un valor del Keychain puede sobrevivir a la desinstalación de la app. Borra la sesión explícitamente cuando el usuario cierra sesión y no des por hecho que reinstalar limpia todo.
+- **Sin web.** En web no hay Keychain ni Keystore; si tu app también corre en navegador, la sesión va en una cookie `HttpOnly` gestionada por el servidor, no en `localStorage`.
+
+### Las fugas laterales
+
+MASVS-STORAGE-2 recuerda que un dato bien guardado puede escaparse por otro lado:
+
+- **Backups.** En Android, `android:allowBackup` incluye los archivos privados de la app en las copias de seguridad. Con Expo se desactiva con `"android": { "allowBackup": false }` en `app.json` o `app.config.ts` (https://docs.expo.dev/versions/latest/config/app/#allowbackup). Por defecto es `true`, así que, por ejemplo, las notas en SQLite se copian a Google Drive; decide según tu modelo de amenazas.
+- **Portapapeles.** Si la app copia una nota al portapapeles, cualquier otra app en primer plano puede leerlo. No copies tokens ni contraseñas; para contenido del usuario, avisa.
+- **Capturas y apps recientes.** Esto pertenece a MASVS-PLATFORM-3: las pantallas con datos sensibles pueden ocultarse en el selector de apps. Lo anotarás como decisión en la auditoría.
+
+<Callout kind="danger">
+  Nunca guardes un token de sesión en AsyncStorage ni en una tabla de SQLite. Vive en SecureStore. Si encuentras `AsyncStorage.setItem("token", ...)` en tu código, es un hallazgo MASVS-STORAGE-1.
+</Callout>
+
+## Práctica
+
+Guarda el mismo token con las dos APIs y observa la diferencia de garantías. Este Snack requiere un dispositivo o simulador real (la pestaña "My Device"), porque SecureStore no existe en web.
+
+<Snack
+  platform="ios"
+  sdkVersion="55.0.0"
+  dependencies={{ 'expo-secure-store': '*', '@react-native-async-storage/async-storage': '*' }}
+  code={`import { useState } from "react";
+import { View, Text, Pressable, StyleSheet } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
+
+const TOKEN = "demo-session-token";
+
+export default function App() {
+  const [lines, setLines] = useState<string[]>([]);
+  const log = (line: string) => setLines((prev) => [line, ...prev].slice(0, 6));
+
+  async function saveWrong() {
+    await AsyncStorage.setItem("session", TOKEN);
+    log("AsyncStorage: plain text file inside the app sandbox");
+  }
+
+  async function saveRight() {
+    await SecureStore.setItemAsync("session", TOKEN, {
+      keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+    });
+    log("SecureStore: Keychain (iOS) / Keystore-encrypted prefs (Android)");
+  }
+
+  async function readBoth() {
+    const a = await AsyncStorage.getItem("session");
+    const s = await SecureStore.getItemAsync("session");
+    log("AsyncStorage -> " + a + " | SecureStore -> " + s);
+  }
+
+  async function clearBoth() {
+    await AsyncStorage.removeItem("session");
+    await SecureStore.deleteItemAsync("session");
+    log("both cleared");
+  }
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Where does the token live?</Text>
+      <Pressable style={[styles.button, styles.wrong]} onPress={saveWrong}><Text style={styles.text}>Save with AsyncStorage (wrong)</Text></Pressable>
+      <Pressable style={styles.button} onPress={saveRight}><Text style={styles.text}>Save with SecureStore (right)</Text></Pressable>
+      <Pressable style={styles.button} onPress={readBoth}><Text style={styles.text}>Read both</Text></Pressable>
+      <Pressable style={styles.button} onPress={clearBoth}><Text style={styles.text}>Clear</Text></Pressable>
+      {lines.map((line, i) => <Text key={i} style={styles.log}>{line}</Text>)}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, padding: 24, paddingTop: 64, gap: 10 },
+  title: { fontSize: 20, fontWeight: "600" },
+  button: { backgroundColor: "#1d6b6e", padding: 12, borderRadius: 8, alignItems: "center" },
+  wrong: { backgroundColor: "#b00020" },
+  text: { color: "white", fontWeight: "600" },
+  log: { fontFamily: "Courier", fontSize: 12 }
+});`}
+/>
+
+Ahora clasifica lo que guarda tu app de notas. Marca cada punto cuando lo hayas verificado en el código, no de memoria:
+
+<Checklist
+  id="09-seguridad-movil/03-clasificacion"
+  items={[
+    "Hice una tabla con cada dato que la app guarda localmente y su clase (pública, interna, sensible, secreta)",
+    "El token de sesión y el refresh token están en SecureStore",
+    "Busqué AsyncStorage.setItem en todo el proyecto y ningún valor es de clase sensible o secreta",
+    "Las notas viven en SQLite y ninguna tabla guarda tokens ni contraseñas",
+    "clearSession borra el token de SecureStore al cerrar sesión",
+    "Decidí y anoté si pongo android.allowBackup en false en app.json y por qué",
+    "La app no copia tokens al portapapeles",
+    "Si la app corre en web, la sesión no está en localStorage"
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Elegir el cajón por dato"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type DataClass = "public" | "internal" | "sensitive" | "secret";
+type Store = "AsyncStorage" | "SQLite" | "SecureStore";
+
+const records: { name: string; dataClass: DataClass; sizeBytes: number }[] = [
+  { name: "theme", dataClass: "public", sizeBytes: 5 },
+  { name: "notes-cache", dataClass: "internal", sizeBytes: 40000 },
+  { name: "note-body", dataClass: "sensitive", sizeBytes: 12000 },
+  { name: "session-token", dataClass: "secret", sizeBytes: 800 },
+  { name: "device-private-key", dataClass: "secret", sizeBytes: 3000 },
+];
+
+function chooseStore(dataClass: DataClass, sizeBytes: number): Store | "REVIEW" {
+  if (dataClass === "secret") return sizeBytes <= 2048 ? "SecureStore" : "REVIEW";
+  if (dataClass === "sensitive") return "SQLite";
+  return "AsyncStorage";
+}
+
+for (const r of records) {
+  console.log(r.name + " -> " + chooseStore(r.dataClass, r.sizeBytes));
+}`}
+      expected={`theme -> AsyncStorage
+notes-cache -> AsyncStorage
+note-body -> SQLite
+session-token -> SecureStore
+device-private-key -> REVIEW`}
+    />
+  }
+>
+  Escribe una función `chooseStore(dataClass, sizeBytes)` que devuelva `"AsyncStorage"` para datos públicos e internos, `"SQLite"` para sensibles y `"SecureStore"` para secretos. Si un dato secreto supera los 2048 bytes, devuelve `"REVIEW"`: alguien debe decidir cómo partirlo o si realmente debe guardarse en el dispositivo. Aplícala a una lista de cinco datos de la app de notas e imprime el resultado.
+</Challenge>
+
+## Errores comunes
+
+**Guardar el token en AsyncStorage "porque es más fácil".** Suele venir de tutoriales antiguos o de copiar el patrón de `localStorage` de la web. Se detecta buscando `AsyncStorage.setItem` en el proyecto y revisando el nombre de cada clave; cualquier `token`, `session` o `auth` es un hallazgo.
+
+**Guardar objetos grandes en SecureStore.** La app serializa el perfil completo del usuario, o la lista de notas, y la llamada falla solo en algunos dispositivos. Ocurre porque SecureStore está pensado para valores pequeños y algunas versiones del sistema rechazan más de unos 2 KB. Se detecta porque `setItemAsync` lanza un error nativo de forma intermitente; la solución es guardar solo el token y el resto en SQLite.
+
+**Dar por hecho que desinstalar borra la sesión.** Tras reinstalar en iOS, la app aparece con la sesión iniciada. Ocurre porque el Keychain puede conservar valores entre instalaciones. Se detecta probando el flujo desinstalar-reinstalar; la solución es que el backend invalide sesiones antiguas y que la app borre explícitamente al cerrar sesión.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué cuatro clases de datos usa la lección para decidir dónde guardar?", back: "Pública, interna, sensible y secreta; la clase decide el almacenamiento." },
+    { front: "¿Por qué AsyncStorage no sirve para el token de sesión?", back: "Guarda en texto plano dentro del sandbox; no resiste root, backups sin cifrar ni extracción física." },
+    { front: "¿Qué usa expo-secure-store por debajo en iOS y Android?", back: "iOS: Keychain (kSecClassGenericPassword). Android: SharedPreferences cifradas con el Android Keystore." },
+    { front: "¿Qué tamaño de valor conviene respetar en SecureStore?", back: "Valores pequeños, por debajo de unos 2048 bytes; algunas versiones de iOS rechazan más." },
+    { front: "¿Un valor de SecureStore desaparece al desinstalar la app en iOS?", back: "No necesariamente; el Keychain puede conservarlo. Borra la sesión explícitamente al cerrar sesión." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Dónde debe guardar la app de notas el contenido de las notas?",
+      options: [
+        { text: "En SecureStore, porque es sensible", correct: false, feedback: "SecureStore es para valores pequeños y secretos; las notas son voluminosas." },
+        { text: "En SQLite dentro del sandbox, sin tokens en la misma base", correct: true, feedback: "Correcto: sensible pero voluminoso; el sandbox y el cifrado de disco lo protegen para MAS-L1." },
+        { text: "En AsyncStorage, porque es texto", correct: false, feedback: "AsyncStorage es para datos públicos o internos, no para contenido del usuario." }
+      ]
+    },
+    {
+      prompt: "¿Qué hace la opción keychainAccessible: AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY?",
+      options: [
+        { text: "Cifra el valor con la huella del usuario", correct: false, feedback: "Eso sería requireAuthentication; esta opción solo define cuándo es legible." },
+        { text: "Permite leer el valor tras el primer desbloqueo desde el arranque, sin migrarlo a otro dispositivo", correct: true, feedback: "Correcto: úsala solo si una tarea en segundo plano necesita el token; si no, WHEN_UNLOCKED_THIS_DEVICE_ONLY es más restrictiva." },
+        { text: "Hace que el valor se borre al reiniciar", correct: false, feedback: "El valor persiste; la opción solo controla la accesibilidad." }
+      ]
+    },
+    {
+      prompt: "¿Cuál de estas es una fuga lateral cubierta por MASVS-STORAGE-2?",
+      options: [
+        { text: "Incluir los archivos privados de la app en el backup de Android", correct: true, feedback: "Correcto: un backup sin cifrar expone datos bien guardados." },
+        { text: "Usar HTTPS para hablar con la API", correct: false, feedback: "Eso pertenece a MASVS-NETWORK." },
+        { text: "Pedir el permiso de cámara", correct: false, feedback: "Eso pertenece a MASVS-PRIVACY y PLATFORM." }
+      ]
+    }
+  ]}
+/>

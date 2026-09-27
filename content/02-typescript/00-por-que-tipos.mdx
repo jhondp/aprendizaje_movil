@@ -1,0 +1,143 @@
+---
+id: "02-typescript/00-por-que-tipos"
+title: "Por qué tipos"
+stage: 2
+module: "Por qué tipos"
+order: 0
+minutes: 10
+prereqs: ["01-javascript/13-proyecto-app-de-tareas"]
+summary: "Entiende qué problema resuelve TypeScript sobre JavaScript y por qué el editor, no la consola, es quien avisa de un error de tipos."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a poder explicar qué es TypeScript, qué diferencia hay entre un error de tipos y un error en tiempo de ejecución, y por qué este curso muestra los errores de tipos como texto en vez de como salida de consola.
+
+**Prerrequisitos:** `01-javascript/13-proyecto-app-de-tareas`
+
+## Concepto
+
+Piensa en un formulario de aduana. El campo "peso en kilos" espera un número. Si escribes "bastante", el formulario en papel lo acepta sin quejarse: nadie revisa el contenido hasta que llega a la báscula real, y ahí, en pleno proceso, todo se detiene porque nadie sabe qué hacer con "bastante". TypeScript es un revisor que lee el formulario antes de enviarlo y te dice, con el bolígrafo en la mano, "este campo debe ser un número" antes de que el paquete salga de la oficina.
+
+JavaScript es un lenguaje de **tipado dinámico**: una variable puede guardar un texto en un momento y un número al siguiente, y el motor de JavaScript no se queja hasta que ejecuta la línea problemática, si es que llega a notarlo. Un ejemplo clásico:
+
+```js
+const price = "5";
+const quantity = 3;
+
+console.log(price + quantity); // "53", no 8
+```
+
+`price` es un texto, no un número. El operador `+` sobre un texto y un número no suma: concatena. El programa no falla, no lanza ningún error: simplemente produce un resultado incorrecto que puede pasar inadvertido hasta que alguien revisa un recibo y ve un total absurdo.
+
+**TypeScript** es un superconjunto de JavaScript: todo programa JavaScript válido es también un programa TypeScript válido. Lo que agrega es una capa de anotaciones de tipo que un programa aparte, el **compilador de TypeScript** (`tsc`), revisa antes de ejecutar nada. Si anotas `price` como `number` y le asignas `"5"`, `tsc` se detiene y te lo dice:
+
+```ts
+const price: number = "5";
+// Type '"5"' is not assignable to type 'number'.
+```
+
+Ese error nunca llega a ejecutarse. Aparece en el editor mientras escribes, o en la terminal cuando corres `tsc`, no en la consola del navegador. Esta es la diferencia central que vas a usar durante toda la etapa:
+
+- Un **error en tiempo de ejecución** (como `"5" + 3` dando `"53"`) ocurre mientras el programa corre y a veces ni siquiera se nota.
+- Un **error de tipos** ocurre antes: el compilador compara lo que anotaste con lo que realmente pasa y avisa sin correr una sola línea.
+
+<Callout kind="warning">
+  El `Playground` de esta plataforma ejecuta TypeScript quitando las anotaciones de tipo con una herramienta llamada Sucrase, para que el código corra al instante y sin conexión. Sucrase no revisa tipos: solo borra `: number`, `: string`, etc., y ejecuta el JavaScript que queda. Por eso, en esta etapa, un `Playground lang="ts"` con un error de tipos **va a ejecutarse igual** y mostrar el mismo resultado incorrecto que su versión en JavaScript. El error de tipos real solo aparece en tu editor o al correr `tsc`, que vas a ver simulado con el componente `Terminal`.
+</Callout>
+
+Instalar TypeScript y usar `tsc` es el tema de la lección 7. Por ahora, lo importante es entender el modelo mental: anotar tipos no cambia cómo corre el JavaScript resultante, cambia qué errores puedes detectar antes de correrlo. La documentación oficial lo resume así: [TypeScript for the New Programmer](https://www.typescriptlang.org/docs/handbook/typescript-from-scratch.html).
+
+## Práctica
+
+Ejecuta primero la versión en JavaScript y observa el resultado incorrecto. Después ejecuta la versión en TypeScript: el código es casi idéntico, con `price` anotado como `number`, pero el resultado es el mismo, porque el `Playground` no revisa tipos, solo los quita y ejecuta.
+
+<Playground
+  lang="js"
+  code={`const price = "5";
+const quantity = 3;
+
+console.log(price + quantity);`}
+  expected={`53`}
+/>
+
+<Playground
+  lang="ts"
+  code={`const price: number = "5";
+const quantity: number = 3;
+
+console.log(price + quantity);`}
+  expected={`53`}
+/>
+
+Ahora mira lo que un compilador real reporta para ese mismo archivo. Este es el error que tu editor te mostraría de inmediato, y el que `tsc` imprime si lo corres desde la terminal:
+
+<Terminal
+  steps={[
+    { cmd: "npx tsc precio.ts --noEmit", out: "precio.ts:1:7 - error TS2322: Type '\"5\"' is not assignable to type 'number'.\n\n1 const price: number = \"5\";\n        ~~~~~\n\nFound 1 error." },
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Encuentra el tipo equivocado"
+  solution={
+    <Playground
+      lang="ts"
+      code={`const total: number = 42;
+const label: string = "Total";
+
+console.log(label + ": " + total);`}
+      expected={`Total: 42`}
+    />
+  }
+>
+  El siguiente fragmento tiene una variable anotada con el tipo incorrecto: `const total: string = 42;`. Escríbelo de nuevo con la anotación correcta para que `total` sea realmente un `number`, y agrega una variable `label: string` con el texto `"Total"`. Imprime `label + ": " + total` y comprueba que el resultado es `Total: 42`.
+</Challenge>
+
+## Errores comunes
+
+**Pensar que `lang="ts"` en el Playground revisa tipos.** El Playground de esta plataforma solo quita las anotaciones con Sucrase y ejecuta el JavaScript resultante; no hay ningún paso de verificación. Cómo detectarlo: un `Playground lang="ts"` con un error de tipos evidente igual se ejecuta y produce salida, sin ningún aviso.
+
+**Confundir un error de tipos con un error en tiempo de ejecución.** `"5" + 3` no es un error de tipos: es JavaScript válido que hace coerción de texto. TypeScript solo lo marca como error si anotaste `price` como `number` explícitamente. Cómo detectarlo: si el código corre y produce un resultado, aunque sea incorrecto, no fue un error de tipos; si el compilador se detiene antes de generar salida, sí lo fue.
+
+**Esperar que TypeScript cambie el comportamiento en tiempo de ejecución.** Anotar tipos no agrega revisiones al JavaScript final: `tsc` borra las anotaciones al compilar, igual que Sucrase, solo que antes de borrarlas las compara con el código real. Cómo detectarlo: el JavaScript compilado de un archivo `.ts` no contiene ninguna anotación de tipo, ábrelo y compáralo.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué es TypeScript en relación con JavaScript?", back: "Un superconjunto de JavaScript que agrega anotaciones de tipo revisadas por un compilador (tsc) antes de ejecutar el código." },
+    { front: "¿Cuándo se detecta un error de tipos: antes o durante la ejecución?", back: "Antes: el compilador lo detecta al revisar el código, sin ejecutar ninguna línea." },
+    { front: "¿Por qué un Playground lang=\"ts\" con un error de tipos igual se ejecuta y muestra salida?", back: "Porque el Playground usa Sucrase para quitar las anotaciones sin revisarlas; no hay verificación de tipos en tiempo real." },
+    { front: "¿Qué imprime \"5\" + 3 en JavaScript?", back: "\"53\": el operador + concatena texto y número en lugar de sumarlos." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Dónde se reporta un error de tipos de TypeScript?",
+      options: [
+        { text: "En la consola del navegador, mientras el programa corre", correct: false, feedback: "Un error de tipos se detecta antes de ejecutar, no en la consola en tiempo de ejecución." },
+        { text: "En el editor o al correr tsc, antes de ejecutar el código", correct: true, feedback: "Correcto: el compilador revisa los tipos antes de generar y correr el JavaScript resultante." },
+        { text: "Nunca; TypeScript no reporta errores", correct: false, feedback: "TypeScript sí reporta errores de tipos; es justamente su propósito principal." },
+      ],
+    },
+    {
+      prompt: "¿Por qué un Playground lang=\"ts\" con const price: number = \"5\" se ejecuta sin quejarse?",
+      options: [
+        { text: "Porque \"5\" es un número válido en TypeScript", correct: false, feedback: "\"5\" es un texto (string), no un número; la anotación number es incorrecta para ese valor." },
+        { text: "Porque el Playground quita las anotaciones con Sucrase sin revisar tipos", correct: true, feedback: "Correcto: Sucrase borra la anotación : number y ejecuta el JavaScript que queda." },
+        { text: "Porque el error solo aparece la segunda vez que se ejecuta", correct: false, feedback: "El Playground nunca revisa tipos, ni la primera vez ni después." },
+      ],
+    },
+    {
+      prompt: "¿Qué diferencia hay entre un error de tipos y un error en tiempo de ejecución?",
+      options: [
+        { text: "Ninguna, son sinónimos", correct: false, feedback: "Son conceptos distintos: uno ocurre antes de ejecutar, el otro durante la ejecución." },
+        { text: "El error de tipos se detecta antes de ejecutar; el de tiempo de ejecución ocurre mientras el programa corre", correct: true, feedback: "Correcto: esa es la distinción central de esta lección." },
+        { text: "El error en tiempo de ejecución solo existe en TypeScript", correct: false, feedback: "Los errores en tiempo de ejecución existen en JavaScript puro; TypeScript agrega la revisión previa de tipos." },
+      ],
+    },
+  ]}
+/>

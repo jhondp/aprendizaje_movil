@@ -1,0 +1,202 @@
+---
+id: "06-calidad-ci/05-e2e-con-maestro"
+title: "E2E con Maestro"
+stage: 6
+module: "Testing"
+order: 5
+minutes: 12
+prereqs: ["06-calidad-ci/04-testing-hooks-y-mocks"]
+summary: "Escribe un flujo de Maestro en YAML que abre la app real, crea una nota y comprueba que aparece en pantalla."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás escribir y ejecutar un flujo de Maestro que recorre la app de notas en un emulador como lo haría una persona.
+
+**Prerrequisitos:** `06-calidad-ci/04-testing-hooks-y-mocks`
+
+## Concepto
+
+Antes de abrir un restaurante al público, el dueño organiza una "noche de prueba": invita a unos amigos, que entran por la puerta, piden de la carta, esperan el plato y pagan. Nadie revisa la receta ni el horno por separado; se comprueba que la experiencia completa funciona de principio a fin. Las pruebas **end-to-end** (E2E) hacen eso con tu app: la instalan en un emulador o dispositivo, tocan botones reales, escriben en campos reales y verifican lo que aparece en la pantalla.
+
+### Dónde encaja en la pirámide de pruebas
+
+Las pruebas con Jest y React Native Testing Library que ya escribiste son rápidas y precisas: cientos se ejecutan en segundos y, cuando fallan, señalan una función o un componente. Pero se ejecutan en Node, con los módulos nativos simulados. No detectan, por ejemplo, que la migración de SQLite falla en Android o que la navegación rompe al volver atrás.
+
+Las pruebas E2E cubren ese hueco a cambio de ser lentas (segundos o minutos por flujo) y más sensibles al entorno. Por eso se usan pocas: un flujo por cada recorrido crítico del usuario, como "crear una nota" o "iniciar sesión". La base de la pirámide son muchas pruebas unitarias; la punta, unos pocos flujos E2E.
+
+### Maestro
+
+**Maestro** es una herramienta de pruebas E2E para apps móviles. Describes el flujo en un archivo YAML, con pasos que se leen casi como instrucciones para una persona. Maestro controla el emulador desde fuera de la app, así que no necesitas agregar dependencias a tu proyecto ni cambiar el código de producción. Espera automáticamente a que los elementos aparezcan y a que las animaciones terminen, lo que reduce las pruebas que fallan "a veces". Documentación oficial: https://docs.maestro.dev/
+
+Como alternativa existe Detox, que se integra dentro del proyecto de React Native y se escribe en JavaScript, a cambio de una configuración nativa bastante más compleja.
+
+Se instala con un script oficial y necesita Java 17 o superior:
+
+```bash
+curl -fsSL "https://get.maestro.mobile.dev" | bash
+maestro --version
+```
+
+### La app que Maestro prueba
+
+Maestro abre una app instalada, identificada por su `appId`: en Android es el `package` y en iOS el `bundleIdentifier` que defines en `app.json`:
+
+```json
+{
+  "expo": {
+    "android": { "package": "com.ana.notes" },
+    "ios": { "bundleIdentifier": "com.ana.notes" }
+  }
+}
+```
+
+Para instalar esa app en un emulador de Android, con Android Studio instalado, ejecuta `npx expo run:android`. El comando compila una versión de desarrollo de tu app en tu máquina y la abre en el emulador. La compilación de builds se estudia en detalle en la etapa 10; aquí solo la necesitas instalada.
+
+### Selectores estables con testID
+
+Maestro encuentra elementos por su texto visible o por su identificador. En React Native, la prop `testID` se expone a Maestro como `id`:
+
+```tsx
+<TextInput
+  testID="note-title-input"
+  placeholder="Título de la nota"
+  value={title}
+  onChangeText={setTitle}
+/>
+```
+
+Usa el texto visible cuando es estable, como el botón "Guardar". Usa `testID` para campos de texto y elementos sin texto propio. Así los flujos no se rompen si cambias un placeholder.
+
+### Un flujo completo
+
+Los flujos viven en una carpeta `flows/` en la raíz del repositorio:
+
+```yaml
+# flows/add-note.yaml
+appId: com.ana.notes
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Todavía no hay notas"
+- tapOn:
+    id: "note-title-input"
+- inputText: "Comprar pan"
+- hideKeyboard
+- tapOn: "Guardar"
+- assertVisible: "Comprar pan"
+- assertVisible: "1 nota"
+- assertNotVisible: "Todavía no hay notas"
+```
+
+El archivo tiene dos partes separadas por `---`. Arriba, la configuración: qué app abrir. Abajo, la lista de comandos:
+
+- `launchApp` con `clearState: true` abre la app borrando sus datos, para que cada ejecución empiece igual.
+- `tapOn` toca un elemento por texto o por `id`.
+- `inputText` escribe en el campo que tiene el foco.
+- `hideKeyboard` cierra el teclado para que no tape el botón.
+- `assertVisible` y `assertNotVisible` son las afirmaciones: si fallan, el flujo se detiene y Maestro guarda una captura de pantalla.
+
+Referencia de comandos: https://docs.maestro.dev/api-reference/commands
+
+### Ejecutar y depurar
+
+```bash
+maestro test flows/add-note.yaml
+maestro test flows/
+```
+
+El primer comando ejecuta un flujo; el segundo, todos los de la carpeta. Si un paso falla y no entiendes por qué, `maestro studio` abre una interfaz en el navegador que muestra la pantalla actual y los selectores de cada elemento. Es la forma más rápida de descubrir qué texto o `id` usar.
+
+### Flujos independientes
+
+Cada flujo debe poder ejecutarse solo y en cualquier orden. Si "borrar una nota" depende de que "crear una nota" se haya ejecutado antes, un fallo en el primero arrastra al segundo y el reporte confunde. Empieza cada flujo con `clearState: true` y crea en el propio flujo los datos que necesitas.
+
+## Práctica
+
+Recorre la ejecución del flujo contra la app instalada en el emulador. En el segundo intento el flujo falla porque el texto del botón cambió a "Guardar nota"; observa cómo Maestro lo reporta.
+
+<Terminal
+  steps={[
+    { cmd: "npx expo run:android", out: "› Building app...\nBUILD SUCCESSFUL in 1m 42s\n› Installing /home/ana/notes/android/app/build/outputs/apk/debug/app-debug.apk\n› Opening com.ana.notes on Medium_Phone_API_35" },
+    { cmd: "maestro test flows/add-note.yaml", out: "Running on emulator-5554\n\n > Flow add-note\n\nLaunch app \"com.ana.notes\" with clear state... COMPLETED\nAssert that \"Todavía no hay notas\" is visible... COMPLETED\nTap on id: note-title-input... COMPLETED\nInput text Comprar pan... COMPLETED\nHide Keyboard... COMPLETED\nTap on \"Guardar\"... COMPLETED\nAssert that \"Comprar pan\" is visible... COMPLETED\nAssert that \"1 nota\" is visible... COMPLETED\nAssert that \"Todavía no hay notas\" is not visible... COMPLETED" },
+    { cmd: "maestro test flows/add-note.yaml", out: "Running on emulator-5554\n\n > Flow add-note\n\nLaunch app \"com.ana.notes\" with clear state... COMPLETED\nAssert that \"Todavía no hay notas\" is visible... COMPLETED\nTap on id: note-title-input... COMPLETED\nInput text Comprar pan... COMPLETED\nHide Keyboard... COMPLETED\nTap on \"Guardar\"... FAILED\n\nElement not found: Text matching regex: Guardar\n\n==== Debug output (logs & screenshots) ====\n/home/ana/.maestro/tests/2026-09-26_101512" },
+    { cmd: "maestro test flows/", out: "[Passed] add-note (6s)\n[Passed] delete-note (8s)\n\n2/2 Flows Passed in 14s" },
+  ]}
+/>
+
+Comprueba tu configuración antes de escribir más flujos.
+
+<Checklist
+  id="06-calidad-ci/05-e2e-con-maestro-setup"
+  items={[
+    "maestro --version muestra la versión instalada",
+    "app.json define android.package e ios.bundleIdentifier",
+    "La app está instalada en un emulador con npx expo run:android",
+    "Los campos de texto tienen testID estables",
+    "flows/add-note.yaml empieza con launchApp y clearState: true",
+    "maestro test flows/ pasa dos veces seguidas sin cambios",
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Flujo para borrar una nota"
+  solution={
+    <Terminal
+      steps={[
+        { cmd: "cat flows/delete-note.yaml", out: "appId: com.ana.notes\n---\n- launchApp:\n    clearState: true\n- tapOn:\n    id: \"note-title-input\"\n- inputText: \"Nota temporal\"\n- hideKeyboard\n- tapOn: \"Guardar\"\n- assertVisible: \"Nota temporal\"\n- longPressOn: \"Nota temporal\"\n- tapOn: \"Borrar\"\n- assertNotVisible: \"Nota temporal\"\n- assertVisible: \"Todavía no hay notas\"" },
+        { cmd: "maestro test flows/delete-note.yaml", out: "[Passed] delete-note (8s)" },
+      ]}
+    />
+  }
+>
+  La app de notas borra una nota cuando la mantienes presionada y tocas "Borrar". Escribe `flows/delete-note.yaml` para que sea independiente: debe empezar con los datos borrados, crear su propia nota "Nota temporal", borrarla con `longPressOn` y comprobar que la nota ya no aparece y que vuelve el estado vacío.
+</Challenge>
+
+## Errores comunes
+
+**Flujos que dependen de otros.** El flujo de borrar asume que existe la nota que creó el flujo anterior. Pasa sin problemas en tu máquina y falla en otra, o al ejecutarlo solo. Ocurre por no limpiar el estado al inicio. Se detecta ejecutando cada flujo por separado con `maestro test flows/delete-note.yaml`.
+
+**Selectores atados a textos que cambian.** El flujo toca el placeholder "Título" y alguien lo cambia por "Título de la nota". Ocurre por usar el texto de elementos que no son parte del contrato visible. Se detecta porque el flujo falla con `Element not found` tras un cambio de copy sin cambio de comportamiento; la solución es un `testID`.
+
+**Probar con E2E lo que cubre una prueba unitaria.** Veinte flujos que validan cada regla de un formulario tardan diez minutos y fallan por el teclado o el emulador. Ocurre por ver el E2E como "la prueba de verdad". Se detecta cuando la suite de Maestro es más lenta que el resto del pipeline junto; mueve esas reglas a pruebas con Jest y deja en Maestro solo los recorridos críticos.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué comprueba una prueba end-to-end que no comprueba una prueba unitaria con Jest?", back: "Que la app real, instalada en un emulador o dispositivo, funciona de principio a fin con sus módulos nativos." },
+    { front: "¿Cómo se expone la prop testID de React Native a Maestro?", back: "Como id: se selecciona con tapOn: { id: \"...\" }." },
+    { front: "¿Para qué sirve clearState: true en launchApp de Maestro?", back: "Borra los datos de la app antes de abrirla, para que cada flujo empiece desde el mismo estado." },
+    { front: "¿Qué comando de Maestro ayuda a descubrir los selectores de la pantalla actual?", back: "maestro studio" },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Cuántos flujos E2E conviene tener en una app como la de notas?",
+      options: [
+        { text: "Uno por cada recorrido crítico del usuario", correct: true, feedback: "Correcto: son lentos y costosos, así que se reservan para lo esencial." },
+        { text: "Uno por cada componente", correct: false, feedback: "Eso es trabajo de las pruebas con React Native Testing Library." },
+        { text: "Ninguno, las pruebas unitarias bastan", correct: false, feedback: "Las unitarias no ejecutan la app real con sus módulos nativos." },
+      ],
+    },
+    {
+      prompt: "¿Qué identifica la línea appId: com.ana.notes en un flujo de Maestro?",
+      options: [
+        { text: "El nombre del flujo", correct: false, feedback: "El nombre sale del archivo." },
+        { text: "La app instalada que Maestro abre, según android.package o ios.bundleIdentifier", correct: true, feedback: "Correcto: Maestro controla esa app desde fuera." },
+        { text: "El repositorio de GitHub", correct: false, feedback: "Maestro no conoce el repositorio." },
+      ],
+    },
+    {
+      prompt: "Un flujo falla con Element not found justo después de cambiar el placeholder de un campo. ¿Cuál es la mejor corrección?",
+      options: [
+        { text: "Agregar un testID al campo y seleccionarlo con id", correct: true, feedback: "Correcto: el identificador no cambia cuando cambia el texto." },
+        { text: "Borrar el flujo", correct: false, feedback: "Pierdes la cobertura del recorrido." },
+        { text: "Agregar una espera de diez segundos", correct: false, feedback: "El elemento no tarda en aparecer: el selector ya no coincide." },
+      ],
+    },
+  ]}
+/>

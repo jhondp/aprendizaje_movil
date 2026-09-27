@@ -1,0 +1,173 @@
+---
+id: "01-javascript/02-condicionales"
+title: "Condicionales"
+stage: 1
+module: "Fundamentos"
+order: 2
+minutes: 12
+prereqs: ["01-javascript/01-operadores"]
+summary: "Ramifica el flujo de un programa con if/else if/else y con el operador ternario."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás ramificar el flujo de un programa con `if`/`else if`/`else` y con el operador ternario, usando los operadores de comparación y lógicos de la lección anterior.
+
+**Prerrequisitos:** `01-javascript/01-operadores`
+
+## Concepto
+
+Hasta ahora tus programas ejecutan todas las instrucciones, siempre, en el mismo orden. Un condicional es una bifurcación en el camino: según si algo es verdadero o falso, el programa sigue por una rama u otra. Piensa en un semáforo: si está en verde, cruzas; si está en rojo, esperas. La decisión depende de una condición que solo puede ser verdadera o falsa, nunca "un poco verdadera".
+
+### if, else if, else
+
+`if` ejecuta un bloque de código solo cuando la condición entre paréntesis es `true`. `else` ejecuta un bloque alternativo cuando la condición es `false`. `else if` permite encadenar varias condiciones, evaluadas en orden, deteniéndose en la primera que sea verdadera.
+
+```js
+const hour = 14;
+
+if (hour < 12) {
+  console.log("morning");
+} else if (hour < 19) {
+  console.log("afternoon");
+} else {
+  console.log("evening");
+}
+```
+
+Con `hour = 14`, la primera condición (`14 < 12`) es falsa, así que se evalúa la siguiente: `14 < 19` es verdadera, entonces se ejecuta `console.log("afternoon")` y el resto de la cadena se ignora, incluso si sus condiciones también serían verdaderas.
+
+El bloque entre llaves `{ }` puede tener una o varias instrucciones. Siempre usa llaves, incluso para una sola línea: omitirlas es una fuente común de errores cuando alguien agrega una segunda línea después y olvida que solo la primera está dentro del `if`.
+
+### Condiciones compuestas
+
+Las condiciones pueden combinar comparaciones con los operadores lógicos que ya conoces.
+
+```js
+const age = 20;
+const hasTicket = true;
+
+if (age >= 18 && hasTicket) {
+  console.log("puede entrar");
+} else {
+  console.log("no puede entrar");
+}
+```
+
+### El operador ternario
+
+Cuando la decisión es simple —elegir entre dos valores según una condición— el operador ternario `condición ? valorSiVerdadero : valorSiFalso` expresa lo mismo que un `if`/`else` corto, en una sola línea.
+
+```js
+const age = 20;
+const status = age >= 18 ? "adult" : "minor";
+console.log(status);
+```
+
+Es equivalente a escribir un `if`/`else` que asigna un valor distinto en cada rama, pero más compacto. Úsalo solo cuando ambas ramas son una expresión simple; para lógica más larga, usa `if`/`else` normal, que se lee mejor.
+
+Puedes ver la referencia completa de `if...else` y del operador condicional en MDN: https://developer.mozilla.org/es/docs/Web/JavaScript/Reference/Statements/if...else y https://developer.mozilla.org/es/docs/Web/JavaScript/Reference/Operators/Conditional_operator.
+
+<Callout kind="tip">
+  Las funciones que vas a ver en la próxima lección suelen contener condicionales dentro: una función que calcula un descuento, por ejemplo, casi siempre decide el porcentaje con un if/else.
+</Callout>
+
+## Práctica
+
+Ejecuta el código: calcula una letra de calificación a partir de un puntaje numérico. Cambia el valor de `score` y vuelve a ejecutar para ver cómo cambia la rama que se ejecuta.
+
+<Playground
+  lang="js"
+  code={`const score = 82;
+
+let grade;
+if (score >= 90) {
+  grade = "A";
+} else if (score >= 80) {
+  grade = "B";
+} else if (score >= 70) {
+  grade = "C";
+} else {
+  grade = "F";
+}
+
+console.log(grade);
+
+const passed = score >= 60 ? "approved" : "failed";
+console.log(passed);`}
+  expected={`B
+approved`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Calculadora de notas"
+  solution={
+    <Playground
+      lang="js"
+      code={`const score = 95;
+
+let grade;
+if (score >= 90) {
+  grade = "A";
+} else if (score >= 80) {
+  grade = "B";
+} else if (score >= 70) {
+  grade = "C";
+} else {
+  grade = "F";
+}
+
+console.log(grade);`}
+    />
+  }
+>
+  Declara una constante `score` con el valor `95`. Usa `if`/`else if`/`else` para asignar a una variable `grade` la letra `"A"` si `score` es 90 o más, `"B"` si es 80 o más, `"C"` si es 70 o más, y `"F"` en cualquier otro caso. Imprime `grade`.
+</Challenge>
+
+## Errores comunes
+
+**Omitir las llaves en un bloque de una sola línea y agregar una segunda línea después.** `if (score >= 60) console.log("aprobado"); console.log("siempre se ejecuta");` hace que la segunda línea se ejecute siempre, sin importar la condición, porque solo la primera línea pertenece al `if`. Se detecta porque un mensaje aparece incluso cuando la condición era falsa. Solución: usar siempre llaves.
+
+**Escribir condiciones en el orden incorrecto en una cadena de else if.** Si pones `score >= 70` antes que `score >= 90`, una nota de 95 entra en la rama de 70 porque es la primera condición verdadera que encuentra. Se detecta comparando el resultado con el esperado para un valor límite. Solución: ordenar las condiciones de la más estricta a la más permisiva.
+
+**Usar `=` en vez de `===` dentro de la condición.** `if (grade = "A")` asigna `"A"` a `grade` y esa asignación se evalúa como verdadera siempre, así que la rama se ejecuta sin importar el valor real. Se detecta porque el `if` "siempre" es verdadero.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué hace else if?", back: "Encadena otra condición que se evalúa solo si la anterior fue falsa." },
+    { front: "¿Cuántas ramas de una cadena if/else if/else se ejecutan como máximo?", back: "Una sola: la primera cuya condición sea verdadera." },
+    { front: "¿Cuándo conviene usar el operador ternario en vez de if/else?", back: "Cuando ambas ramas son una expresión simple que se asigna a una variable." },
+    { front: "¿Por qué siempre se deben usar llaves en un if, aunque tenga una sola línea?", back: "Porque sin llaves, solo la línea inmediatamente siguiente pertenece al if, y agregar una segunda línea después introduce errores." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Con hour = 20, ¿qué imprime este código: if (hour < 12) { console.log(\"morning\") } else if (hour < 19) { console.log(\"afternoon\") } else { console.log(\"evening\") }?",
+      options: [
+        { text: "morning", correct: false, feedback: "20 < 12 es falso." },
+        { text: "afternoon", correct: false, feedback: "20 < 19 también es falso." },
+        { text: "evening", correct: true, feedback: "Correcto: ninguna de las dos primeras condiciones es verdadera, así que se ejecuta el else." },
+      ],
+    },
+    {
+      prompt: "¿Qué produce const status = age >= 18 ? \"adult\" : \"minor\"; cuando age vale 15?",
+      options: [
+        { text: "status vale \"adult\"", correct: false, feedback: "15 >= 18 es falso." },
+        { text: "status vale \"minor\"", correct: true, feedback: "Correcto: la condición es falsa, así que se toma el valor después de los dos puntos." },
+        { text: "Se lanza un error", correct: false, feedback: "El operador ternario no lanza errores por sí mismo." },
+      ],
+    },
+    {
+      prompt: "¿Qué problema tiene omitir las llaves en if (ok) console.log(\"a\"); console.log(\"b\");?",
+      options: [
+        { text: "Ninguno, ambas líneas dependen de la condición", correct: false, feedback: "Solo la primera línea pertenece al if cuando no hay llaves." },
+        { text: "\"b\" se imprime siempre, sin importar el valor de ok", correct: true, feedback: "Correcto: sin llaves, solo la línea inmediata está condicionada." },
+        { text: "El código no compila", correct: false, feedback: "Es válido en JavaScript, aunque el comportamiento suele ser el no esperado." },
+      ],
+    },
+  ]}
+/>

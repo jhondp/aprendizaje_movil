@@ -1,0 +1,207 @@
+---
+id: "02-typescript/03-unions-y-literales"
+title: "Unions y literales"
+stage: 2
+module: "Tipos avanzados"
+order: 3
+minutes: 12
+prereqs: ["02-typescript/02-interfaces-y-types"]
+summary: "Combina tipos con union, restringe valores con tipos literales y modela estados con una union discriminada."
+---
+
+## Objetivo
+
+Al terminar esta lección vas a poder declarar una unión de tipos, restringir un valor a un conjunto fijo de literales y modelar un estado con una unión discriminada.
+
+**Prerrequisitos:** `02-typescript/02-interfaces-y-types`
+
+## Concepto
+
+Piensa en un semáforo. Solo puede estar en tres estados: rojo, amarillo o verde. No existe un cuarto estado ni un valor a mitad de camino: el semáforo es exactamente uno de esos tres. Una **unión** (`union`) en TypeScript describe justo eso: un valor que puede ser de uno de varios tipos posibles, nunca de otro.
+
+### Unión de tipos
+
+El operador `|` combina tipos:
+
+```ts
+function printId(id: string | number): void {
+  console.log("ID:", id);
+}
+
+printId(42);
+printId("abc-123");
+```
+
+`id` puede ser `string` o `number`, pero nada más: pasar un `boolean` es un error de compilación.
+
+### Tipos literales
+
+Un tipo literal restringe un valor a un texto o número exacto, no a todo el conjunto de `string` o `number`:
+
+```ts
+let direction: "left" | "right";
+
+direction = "left";  // válido
+direction = "up";    // error: Type '"up"' is not assignable to type '"left" | "right"'.
+```
+
+`"left" | "right"` es una unión de dos tipos literales: el valor solo puede ser uno de esos dos textos exactos. Esto reemplaza al patrón, común en JavaScript, de comentar "acá solo va 'left' o 'right'" con un comentario que nadie garantiza que se respete: TypeScript lo hace cumplir.
+
+### El semáforo, modelado
+
+```ts
+type Status = "todo" | "done";
+
+let taskStatus: Status = "todo";
+taskStatus = "done";     // válido
+taskStatus = "pending";  // error: no es uno de los literales permitidos
+```
+
+`Status` documenta, en el propio tipo, cuáles son los únicos valores posibles. Cualquiera que lea la firma de una función que recibe `Status` sabe exactamente qué esperar, sin necesitar un comentario aparte.
+
+### Unión discriminada
+
+Cuando cada posible "forma" de un valor necesita datos distintos, una unión de literales sueltos no alcanza. Ahí entra la **unión discriminada**: varias interfaces que comparten un campo común (el discriminante) con un valor literal distinto en cada una.
+
+```ts
+interface Loading {
+  kind: "loading";
+}
+
+interface Success {
+  kind: "success";
+  data: string;
+}
+
+interface Failure {
+  kind: "failure";
+  error: string;
+}
+
+type FetchState = Loading | Success | Failure;
+
+function describe(state: FetchState): string {
+  if (state.kind === "success") {
+    return "Datos: " + state.data;
+  }
+  if (state.kind === "failure") {
+    return "Error: " + state.error;
+  }
+  return "Cargando...";
+}
+```
+
+El campo `kind` es el discriminante: su valor literal (`"loading"`, `"success"`, `"failure"`) le dice a TypeScript cuál de las tres formas tiene el objeto en cada rama del `if`. Dentro de `if (state.kind === "success")`, TypeScript ya sabe que `state` tiene la propiedad `data`, y te avisaría si intentas acceder a `state.error` en esa misma rama. Este mecanismo de "reducir" una unión a una forma concreta según una comprobación se llama **narrowing** y es el tema completo de la lección 5. Documentación oficial: [Narrowing — Discriminated unions](https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions).
+
+## Práctica
+
+Ejecuta el código y observa cómo `describe` distingue cada estado según el discriminante `kind`.
+
+<Playground
+  lang="ts"
+  code={`interface Loading {
+  kind: "loading";
+}
+
+interface Success {
+  kind: "success";
+  data: string;
+}
+
+interface Failure {
+  kind: "failure";
+  error: string;
+}
+
+type FetchState = Loading | Success | Failure;
+
+function describe(state: FetchState): string {
+  if (state.kind === "success") {
+    return "Datos: " + state.data;
+  }
+  if (state.kind === "failure") {
+    return "Error: " + state.error;
+  }
+  return "Cargando...";
+}
+
+console.log(describe({ kind: "loading" }));
+console.log(describe({ kind: "success", data: "42 tareas" }));
+console.log(describe({ kind: "failure", error: "sin conexión" }));`}
+  expected={`Cargando...
+Datos: 42 tareas
+Error: sin conexión`}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Modelar un semáforo"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type Light = "red" | "yellow" | "green";
+
+function next(current: Light): Light {
+  if (current === "red") return "green";
+  if (current === "green") return "yellow";
+  return "red";
+}
+
+console.log(next("red"));
+console.log(next("green"));
+console.log(next("yellow"));`}
+      expected={`green
+yellow
+red`}
+    />
+  }
+>
+  Declara `type Light = "red" | "yellow" | "green"`. Escribe una función `next` que reciba un `Light` y devuelva el siguiente color según el orden real de un semáforo: de `"red"` pasa a `"green"`, de `"green"` pasa a `"yellow"`, y de `"yellow"` vuelve a `"red"`. Prueba la función con los tres colores.
+</Challenge>
+
+## Errores comunes
+
+**Asignar un valor fuera de la unión literal.** `let direction: "left" | "right"; direction = "up";` falla en compilación porque `"up"` no es uno de los literales permitidos. Cómo detectarlo: el mensaje de error lista exactamente los literales válidos entre comillas.
+
+**Acceder a una propiedad de una rama distinta antes de comprobar el discriminante.** Dentro de una función que recibe `FetchState`, escribir `state.data` sin antes comprobar `state.kind === "success"` falla porque `Loading` y `Failure` no tienen `data`. Cómo detectarlo: el compilador dice algo como "Property 'data' does not exist on type 'Loading | Failure'".
+
+**Olvidar un caso al ramificar sobre una unión.** Si `FetchState` tuviera un cuarto estado y la función solo comprueba dos de los cuatro, ese cuarto caso cae en un `else` genérico sin que nadie lo note. Cómo detectarlo: la lección 5 muestra cómo un `switch` exhaustivo hace que el compilador marque un error si falta cubrir un caso.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué representa una unión de tipos como string | number?", back: "Un valor que puede ser de cualquiera de los tipos listados, y de ningún otro." },
+    { front: "¿Qué es un tipo literal como \"left\" | \"right\"?", back: "Un tipo que restringe el valor a uno o más textos o números exactos, no a todo el conjunto string o number." },
+    { front: "¿Qué es el discriminante en una unión discriminada?", back: "Un campo común a todas las interfaces de la unión, con un valor literal distinto en cada una, que permite distinguir la forma concreta del objeto." },
+    { front: "¿Cómo se llama el mecanismo de reducir una unión a una forma concreta según una comprobación?", back: "Narrowing." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "Dado let direction: \"left\" | \"right\", ¿qué ocurre con direction = \"up\"?",
+      options: [
+        { text: "Se acepta porque up es un string válido", correct: false, feedback: "El tipo no es string en general, es la unión de dos literales exactos; up no es ninguno de los dos." },
+        { text: "El compilador lo rechaza porque up no es uno de los literales permitidos", correct: true, feedback: "Correcto: la unión de literales solo acepta esos valores exactos." },
+        { text: "Se acepta pero direction queda undefined", correct: false, feedback: "TypeScript rechaza la asignación en compilación, no la deja pasar con un valor distinto." },
+      ],
+    },
+    {
+      prompt: "En una unión discriminada, ¿qué función cumple el campo compartido (por ejemplo kind)?",
+      options: [
+        { text: "Ninguna en particular, es solo una propiedad más", correct: false, feedback: "Ese campo es justamente el que permite a TypeScript distinguir qué forma concreta tiene el objeto." },
+        { text: "Permite a TypeScript identificar qué forma concreta de la unión tiene el objeto en cada rama", correct: true, feedback: "Correcto: por eso se llama discriminante." },
+        { text: "Obliga a que todas las interfaces de la unión tengan las mismas propiedades", correct: false, feedback: "Al contrario: cada interfaz puede tener propiedades distintas además del discriminante." },
+      ],
+    },
+    {
+      prompt: "¿Qué error produce acceder a state.data dentro de una función que recibe FetchState, sin comprobar antes state.kind?",
+      options: [
+        { text: "Ninguno, TypeScript infiere que siempre hay data", correct: false, feedback: "TypeScript no puede asumir eso: Loading y Failure no tienen data." },
+        { text: "Un error de compilación porque data no existe en todas las formas de la unión", correct: true, feedback: "Correcto: sin comprobar el discriminante, TypeScript no reduce la unión y data no es seguro de acceder." },
+        { text: "Un error solo en tiempo de ejecución, nunca en compilación", correct: false, feedback: "TypeScript lo detecta antes de ejecutar, durante la compilación." },
+      ],
+    },
+  ]}
+/>

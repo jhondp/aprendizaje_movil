@@ -1,0 +1,235 @@
+---
+id: "06-calidad-ci/02-conventional-commits-y-prs"
+title: "Conventional commits y pull requests"
+stage: 6
+module: "Herramientas"
+order: 2
+minutes: 10
+prereqs: ["06-calidad-ci/01-git-avanzado"]
+summary: "Escribe mensajes de commit con el formato Conventional Commits y abre pull requests pequeños y fáciles de revisar."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás escribir mensajes de commit con el formato Conventional Commits y abrir una pull request con una descripción que facilite la revisión.
+
+**Prerrequisitos:** `06-calidad-ci/01-git-avanzado`
+
+## Concepto
+
+Piensa en las etiquetas de un archivo de oficina. Si cada carpeta dice "Cosas" o "Varios", encontrar un contrato de hace dos años exige abrirlas todas. Si cada una dice "Factura · Proveedor · 2025-03", lo encuentras en segundos y además puedes ordenar el archivo automáticamente. Un mensaje de commit es la etiqueta de un cambio. **Conventional Commits** es un acuerdo sobre cómo escribir esa etiqueta para que personas y herramientas la entiendan.
+
+### El formato
+
+```text
+<type>(<scope>): <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+La primera línea, llamada **header**, es la parte obligatoria:
+
+- **type**: qué clase de cambio es. Los dos tipos que define la especificación son `feat` (nueva funcionalidad) y `fix` (corrección de un bug). La convención más extendida agrega `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore` y `revert`.
+- **scope** (opcional): la parte del proyecto afectada, entre paréntesis. En la app de notas: `notes`, `quotes`, `auth`.
+- **description**: qué hace el cambio, en imperativo y en minúscula: "add search", no "Added search" ni "adds search".
+
+Ejemplos reales:
+
+```text
+feat(notes): add search by title
+fix(quotes): retry when the API returns 503
+test(notes): cover empty state
+ci: run typecheck on pull requests
+```
+
+### Cambios incompatibles
+
+Si un cambio rompe la compatibilidad, se marca con `!` antes de los dos puntos o con un footer `BREAKING CHANGE:`:
+
+```text
+feat(storage)!: migrate notes table to v2 schema
+
+BREAKING CHANGE: notes saved with v1 must be migrated on first launch.
+```
+
+### Por qué vale la pena
+
+Conventional Commits se alinea con el **versionado semántico**: un `fix` sugiere subir la versión de parche (1.4.2 a 1.4.3), un `feat` la versión menor (1.4.2 a 1.5.0) y un cambio con `!` la versión mayor (1.4.2 a 2.0.0). Con historias bien etiquetadas, herramientas externas pueden generar el changelog y calcular la versión siguiente sin intervención humana. Aunque no uses esas herramientas, `git log --oneline` se vuelve legible: sabes qué commit introdujo una funcionalidad y cuál solo cambió documentación.
+
+Especificación oficial en español: https://www.conventionalcommits.org/es/v1.0.0/
+
+### Un commit, una idea
+
+El formato te obliga a elegir un solo tipo. Si no puedes, probablemente el commit mezcla dos cambios: por ejemplo, una funcionalidad nueva y una refactorización. Sepáralos. Commits atómicos significan revisiones más simples y un `git revert` que deshace exactamente lo que quieres.
+
+### Pull requests
+
+Una **pull request** (PR) propone integrar tu rama en `main` y abre un espacio para revisión. Tres reglas prácticas:
+
+1. **Pequeña.** Menos de 400 líneas cambiadas es una buena meta. Una PR de 2000 líneas recibe un "se ve bien" sin revisión real.
+2. **Descriptiva.** Qué cambia, por qué y cómo probarlo. La persona que revisa no estuvo en tu cabeza.
+3. **Verde.** Antes de pedir revisión, lint, tipos y pruebas deben pasar en tu máquina.
+
+Con la CLI de GitHub (`gh`) puedes abrirla desde la terminal:
+
+```bash
+gh pr create --title "feat(notes): add search by title" --body-file pr.md
+```
+
+Para que todas las PR tengan la misma estructura, crea `.github/pull_request_template.md`. GitHub lo usa como texto inicial de cada PR nueva:
+
+```markdown
+## What
+
+## Why
+
+## How to test
+
+- [ ] `pnpm lint` passes
+- [ ] `pnpm typecheck` passes
+- [ ] `pnpm test` passes
+- [ ] Screenshots attached for UI changes
+```
+
+El título de la PR también sigue Conventional Commits. Si el repositorio integra con "squash and merge", ese título se convierte en el único commit que queda en `main`.
+
+## Práctica
+
+Recorre el ciclo de un cambio: commit, push y PR.
+
+<Terminal
+  steps={[
+    { cmd: "git switch -c feat/notes-search", out: "Switched to a new branch 'feat/notes-search'" },
+    { cmd: "git commit -m \"feat(notes): add search\"", out: "[feat/notes-search 5d1e7aa] feat(notes): add search\n 3 files changed, 48 insertions(+), 2 deletions(-)" },
+    { cmd: "git push -u origin feat/notes-search", out: "branch 'feat/notes-search' set up to track 'origin/feat/notes-search'." },
+    { cmd: "gh pr create --title \"feat(notes): add search\" --body-file pr.md", out: "Creating pull request for feat/notes-search into main in ana/notes\n\nhttps://github.com/ana/notes/pull/12" },
+  ]}
+/>
+
+Este validador aplica la regla del header. Agrega tus propios mensajes al arreglo y ejecútalo.
+
+<Playground
+  lang="ts"
+  code={`const HEADER = /^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)([(][a-z0-9-]+[)])?(!)?: .+$/;
+
+function isConventional(header: string): boolean {
+  return HEADER.test(header);
+}
+
+const headers: string[] = [
+  "feat(notes): add search",
+  "fix: handle empty title",
+  "feat(storage)!: migrate notes table",
+  "Added search",
+  "feat(notes) add search",
+];
+
+for (const header of headers) {
+  console.log((isConventional(header) ? "OK   " : "FAIL ") + header);
+}`}
+  expected={`OK   feat(notes): add search
+OK   fix: handle empty title
+OK   feat(storage)!: migrate notes table
+FAIL Added search
+FAIL feat(notes) add search`}
+/>
+
+Marca cada punto de la plantilla de PR cuando lo apliques en tu repositorio.
+
+<Checklist
+  id="06-calidad-ci/02-conventional-commits-y-prs-template"
+  items={[
+    "Creé .github/pull_request_template.md con las secciones What, Why y How to test",
+    "El título de la PR sigue Conventional Commits",
+    "La PR cambia menos de 400 líneas",
+    "Lint, tipos y pruebas pasan antes de pedir revisión",
+    "Adjunté capturas si la PR cambia la interfaz",
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Analizar un header"
+  solution={
+    <Playground
+      lang="ts"
+      code={`type Commit = {
+  type: string;
+  scope: string | null;
+  breaking: boolean;
+  description: string;
+};
+
+const HEADER = /^([a-z]+)(?:[(]([a-z0-9-]+)[)])?(!)?: (.+)$/;
+
+function parseCommit(header: string): Commit | null {
+  const match = HEADER.exec(header);
+  if (match === null) return null;
+  return {
+    type: match[1],
+    scope: match[2] ?? null,
+    breaking: match[3] === "!",
+    description: match[4],
+  };
+}
+
+console.log(JSON.stringify(parseCommit("feat(notes)!: remove legacy sync")));
+console.log(JSON.stringify(parseCommit("fix: handle empty title")));
+console.log(JSON.stringify(parseCommit("Added search")));`}
+      expected={`{"type":"feat","scope":"notes","breaking":true,"description":"remove legacy sync"}
+{"type":"fix","scope":null,"breaking":false,"description":"handle empty title"}
+null`}
+    />
+  }
+>
+  Escribe una función `parseCommit(header)` que devuelva un objeto con `type`, `scope` (o `null` si no hay), `breaking` (verdadero si hay `!`) y `description`. Si el header no cumple el formato, debe devolver `null`. Pruébala con `"feat(notes)!: remove legacy sync"`, `"fix: handle empty title"` y `"Added search"`.
+</Challenge>
+
+## Errores comunes
+
+**Mensajes que describen el proceso, no el cambio.** Aparecen como `fix: stuff`, `wip` o `feat: changes from review`. Ocurren al hacer commit por costumbre al final del día. Se detectan leyendo `git log --oneline`: si no puedes saber qué hace cada commit sin abrirlo, los mensajes no cumplen su función.
+
+**Usar `feat` para todo.** Una refactorización o una actualización de documentación etiquetada como `feat` hace que la herramienta de versionado suba la versión menor sin motivo. Pasa porque `feat` parece "trabajo importante". Se detecta preguntando: ¿el usuario final ve algo nuevo? Si no, no es `feat`.
+
+**PRs gigantes.** Una PR con cambios de formato, una migración y una funcionalidad nueva en 1500 líneas. Ocurre por no separar el trabajo en ramas pequeñas. Se detecta porque el resumen de GitHub muestra decenas de archivos y la revisión tarda días.
+
+<Flashcards
+  cards={[
+    { front: "¿Cuál es la estructura del header en Conventional Commits?", back: "type(scope): description, con scope opcional y ! opcional antes de los dos puntos." },
+    { front: "¿Cómo se marca un cambio incompatible en Conventional Commits?", back: "Con ! antes de los dos puntos o con un footer BREAKING CHANGE:." },
+    { front: "¿Qué versión semántica sugiere un commit feat?", back: "Una versión menor, por ejemplo de 1.4.2 a 1.5.0." },
+    { front: "¿Para qué sirve .github/pull_request_template.md?", back: "GitHub lo usa como texto inicial de cada PR nueva, para que todas tengan la misma estructura." },
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Cuál de estos headers cumple Conventional Commits?",
+      options: [
+        { text: "Added search to notes", correct: false, feedback: "Falta el tipo y la descripción no está en imperativo." },
+        { text: "feat(notes): add search", correct: true, feedback: "Correcto: tipo, scope opcional, dos puntos y descripción." },
+        { text: "feat(notes) add search", correct: false, feedback: "Faltan los dos puntos después del scope." },
+      ],
+    },
+    {
+      prompt: "Cambiaste el nombre de una función interna sin alterar el comportamiento. ¿Qué tipo usas?",
+      options: [
+        { text: "feat", correct: false, feedback: "No hay funcionalidad nueva para el usuario." },
+        { text: "fix", correct: false, feedback: "No se corrigió ningún bug." },
+        { text: "refactor", correct: true, feedback: "Correcto: cambia la estructura sin cambiar el comportamiento." },
+      ],
+    },
+    {
+      prompt: "¿Qué hace una PR fácil de revisar?",
+      options: [
+        { text: "Que sea pequeña, tenga descripción y pase lint, tipos y pruebas", correct: true, feedback: "Correcto: la persona que revisa puede concentrarse en la lógica." },
+        { text: "Que agrupe varias funcionalidades para revisar una sola vez", correct: false, feedback: "Las PR grandes reciben revisiones superficiales." },
+        { text: "Que no tenga descripción para no repetir el código", correct: false, feedback: "La descripción explica el porqué, que el código no dice." },
+      ],
+    },
+  ]}
+/>

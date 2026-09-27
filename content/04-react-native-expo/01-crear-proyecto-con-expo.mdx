@@ -1,0 +1,195 @@
+---
+id: "04-react-native-expo/01-crear-proyecto-con-expo"
+title: "Crear un proyecto con Expo"
+stage: 4
+module: "Cómo funciona React Native"
+order: 1
+minutes: 15
+prereqs: ["04-react-native-expo/00-como-funciona-react-native"]
+summary: "Crea tu primer proyecto con create-expo-app, arráncalo con Metro y ábrelo en tu teléfono."
+---
+
+## Objetivo
+
+Al terminar esta lección podrás crear un proyecto nuevo con Expo, arrancar el servidor de desarrollo y ver tus cambios en un teléfono o un emulador.
+
+**Prerrequisitos:** `04-react-native-expo/00-como-funciona-react-native`
+
+## Concepto
+
+React Native por sí solo te da el motor: componentes core, renderizado nativo y Hermes. Para construir una app real necesitas mucho más: herramientas para compilar, acceso a la cámara o a las notificaciones, navegación, un servidor de desarrollo. **Expo** es el framework que reúne todo eso. La documentación oficial de React Native recomienda empezar cualquier proyecto nuevo con un framework, y Expo es el recomendado.
+
+Documentación oficial: https://docs.expo.dev/get-started/create-a-project/
+
+### Una analogía: la cocina equipada
+
+Puedes montar una cocina comprando cada pieza por separado: horno, extractor, cañerías, instalación eléctrica. O puedes alquilar una cocina profesional que ya trae todo conectado y probado. React Native es el horno. Expo es la cocina equipada: sigues cocinando tú, pero no pierdes una semana instalando cañerías.
+
+### Crear el proyecto
+
+Necesitas Node.js LTS (la versión 22 o superior) instalado en tu computadora. Luego ejecutas:
+
+```bash
+npx create-expo-app@latest my-notes
+```
+
+- `npx` descarga y ejecuta la herramienta sin instalarla de forma global.
+- `@latest` garantiza que usas la versión más reciente de la plantilla y, por lo tanto, el SDK de Expo más reciente.
+- `my-notes` es el nombre de la carpeta que se crea.
+
+La herramienta descarga la plantilla por defecto e instala las dependencias con npm.
+
+### La estructura del proyecto
+
+La plantilla por defecto cambia un poco entre versiones del SDK, pero la idea central se mantiene. Las piezas que importan ahora son estas:
+
+```text
+my-notes/
+├── app.json          # app name, icon, splash screen, native config
+├── package.json      # dependencies and scripts
+├── tsconfig.json     # TypeScript is enabled by default
+├── assets/           # images and fonts
+└── src/
+    ├── app/          # screens: every file here is a route
+    │   ├── _layout.tsx
+    │   └── index.tsx
+    └── components/   # reusable components
+```
+
+- `app.json` describe la app: nombre, ícono, pantalla de carga, identificadores de iOS y Android.
+- `src/app/` contiene las pantallas. Expo Router convierte cada archivo en una ruta; lo estudiarás en el módulo de navegación. Proyectos creados con SDK anteriores al 55 tienen esta carpeta en `app/`, en la raíz; ambas ubicaciones funcionan.
+- `src/app/index.tsx` es la primera pantalla que ves al abrir la app.
+
+Por ahora basta con saber que puedes editar `src/app/index.tsx` y ver el resultado.
+
+### Arrancar el servidor de desarrollo
+
+```bash
+cd my-notes
+npx expo start
+```
+
+Este comando arranca **Metro**, el bundler de React Native. Metro cumple el mismo papel que Vite en la etapa de React: toma todos tus archivos, los transforma y los sirve como un bundle. En la terminal aparece un código QR y un menú de atajos:
+
+- `a` abre la app en un emulador de Android.
+- `i` abre la app en el simulador de iOS (solo en macOS con Xcode).
+- `w` abre la app en el navegador.
+- `r` recarga la app.
+- `j` abre las herramientas de depuración.
+
+### Abrir la app en tu teléfono
+
+La forma más rápida de ver la app en un dispositivo real es **Expo Go**, una app que ya trae compilado el SDK de Expo y puede cargar tu bundle de JavaScript. Escaneas el código QR, Expo Go descarga el bundle desde Metro y tu app aparece.
+
+Hay tres condiciones:
+
+1. El teléfono y la computadora deben estar en la misma red Wi-Fi. Si tu red bloquea la conexión, usa `npx expo start --tunnel`.
+2. Expo Go soporta un solo SDK por versión. Si tu proyecto usa un SDK más nuevo que el Expo Go de la tienda, la app muestra un error de incompatibilidad.
+3. En iOS, para los SDK más recientes Expo Go puede no estar aún en la App Store. La página https://docs.expo.dev/get-started/expo-go/ explica cómo instalar la versión correcta; si no puedes hacerlo, usa un emulador de Android o la vista web mientras tanto.
+
+### Fast Refresh
+
+Con la app abierta, edita el texto de `src/app/index.tsx` y guarda. El cambio aparece en el teléfono en menos de un segundo y el state de la pantalla se conserva. Esto se llama **Fast Refresh**. Si cometes un error de sintaxis, aparece una pantalla roja con el archivo y la línea; al corregirlo, desaparece sola.
+
+## Práctica
+
+Recorre los pasos para crear y arrancar tu primer proyecto. Luego ejecútalos en tu propia terminal.
+
+<Terminal
+  steps={[
+    { cmd: "npx create-expo-app@latest my-notes", out: "Creating an Expo project using the default template.\n\n✔ Downloaded and extracted project files.\n> npm install\n✅ Your project is ready!\n\nTo run your project, navigate to the directory and run one of the following npm commands.\n\n- cd my-notes\n- npm run android\n- npm run ios\n- npm run web" },
+    { cmd: "cd my-notes && npx expo start", out: "Starting Metro Bundler\n\n› Metro waiting on exp://192.168.1.10:8081\n› Scan the QR code above with Expo Go (Android) or the Camera app (iOS)\n\n› Press a │ open Android\n› Press i │ open iOS simulator\n› Press w │ open web\n\n› Press r │ reload app\n› Press j │ open debugger" },
+    { cmd: "npx expo start --tunnel", out: "› Tunnel connected.\n› Metro waiting on exp://abc123-anonymous-8081.exp.direct" }
+  ]}
+/>
+
+Antes de seguir, confirma que tu entorno está listo:
+
+<Checklist
+  id="04-react-native-expo/01-crear-proyecto-con-expo-setup"
+  items={[
+    "Tengo Node.js 22 o superior instalado (node --version)",
+    "Creé el proyecto con npx create-expo-app@latest",
+    "Instalé Expo Go en mi teléfono, en la versión que soporta el SDK de mi proyecto",
+    "El teléfono y la computadora están en la misma red Wi-Fi, o uso --tunnel",
+    "Vi la app en el teléfono, en un emulador o en la vista web",
+    "Edité src/app/index.tsx y vi el cambio con Fast Refresh"
+  ]}
+/>
+
+## Ejercicio
+
+<Challenge
+  title="Tu primera pantalla"
+  solution={
+    <Snack
+      platform="ios"
+      sdkVersion="55.0.0"
+      code={`import { View, Text, StyleSheet } from "react-native";
+
+// Content for src/app/index.tsx
+export default function App() {
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Mis notas</Text>
+      <Text style={styles.subtitle}>Creado por Ana</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", alignItems: "center", gap: 8 },
+  title: { fontSize: 28, fontWeight: "700" },
+  subtitle: { fontSize: 16, color: "#555" },
+});`}
+    />
+  }
+>
+  Reemplaza todo el contenido de `src/app/index.tsx` por una pantalla que muestre, centrados, el título "Mis notas" y debajo el texto "Creado por" seguido de tu nombre. Guarda y confirma que Fast Refresh actualiza el teléfono sin reiniciar la app.
+</Challenge>
+
+## Errores comunes
+
+**El teléfono no conecta con Metro.** Expo Go queda cargando o muestra "Could not connect to development server". Ocurre porque el teléfono y la computadora están en redes distintas, o porque una VPN o un firewall bloquean el puerto 8081. Se detecta comparando la IP del mensaje `exp://` con la red del teléfono. Solución: misma red Wi-Fi o `npx expo start --tunnel`.
+
+**Expo Go dice que el proyecto es incompatible.** Aparece un mensaje que menciona la versión del SDK. Ocurre porque Expo Go soporta un solo SDK y tu proyecto usa otro. Se detecta comparando el campo `expo` de `package.json` con la versión que indica Expo Go. Solución: instalar la versión de Expo Go que corresponde, usar un emulador o, más adelante, un development build.
+
+**Instalar paquetes globales antiguos.** Guías viejas piden `npm install -g expo-cli`. Esa herramienta está retirada; la CLI actual viene dentro del proyecto y se ejecuta con `npx expo`. Se detecta porque el comando `expo` global muestra advertencias de deprecación.
+
+<Flashcards
+  cards={[
+    { front: "¿Qué comando crea un proyecto nuevo de Expo con la plantilla actual?", back: "npx create-expo-app@latest nombre-del-proyecto" },
+    { front: "¿Qué hace npx expo start?", back: "Arranca Metro, el bundler que sirve tu código a la app." },
+    { front: "¿Para qué sirve la opción --tunnel de npx expo start?", back: "Para conectar el teléfono aunque no esté en la misma red que la computadora." },
+    { front: "¿Qué es Fast Refresh en React Native?", back: "La actualización instantánea de la app al guardar un archivo, conservando el state." }
+  ]}
+/>
+
+<Quiz
+  questions={[
+    {
+      prompt: "¿Qué papel cumple Metro en un proyecto de Expo?",
+      options: [
+        { text: "Empaqueta y sirve tu código JavaScript a la app", correct: true, feedback: "Correcto: Metro es el bundler, como Vite en la web." },
+        { text: "Compila la app para publicarla en las tiendas", correct: false, feedback: "Eso se hace con builds nativos, no con Metro." },
+        { text: "Es el motor que ejecuta JavaScript", correct: false, feedback: "El motor es Hermes; Metro solo prepara el bundle." }
+      ]
+    },
+    {
+      prompt: "En la plantilla actual de Expo, ¿dónde está la primera pantalla de la app?",
+      options: [
+        { text: "En App.js en la raíz", correct: false, feedback: "Esa era la estructura de plantillas antiguas sin Expo Router." },
+        { text: "En src/app/index.tsx", correct: true, feedback: "Correcto: Expo Router usa index.tsx como pantalla inicial." },
+        { text: "En app.json", correct: false, feedback: "app.json guarda configuración, no pantallas." }
+      ]
+    },
+    {
+      prompt: "Expo Go muestra un error de versión del SDK. ¿Cuál es la causa más probable?",
+      options: [
+        { text: "Falta instalar TypeScript", correct: false, feedback: "TypeScript no afecta la compatibilidad con Expo Go." },
+        { text: "El proyecto usa un SDK distinto al que soporta esa versión de Expo Go", correct: true, feedback: "Correcto: cada versión de Expo Go soporta un solo SDK." },
+        { text: "El teléfono no tiene conexión a internet", correct: false, feedback: "Sin conexión el error sería de red, no de versión." }
+      ]
+    }
+  ]}
+/>
