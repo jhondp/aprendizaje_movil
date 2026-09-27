@@ -7,8 +7,8 @@ Thank you for contributing to the Saber learning platform. This guide covers wri
 ### File naming and location
 
 - Save lesson files in `content/<stage-slug>/` where `<stage-slug>` matches the stage directory (e.g., `content/01-javascript/` for stage 1).
-- File name format: `NN-slug.mdx` where `NN` is a two-digit order number (01, 02, ...) and `slug` is lowercase ASCII with hyphens.
-- The `order` field in frontmatter must match the `NN` prefix and be unique within the stage.
+- File name format: `NN-slug.mdx` where `NN` is a two-digit order number starting at `00` (00, 01, 02, ...) and `slug` is lowercase ASCII with hyphens.
+- The `order` field in frontmatter must be unique within the stage; matching the `NN` prefix is a naming convention, not something the validator enforces.
 
 ### Frontmatter schema
 
@@ -32,9 +32,9 @@ hidden: false
 - **`title`**: Sentence case (e.g., "Funciones", not "FUNCIONES").
 - **`stage`**: Integer 0–11.
 - **`module`**: Name of the learning unit within the stage (e.g., "Fundamentos", "Tipos").
-- **`order`**: Unique integer within the stage; must match the file's `NN` prefix.
+- **`order`**: Unique integer within the stage; matching the file's `NN` prefix is a convention, not enforced.
 - **`minutes`**: Estimated reading time in minutes.
-- **`prereqs`**: Array of required lesson ids, or `["ninguno"]` if none.
+- **`prereqs`**: Array of required lesson ids, or `[]` if none (never `["ninguno"]`; the word "ninguno" is only used in prose, on the `**Prerrequisitos:**` line).
 - **`summary`**: One sentence describing what the lesson teaches (not used in lesson body, shown in course index).
 - **`hidden`** (optional): Boolean; if `true`, lesson is hidden from the course menu (defaults to `false`).
 
@@ -73,9 +73,12 @@ Nothing appears after the quiz.
 
 ### Component limits per stage
 
-- Stage 0: Terminal/Checklist-only lessons permitted.
-- Stages 6, 9, 10: Terminal/Checklist-only lessons permitted.
-- Stages 1–5, 7–8, 11: At least one of Playground/Sandpack/Snack required (depending on stage).
+The validator enforces:
+
+- Every lesson's `## Práctica` needs at least one of `Playground`, `Sandpack`, `Snack`, `Terminal` or `Checklist`.
+- No `Sandpack` or `Snack` in stages 0–2.
+- No `Snack` in stage 3.
+- `Terminal` and `Checklist` are allowed in any stage.
 
 ### Interactive components reference
 
@@ -288,8 +291,13 @@ This checks:
 - 3–5 flashcard cards.
 - Internal lesson links resolve.
 - Component stage limits (no `Sandpack`/`Snack` in stages 0–2; no `Snack` in stage 3).
+- Every `Snack` declares `sdkVersion`, and every `Snack` in the content directory shares the same one.
+- Every `Playground` `expected` prop, when present, is a non-empty string.
+- Every `Snack`'s generated embed URL is at most 7500 characters.
 
 The validator must pass (`OK` with zero errors) before committing.
+
+`pnpm validate:content` checks structure only; it does not run any code. `pnpm test` covers that: it executes every `Playground` `expected` against the real sandbox harness (`scripts/playground-expected.test.ts`) and renders every non-hidden lesson through the real MDX pipeline, failing if a lesson triggers a `console.error` (`src/ui/pages/Lesson.content.test.tsx`).
 
 ## Commits
 
@@ -303,14 +311,18 @@ The validator must pass (`OK` with zero errors) before committing.
 
 ## Review process
 
-Lessons are reviewed for pedagogical soundness, code correctness, and platform alignment. Reviews use four lenses:
+Lessons go through four review lenses:
 
-1. **Risk:** Security, data correctness, architectural soundness. Are code examples safe? Do they follow React Native best practices?
-2. **Reliability:** Learning outcomes, tests, edge cases. Does the lesson teach what it claims? Are examples runnable without errors?
-3. **Resilience:** Error handling, accessibility, fallbacks. Are error cases explained? Can learners recover from mistakes?
-4. **Readability:** Clarity, intention, ease of understanding. Is the explanation clear? Is the analogy helpful? Is code readable?
+1. **Technical:** Code correctness against the real APIs and tools taught (Expo, EAS, Supabase, React Native), and consistency with the platform's own components (e.g., `Snack`, `Playground`).
+2. **Pedagogy:** Whether the lesson actually teaches what it claims, in the right order, with a clear analogy and a practice section that exercises the concept.
+3. **Security:** Safe defaults in every example (no secrets in code, correct RLS/auth patterns, no unsafe input handling), matching the MASVS-aligned content in stage 9.
+4. **Style:** Language contract compliance (neutral professional Spanish in prose, English in code/identifiers), formatting, and consistency of terminology across lessons.
 
-Reviewers return findings in a structured format noting the severity (blocker, warning, info), the lesson section, and the suggested change.
+Each lens reports findings as JSON in `docs/superpowers/reviews/` (e.g., `docs/superpowers/reviews/<date>-technical.json`), one entry per finding with `file`, `line`, `severity`, `category`, `summary` and `fix`. Severity is one of:
+
+- **blocker:** Must be fixed before the change can land.
+- **major:** Should be fixed; a significant but non-blocking issue.
+- **minor:** Worth fixing, low impact.
 
 ## Before you commit
 

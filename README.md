@@ -70,9 +70,9 @@ The codebase follows a layered architecture:
 
 Lessons are authored as `.mdx` files in `content/<stage-slug>/`. The build process:
 
-1. Each lesson file is loaded via a Vite virtual module (`virtual:lesson-index`).
-2. The MDX compiler extracts frontmatter (id, title, stage, order, etc.) and renders lesson content.
-3. An in-browser component tree loads lessons on demand via `Course.loadLesson()`.
+1. A Vite virtual module (`virtual:lesson-index`, built by `scripts/vite/lessonIndexPlugin.ts`) provides every lesson's frontmatter (id, title, stage, order, etc.) without importing the MDX bodies.
+2. `src/infrastructure/content/lessonModules.ts` lazily globs `/content/**/*.mdx`, so each lesson's compiled MDX component loads in its own chunk.
+3. `loadCourse()` combines both into a `Course`; each `Lesson` exposes `load()`, which resolves to that lesson's MDX component on demand.
 4. Progress (completed sections, quiz scores) is stored in `localStorage` under the `saber:` key prefix.
 
 ### Interactive components
@@ -82,8 +82,8 @@ Nine reusable components for lesson content:
 | Component | Purpose | Where |
 | --- | --- | --- |
 | **Playground** | Run JavaScript or TypeScript code in a sandboxed environment; shows console output. | Stages 0–11 (preferred 0–2) |
-| **Sandpack** | Live React preview with hot reload. Needs network. | Stages 0–11 (preferred stage 3) |
-| **Snack** | Real React Native preview via Expo. Needs network and mobile device. | Stages 4–11 |
+| **Sandpack** | Live React preview with hot reload. Needs network. | Stages 3–11 (preferred stage 3) |
+| **Snack** | Real React Native preview via Expo, embedded and previewed in the browser. Needs network. | Stages 4–11 |
 | **Quiz** | Multiple-choice assessment; exactly 3 questions per lesson. | All stages |
 | **Challenge** | Exercise with a hidden solution snippet. | All stages |
 | **Flashcards** | Review cards (3–5) stored in a global review deck. | All stages |
