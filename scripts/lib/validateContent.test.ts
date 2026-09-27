@@ -392,6 +392,33 @@ describe('validateLesson', () => {
     expect(snackSdkVersions).toEqual(['55.0.0']);
   });
 
+  it('rejects a Snack whose generated embed URL exceeds the length limit', () => {
+    const hugeCode = 'x'.repeat(8000);
+    const src = good
+      .replace('id: "01-javascript/00-variables"', 'id: "04-react-native-expo/00-variables"')
+      .replace('stage: 1', 'stage: 4')
+      .replace(
+        '<Playground lang="js" code={`console.log(1)`} />',
+        `<Snack sdkVersion="55.0.0" platform="ios" code={\`${hugeCode}\`} />`,
+      );
+    const { errors } = validateLesson(src, '04-react-native-expo/00-variables.mdx', stages);
+    expect(
+      errors.some((e) => /Snack embed URL is \d+ characters, exceeding the 7500 limit/.test(e)),
+    ).toBe(true);
+  });
+
+  it('accepts a Snack whose generated embed URL is within the length limit', () => {
+    const src = good
+      .replace('id: "01-javascript/00-variables"', 'id: "04-react-native-expo/00-variables"')
+      .replace('stage: 1', 'stage: 4')
+      .replace(
+        '<Playground lang="js" code={`console.log(1)`} />',
+        '<Snack sdkVersion="55.0.0" platform="ios" code={`export default function App() { return null; }`} />',
+      );
+    const { errors } = validateLesson(src, '04-react-native-expo/00-variables.mdx', stages);
+    expect(errors.some((e) => e.includes('Snack embed URL'))).toBe(false);
+  });
+
   it('rejects an empty Playground "expected" prop', () => {
     const src = good.replace(
       '<Playground lang="js" code={`console.log(1)`} />',

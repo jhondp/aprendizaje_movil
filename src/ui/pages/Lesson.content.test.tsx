@@ -24,6 +24,17 @@ const INTERACTIVE_SELECTORS = [
 ];
 
 describe('every non-hidden lesson renders through the real MDX pipeline', () => {
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
+  });
+
   it('has at least one lesson per stage', () => {
     for (const stage of course.stages) {
       expect(stage.lessons.length, `stage ${stage.slug}`).toBeGreaterThan(0);

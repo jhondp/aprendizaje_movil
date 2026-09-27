@@ -3,7 +3,7 @@ import { transpile, type PlaygroundLang } from './transpile';
 import { buildSrcdoc, type PlaygroundMessage } from './buildSrcdoc';
 import styles from './Playground.module.css';
 
-const TIMEOUT_MS = 5000;
+export const TIMEOUT_MS = 5000;
 const LEVELS: readonly PlaygroundMessage['level'][] = ['log', 'info', 'warn', 'error', 'done'];
 
 interface OutputLine {

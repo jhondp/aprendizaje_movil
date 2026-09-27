@@ -43,6 +43,9 @@ const SECTION_MARKERS: { name: string; regex: RegExp }[] = [
   { name: '<Quiz', regex: /<Quiz\b/ },
 ];
 const PRACTICE_COMPONENTS = ['Playground', 'Sandpack', 'Snack', 'Terminal', 'Checklist'];
+/** Snack embeds it as an iframe `src`; a URL far past this length has historically hit proxy and
+ *  browser URL-length limits. The largest current lesson is 6838 characters (04-react-native-expo/11). */
+const MAX_SNACK_URL_LENGTH = 7500;
 /** Components forbidden per stage id (spec section 4); the label is used in the error message. */
 const STAGE_LIMITS: { component: string; maxStage: number; label: string }[] = [
   { component: 'Sandpack', maxStage: 2, label: 'stages 0 to 2' },
@@ -291,6 +294,36 @@ function evalLiteral(raw: string): unknown {
 }
 
 /**
+ * Mirrors `buildSnackUrl` in src/ui/organisms/interactive/Snack.tsx (kept in sync manually):
+ * importing that module here would pull in its `.css` module import, which `tsx` (the plain
+ * Node runtime `pnpm validate:content` uses, with no bundler) cannot resolve.
+ */
+function snackEmbedUrlLength(props: {
+  code: string;
+  dependencies?: Record<string, string>;
+  platform: string;
+  sdkVersion?: string;
+}): number {
+  const files = { 'App.tsx': { type: 'CODE', contents: props.code } };
+  const params = new URLSearchParams({
+    platform: props.platform,
+    preview: 'true',
+    theme: 'light',
+    files: JSON.stringify(files),
+  });
+  if (props.dependencies && Object.keys(props.dependencies).length > 0) {
+    params.set(
+      'dependencies',
+      Object.entries(props.dependencies)
+        .map(([name, version]) => `${name}@${version}`)
+        .join(','),
+    );
+  }
+  if (props.sdkVersion) params.set('sdkVersion', props.sdkVersion);
+  return `https://snack.expo.dev/embedded?${params.toString()}`.length;
+}
+
+/**
  * Resolves a prop value extracted by `extractProp` to its real string: a `` `...` `` template
  * literal is evaluated, a `"..."` string is already unwrapped. Returns null when the value is not
  * a string (a parse failure counts as "not a string" here, rather than throwing).
@@ -533,7 +566,8 @@ export function validateLesson(
     }
   }
 
-  // Every Snack must declare an sdkVersion; validateContent checks they all agree across content.
+  // Every Snack must declare an sdkVersion (validateContent checks they all agree across content)
+  // and its generated embed URL must stay within MAX_SNACK_URL_LENGTH.
   const snackSdkVersions: string[] = [];
   let snackFrom = 0;
   for (;;) {
@@ -543,6 +577,35 @@ export function validateLesson(
     const sdkVersion = extractProp(block.text, 'Snack', 'sdkVersion');
     if (sdkVersion === null) err('Snack is missing "sdkVersion"');
     else snackSdkVersions.push(sdkVersion);
+
+    const codeRaw = extractProp(block.text, 'Snack', 'code');
+    const code = codeRaw !== null ? evalPropStringLiteral(codeRaw) : null;
+    if (code !== null) {
+      const platform = extractProp(block.text, 'Snack', 'platform') ?? 'ios';
+      const dependenciesRaw = extractProp(block.text, 'Snack', 'dependencies');
+      let dependencies: Record<string, string> | undefined;
+      if (dependenciesRaw !== null) {
+        try {
+          const parsed = evalLiteral(dependenciesRaw);
+          if (parsed !== null && typeof parsed === 'object') {
+            dependencies = parsed as Record<string, string>;
+          }
+        } catch {
+          // A malformed dependencies literal is not this check's concern; skip it.
+        }
+      }
+      const urlLength = snackEmbedUrlLength({
+        code,
+        dependencies,
+        platform,
+        sdkVersion: sdkVersion ?? undefined,
+      });
+      if (urlLength > MAX_SNACK_URL_LENGTH) {
+        err(
+          `Snack embed URL is ${urlLength} characters, exceeding the ${MAX_SNACK_URL_LENGTH} limit`,
+        );
+      }
+    }
   }
 
   // Every Playground "expected" prop, when present, must be a non-empty string.
