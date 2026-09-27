@@ -57,12 +57,12 @@ maestro test flows/
 npx expo export --platform all
 grep -rlE "sb_secret_|PRIVATE KEY" dist
 # Every JWT in the bundle must be the anon key: decode its payload and check the role claim
-grep -rhoE "eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+" dist | sort -u | cut -d. -f2 \
-  | node -e 'require("fs").readFileSync(0, "utf8").trim().split("\n").forEach((p) => console.log(JSON.parse(Buffer.from(p, "base64url")).role))'
+grep -arhoE "eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+" dist | sort -u | cut -d. -f2 \
+  | node -e 'const payloads = require("fs").readFileSync(0, "utf8").trim().split("\n").filter(Boolean); if (payloads.length === 0) { console.log("no JWTs found"); } else { payloads.forEach((p) => console.log(JSON.parse(Buffer.from(p, "base64url")).role)); }'
 pnpm audit --audit-level high
 ```
 
-Buscar el texto `service_role` no sirve: la clave de servicio antigua es un JWT y su claim `role` está codificado en base64url, así que esa palabra nunca aparece literal en el bundle; las claves secretas nuevas de Supabase empiezan con `sb_secret_`. Por eso el control busca ese prefijo y claves privadas, y decodifica cada JWT que encuentre: la única salida aceptable es `anon`, como viste en la lección de configuración de Supabase de la etapa 8.
+Buscar el texto `service_role` no sirve: la clave de servicio antigua es un JWT y su claim `role` está codificado en base64url, así que esa palabra nunca aparece literal en el bundle; las claves secretas nuevas de Supabase empiezan con `sb_secret_`. Por eso el control busca ese prefijo y claves privadas, y decodifica cada JWT que encuentre: la única salida aceptable es sin salida o solo `anon` (los proyectos nuevos de Supabase usan claves publicables, no JWT, así que no encontrar ninguno también es correcto), como viste en la lección de configuración de Supabase de la etapa 8.
 
 Otros criterios no se comprueban con un comando, sino con una captura o un enlace: la política RLS de cada tabla en el panel de Supabase, la build en TestFlight, el evento de prueba en Sentry sin datos personales. Para la parte de seguridad, reutiliza la tabla de autoauditoría MASVS L1 que construiste en la etapa 9; el catálogo oficial de controles está en https://mas.owasp.org/checklists/. Para el release, la referencia es la documentación de EAS en https://docs.expo.dev/.
 
@@ -88,7 +88,7 @@ Esta es una ejecución de los comandos de verificación sobre el registro de há
     { cmd: "npx jest", out: "Test Suites: 6 passed, 6 total\nTests:       14 passed, 14 total\nSnapshots:   0 total\nTime:        3.1 s" },
     { cmd: "maestro test flows/complete-habit.yaml", out: "Launch app \"com.example.habittracker\"... COMPLETED\nTap on \"Read 10 pages\"... COMPLETED\nAssert that \"Streak: 1\" is visible... COMPLETED" },
     { cmd: "grep -rlE \"sb_secret_|PRIVATE KEY\" dist; echo \"exit $?\"", out: "exit 1" },
-    { cmd: "grep -rhoE \"eyJ[A-Za-z0-9_-]+\\.eyJ[A-Za-z0-9_-]+\" dist | sort -u | cut -d. -f2 | node -e '<same role script as above>'", out: "anon" },
+    { cmd: "grep -arhoE \"eyJ[A-Za-z0-9_-]+\\.eyJ[A-Za-z0-9_-]+\" dist | sort -u | cut -d. -f2 | node -e '<same role script as above>'", out: "anon" },
     { cmd: "pnpm audit --audit-level high", out: "No known vulnerabilities found" }
   ]}
 />

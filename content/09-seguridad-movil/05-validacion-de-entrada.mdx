@@ -116,7 +116,7 @@ import { z } from "zod";
 
 const noteSchema = z.object({
   title: z.string().trim().min(1, "Title is required").max(80, "Max 80 characters"),
-  email: z.email("Invalid email"),
+  email: z.string().trim().pipe(z.email("Invalid email")),
   tag: z.enum(["work", "personal", "ideas"]),
 });
 

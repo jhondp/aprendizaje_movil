@@ -86,7 +86,7 @@ Una actualización OTA es código que se ejecuta en todos los teléfonos con esa
 
 - **Cuentas.** Activa la verificación en dos pasos (2FA) en todas las cuentas de Expo de la organización y da a cada persona el rol mínimo que necesita.
 - **Tokens de robot.** CI publica con un token de un usuario robot, guardado como secret del repositorio (nunca en el código ni en `eas.json`), con permisos mínimos y rotado cuando alguien deja el equipo o hay sospecha de fuga.
-- **Origen.** Publica solo desde un commit revisado, idealmente desde CI; nunca desde un portátil con cambios sin confirmar.
+- **Origen.** Publica solo desde un commit revisado, idealmente desde CI; nunca desde una computadora portátil con cambios sin confirmar.
 - **Firma de actualizaciones.** EAS Update admite code signing: generas un par de claves (`npx expo-updates codesigning:generate`), configuras el certificado en la app (`npx expo-updates codesigning:configure`) y publicas firmando con `eas update --private-key-path`. La app verifica la firma y rechaza actualizaciones que no firmaste tú. Requiere un plan Production o Enterprise de EAS (https://docs.expo.dev/eas-update/code-signing/); sin ella, tu garantía es la seguridad de tu cuenta y el TLS hacia los servidores de EAS.
 
 ### Rollback
