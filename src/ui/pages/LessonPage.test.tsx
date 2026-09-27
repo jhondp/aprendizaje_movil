@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderApp } from '@/test/renderApp';
 
@@ -63,12 +63,33 @@ describe('LessonPage', () => {
     ).toBeInTheDocument();
   });
 
-  it('saves a note for the lesson', async () => {
+  it('shows the typed note instantly but persists it once after a debounce', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const { repos } = renderApp('/etapa/00-intro/00-a');
+      await screen.findByText('Cuerpo de Qué es un programa');
+      await userEvent.click(screen.getByRole('button', { name: 'Añadir nota' }));
+      const textarea = screen.getByLabelText('Mi nota');
+      await userEvent.type(textarea, 'Recordar');
+
+      expect(textarea).toHaveValue('Recordar');
+      expect(repos.notes.get()['00-intro/00-a']?.text).toBeUndefined();
+
+      act(() => vi.advanceTimersByTime(400));
+
+      expect(repos.notes.get()['00-intro/00-a']?.text).toBe('Recordar');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('flushes a pending note immediately when leaving the lesson', async () => {
     const { repos } = renderApp('/etapa/00-intro/00-a');
     await screen.findByText('Cuerpo de Qué es un programa');
     await userEvent.click(screen.getByRole('button', { name: 'Añadir nota' }));
     await userEvent.type(screen.getByLabelText('Mi nota'), 'Recordar');
-    await waitFor(() => expect(repos.notes.get()['00-intro/00-a']?.text).toBe('Recordar'));
+    await userEvent.click(screen.getByRole('button', { name: 'Completar y seguir ›' }));
+    expect(repos.notes.get()['00-intro/00-a']?.text).toBe('Recordar');
   });
 
   it('shows a not-found state for unknown lessons', () => {

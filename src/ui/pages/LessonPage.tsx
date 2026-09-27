@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useCourse } from '@/application/CourseContext';
+import { useDebouncedNote } from '@/application/hooks/useDebouncedNote';
 import { useNotes } from '@/application/hooks/useNotes';
 import { useProgress } from '@/application/hooks/useProgress';
 import { findLesson, type LessonComponent } from '@/domain/course';
@@ -21,6 +22,12 @@ export function LessonPage() {
   const { notes, upsert } = useNotes();
   const lesson = findLesson(course, stageSlug, lessonSlug);
   const stage = lesson ? course.stages.find((s) => s.id === lesson.stage) : undefined;
+  const lessonId = lesson?.id ?? '';
+  const { text: noteText, onChange: onNoteChange } = useDebouncedNote(
+    lessonId,
+    notes[lessonId]?.text ?? '',
+    upsert,
+  );
 
   const [Body, setBody] = useState<LessonComponent | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -91,8 +98,8 @@ export function LessonPage() {
         lesson={lesson}
         stageTitle={stage.title}
         prev={prev}
-        note={notes[lesson.id]?.text ?? ''}
-        onNoteChange={(text) => upsert(lesson.id, text)}
+        note={noteText}
+        onNoteChange={onNoteChange}
         showNote={showNote}
         onToggleNote={() => setShowNote((s) => !s)}
         onComplete={complete}
