@@ -1,7 +1,9 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import matter from 'gray-matter';
 import type { StageMeta } from '@/domain/course';
+import { buildSnackUrl, type SnackPlatform } from '@/ui/organisms/interactive/snackUrl';
+import { walkMdx } from './walkMdx';
 
 export interface ValidationResult {
   ok: boolean;
@@ -294,36 +296,6 @@ function evalLiteral(raw: string): unknown {
 }
 
 /**
- * Mirrors `buildSnackUrl` in src/ui/organisms/interactive/Snack.tsx (kept in sync manually):
- * importing that module here would pull in its `.css` module import, which `tsx` (the plain
- * Node runtime `pnpm validate:content` uses, with no bundler) cannot resolve.
- */
-function snackEmbedUrlLength(props: {
-  code: string;
-  dependencies?: Record<string, string>;
-  platform: string;
-  sdkVersion?: string;
-}): number {
-  const files = { 'App.tsx': { type: 'CODE', contents: props.code } };
-  const params = new URLSearchParams({
-    platform: props.platform,
-    preview: 'true',
-    theme: 'light',
-    files: JSON.stringify(files),
-  });
-  if (props.dependencies && Object.keys(props.dependencies).length > 0) {
-    params.set(
-      'dependencies',
-      Object.entries(props.dependencies)
-        .map(([name, version]) => `${name}@${version}`)
-        .join(','),
-    );
-  }
-  if (props.sdkVersion) params.set('sdkVersion', props.sdkVersion);
-  return `https://snack.expo.dev/embedded?${params.toString()}`.length;
-}
-
-/**
  * Resolves a prop value extracted by `extractProp` to its real string: a `` `...` `` template
  * literal is evaluated, a `"..."` string is already unwrapped. Returns null when the value is not
  * a string (a parse failure counts as "not a string" here, rather than throwing).
@@ -594,12 +566,12 @@ export function validateLesson(
           // A malformed dependencies literal is not this check's concern; skip it.
         }
       }
-      const urlLength = snackEmbedUrlLength({
+      const urlLength = buildSnackUrl({
         code,
         dependencies,
-        platform,
+        platform: platform as SnackPlatform,
         sdkVersion: sdkVersion ?? undefined,
-      });
+      }).length;
       if (urlLength > MAX_SNACK_URL_LENGTH) {
         err(
           `Snack embed URL is ${urlLength} characters, exceeding the ${MAX_SNACK_URL_LENGTH} limit`,
@@ -639,16 +611,6 @@ export function validateLesson(
   };
 }
 
-function walk(dir: string): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir)) {
-    const full = path.join(dir, entry);
-    if (statSync(full).isDirectory()) out.push(...walk(full));
-    else if (entry.endsWith('.mdx')) out.push(full);
-  }
-  return out.sort();
-}
-
 export function validateContent(rootDir: string): ValidationResult {
   const stagesPath = path.join(rootDir, 'stages.json');
   let raw: string;
@@ -666,7 +628,7 @@ export function validateContent(rootDir: string): ValidationResult {
   }
 
   const errors: string[] = [];
-  const files = walk(rootDir);
+  const files = walkMdx(rootDir);
   const seen = new Map<string, string>();
   const results = files.map((file) => {
     const relPath = path.relative(rootDir, file).split(path.sep).join('/');

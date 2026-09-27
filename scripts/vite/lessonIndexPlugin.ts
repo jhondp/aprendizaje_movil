@@ -1,20 +1,11 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import matter from 'gray-matter';
 import type { Plugin, ViteDevServer } from 'vite';
+import { walkMdx } from '../lib/walkMdx';
 
 const VIRTUAL_ID = 'virtual:lesson-index';
 const RESOLVED_ID = `\0${VIRTUAL_ID}`;
-
-function walk(dir: string): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir)) {
-    const full = path.join(dir, entry);
-    if (statSync(full).isDirectory()) out.push(...walk(full));
-    else if (entry.endsWith('.mdx')) out.push(full);
-  }
-  return out.sort();
-}
 
 function readFrontmatter(file: string): Record<string, unknown> {
   return matter(readFileSync(file, 'utf8')).data as Record<string, unknown>;
@@ -56,7 +47,7 @@ export function lessonIndexPlugin(contentDirName = 'content'): Plugin {
       const index: Record<string, Record<string, unknown>> = {};
       // In dev the server already watches the project; configureServer and handleHotUpdate decide
       // when the index must be rebuilt. Only `vite build --watch` needs explicit watch files.
-      for (const file of walk(contentDir)) {
+      for (const file of walkMdx(contentDir)) {
         if (isBuild) this.addWatchFile(file);
         const data = readFrontmatter(file);
         frontmatterCache.set(file, JSON.stringify(data));

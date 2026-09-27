@@ -2,7 +2,7 @@ import type { RenderResult } from '@testing-library/react';
 import { CourseProvider } from '@/application/CourseContext';
 import type { Repositories } from '@/application/ports/Repositories';
 import { renderWithRepositories } from '@/application/testing/renderWithRepositories';
-import { AppRoutes } from '@/router';
+import { AppRoutes } from '@/AppRoutes';
 import { testCourse } from './fixtures/testCourse';
 
 export function renderApp(

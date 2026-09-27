@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
-import { buildSnackUrl, Snack } from './Snack';
+import { Snack } from './Snack';
+import { buildSnackUrl } from './snackUrl';
 
 describe('buildSnackUrl', () => {
   it('encodes code, dependencies and platform', () => {

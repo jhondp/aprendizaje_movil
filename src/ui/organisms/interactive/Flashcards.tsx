@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSrs } from '@/application/hooks/useSrs';
-import { useLessonId } from './LessonContext';
+import { useLessonId } from './useLessonId';
 import styles from './Flashcards.module.css';
 
 export interface Flashcard {

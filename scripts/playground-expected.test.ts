@@ -1,7 +1,8 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { extractBlock, extractProp } from './lib/validateContent';
+import { walkMdx } from './lib/walkMdx';
 import { transpile } from '@/ui/organisms/interactive/playground/transpile';
 import { buildSrcdoc } from '@/ui/organisms/interactive/playground/buildSrcdoc';
 import { TIMEOUT_MS } from '@/ui/organisms/interactive/playground/Playground';
@@ -144,19 +145,9 @@ function evalPropValue(raw: string): string {
   return raw.startsWith('`') ? (new Function(`return (${raw});`)() as string) : raw;
 }
 
-function walkMdxFiles(dir: string): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir)) {
-    const full = path.join(dir, entry);
-    if (statSync(full).isDirectory()) out.push(...walkMdxFiles(full));
-    else if (entry.endsWith('.mdx')) out.push(full);
-  }
-  return out.sort();
-}
-
 function collectExpectations(rootDir: string): PlaygroundExpectation[] {
   const expectations: PlaygroundExpectation[] = [];
-  for (const file of walkMdxFiles(rootDir)) {
+  for (const file of walkMdx(rootDir)) {
     const relPath = path.relative(rootDir, file).split(path.sep).join('/');
     const source = readFileSync(file, 'utf8');
     let from = 0;

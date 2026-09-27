@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { dueCards, type Grade, type SrsCard, type SrsState } from '@/domain/srs';
 import type { LessonId } from '@/domain/course';
-import { useRepositories } from '@/application/RepositoriesContext';
+import { useRepositories } from '@/application/useRepositories';
 import { gradeCardUseCase } from '@/application/useCases/gradeCard';
 import { registerCardsUseCase } from '@/application/useCases/registerCards';
 import { useStoreValue } from './useStoreValue';

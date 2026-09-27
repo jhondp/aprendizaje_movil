@@ -1,5 +1,5 @@
 import type { Course, Lesson } from '@/domain/course';
-import { useRepositories } from '@/application/RepositoriesContext';
+import { useRepositories } from '@/application/useRepositories';
 import { continueLearning } from '@/application/useCases/continueLearning';
 import { useStoreValue } from './useStoreValue';
 

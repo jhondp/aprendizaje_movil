@@ -1,5 +1,5 @@
 import { computeStreak, lastSevenDays, type DayActivity } from '@/domain/progress';
-import { useRepositories } from '@/application/RepositoriesContext';
+import { useRepositories } from '@/application/useRepositories';
 import { useStoreValue } from './useStoreValue';
 
 export function useStreak(): { streak: number; week: DayActivity[] } {

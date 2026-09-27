@@ -1,5 +1,5 @@
 import { useChecklist } from '@/application/hooks/useChecklist';
-import { useLessonId } from './LessonContext';
+import { useLessonId } from './useLessonId';
 import styles from './Checklist.module.css';
 
 export function Checklist({ id, items }: { id: string; items: string[] }) {
