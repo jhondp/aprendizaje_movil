@@ -1,7 +1,8 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import matter from 'gray-matter';
 import type { StageMeta } from '@/domain/course';
+import { walkMdx } from './walkMdx';
 
 export interface ValidationResult {
   ok: boolean;
@@ -639,16 +640,6 @@ export function validateLesson(
   };
 }
 
-function walk(dir: string): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir)) {
-    const full = path.join(dir, entry);
-    if (statSync(full).isDirectory()) out.push(...walk(full));
-    else if (entry.endsWith('.mdx')) out.push(full);
-  }
-  return out.sort();
-}
-
 export function validateContent(rootDir: string): ValidationResult {
   const stagesPath = path.join(rootDir, 'stages.json');
   let raw: string;
@@ -666,7 +657,7 @@ export function validateContent(rootDir: string): ValidationResult {
   }
 
   const errors: string[] = [];
-  const files = walk(rootDir);
+  const files = walkMdx(rootDir);
   const seen = new Map<string, string>();
   const results = files.map((file) => {
     const relPath = path.relative(rootDir, file).split(path.sep).join('/');
