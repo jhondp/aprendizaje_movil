@@ -6,7 +6,7 @@ import {
   type ProgressState,
 } from '@/domain/progress';
 import type { LessonId } from '@/domain/course';
-import { useRepositories } from '@/application/RepositoriesContext';
+import { useRepositories } from '@/application/useRepositories';
 import { completeLessonUseCase } from '@/application/useCases/completeLesson';
 import { useStoreValue } from './useStoreValue';
 

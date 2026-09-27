@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { upsertNote, type NotesState } from '@/domain/notes';
 import type { LessonId } from '@/domain/course';
-import { useRepositories } from '@/application/RepositoriesContext';
+import { useRepositories } from '@/application/useRepositories';
 import { useStoreValue } from './useStoreValue';
 
 export function useNotes(): { notes: NotesState; upsert(lessonId: LessonId, text: string): void } {

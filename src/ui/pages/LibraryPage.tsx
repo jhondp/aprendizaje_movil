@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useCourse } from '@/application/CourseContext';
-import { useRepositories } from '@/application/RepositoriesContext';
+import { useCourse } from '@/application/useCourse';
+import { useRepositories } from '@/application/useRepositories';
 import { useContinueLearning } from '@/application/hooks/useContinueLearning';
 import { useProgress } from '@/application/hooks/useProgress';
 import { useSrs } from '@/application/hooks/useSrs';

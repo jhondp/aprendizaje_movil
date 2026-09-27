@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useProgress } from '@/application/hooks/useProgress';
-import { useLessonId } from './LessonContext';
+import { useLessonId } from './useLessonId';
 import styles from './Quiz.module.css';
 
 export interface QuizOption {

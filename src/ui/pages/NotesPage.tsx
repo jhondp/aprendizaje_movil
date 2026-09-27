@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useCourse } from '@/application/CourseContext';
+import { useCourse } from '@/application/useCourse';
 import { useNotes } from '@/application/hooks/useNotes';
 import { lessonPath } from '@/ui/routes';
 import styles from './NotesPage.module.css';

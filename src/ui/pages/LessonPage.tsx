@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useCourse } from '@/application/CourseContext';
+import { useCourse } from '@/application/useCourse';
 import { useDebouncedNote } from '@/application/hooks/useDebouncedNote';
 import { useNotes } from '@/application/hooks/useNotes';
 import { useProgress } from '@/application/hooks/useProgress';
